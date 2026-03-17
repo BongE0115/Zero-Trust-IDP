@@ -609,80 +609,100 @@ resource "aws_db_instance" "aiops_rds" {
 
 
 # ==========================================
-# RDS Security Group
+# NAT Instance
 # ==========================================
-resource "aws_security_group" "rds_sg" {
-  name        = "aiops-rds-sg"
-  description = "Security group for AIOps RDS PostgreSQL"
-  vpc_id      = aws_vpc.main.id
+resource "aws_instance" "nat" {
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.public_a.id
+  vpc_security_group_ids      = [aws_security_group.nat_sg.id]
+  iam_instance_profile        = aws_iam_instance_profile.ssm_profile.name
+  associate_public_ip_address = true
+  source_dest_check           = false
 
-  ingress {
-    description     = "Allow PostgreSQL traffic from K3s master"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.k3s_server_sg.id]
-  }
+  user_data = <<-EOF
+              #!/bin/bash
+              set -eux
 
-  ingress {
-    description     = "Allow PostgreSQL traffic from K3s worker"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.k3s_agent_sg.id]
-  }
+              sysctl -w net.ipv4.ip_forward=1
+              sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf || true
+              echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+              IFACE=$(ip -o -4 route show to default | awk '{print $5}')
+              iptables -t nat -A POSTROUTING -o $${IFACE} -j MASQUERADE
+
+              apt-get update -y
+              DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent
+              netfilter-persistent save
+              EOF
 
   tags = {
-    Name = "aiops-rds-sg"
+    Name = "aiops-nat-instance"
   }
 }
 
 # ==========================================
-# RDS Subnet Group
+# Monitoring + Ansible Control Node
 # ==========================================
-resource "aws_db_subnet_group" "rds_subnet_group" {
-  name       = "aiops-rds-subnet-group"
-  subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+resource "aws_instance" "monitoring_server" {
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.public_a.id
+  vpc_security_group_ids      = [aws_security_group.monitoring_sg.id]
+  iam_instance_profile        = aws_iam_instance_profile.ssm_profile.name
+  associate_public_ip_address = true
+
+  user_data = templatefile("${path.module}/templates/monitoring.sh.tpl", {
+    k3s_server_private_ip = aws_instance.k3s_server.private_ip
+    k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
+  })
 
   tags = {
-    Name = "aiops-rds-subnet-group"
+    Name = "aiops-monitoring-control"
+    Role = "Monitoring_And_Ansible_Control_Node"
   }
 }
 
 # ==========================================
-# PostgreSQL RDS Instance
+# K3s Master
 # ==========================================
-resource "aws_db_instance" "aiops_rds" {
-  identifier = "aiops-postgres-db"
+resource "aws_instance" "k3s_server" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.private_a.id
+  vpc_security_group_ids = [aws_security_group.k3s_server_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
 
-  engine         = "postgres"
-  engine_version = "15"
-
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20
-  storage_type      = "gp2"
-
-  db_name  = "aiopsdb"
-  username = var.db_username
-  password = var.db_password
-
-  db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
-  vpc_security_group_ids = [aws_security_group.rds_sg.id]
-
-  publicly_accessible = false
-  skip_final_snapshot = true
+  user_data = templatefile("${path.module}/templates/k3s_server.sh.tpl", {
+    tailscale_auth_key = var.tailscale_auth_key
+    k3s_token          = var.k3s_token
+  })
 
   tags = {
-    Name      = "aiops-rds-postgres"
-    Project   = "AIOps"
-    ManagedBy = "Terraform"
+    Name = "aiops-k3s-server-aza"
+    Role = "K3s_Server"
+  }
+}
+
+# ==========================================
+# K3s Worker
+# ==========================================
+resource "aws_instance" "k3s_agent" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.private_b.id
+  vpc_security_group_ids = [aws_security_group.k3s_agent_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
+
+  user_data = templatefile("${path.module}/templates/k3s_agent.sh.tpl", {
+    tailscale_auth_key = var.tailscale_auth_key
+    k3s_token          = var.k3s_token
+    k3s_server_ip      = aws_instance.k3s_server.private_ip
+  })
+
+  tags = {
+    Name = "aiops-k3s-agent-azb"
+    Role = "K3s_Agent"
   }
 }
 
