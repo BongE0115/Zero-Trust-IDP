@@ -698,7 +698,12 @@ resource "aws_instance" "monitoring_server" {
     k3s_server_private_ip = aws_instance.k3s_server.private_ip
     k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
     k3s_token             = var.k3s_token
-    ssh_private_key       = var.ssh_private_key # 변수 추가 필요
+    ssh_private_key       = tls_private_key.aiops_key.private_key_pem # 변수 추가 필요
+
+    # 플레이북 파일을 렌더링해서 변수로 넘긴다. 
+    ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
+    k3s_token = var.k3s_token
+    })
   })
 
   tags = {
