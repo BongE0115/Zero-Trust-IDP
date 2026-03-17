@@ -1,0 +1,35 @@
+# sandbox namespace with istio sidecar injection enabled
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: forensic-sandbox
+  labels:
+    istio-injection: enabled
+
+# sandbox application deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forensic-sandbox-app
+  namespace: forensic-sandbox
+spec:
+  replicas: 0 
+  selector:
+    matchLabels:
+      app: forensic-sandbox-app
+  template:
+    metadata:
+      labels:
+        app: forensic-sandbox-app
+    spec:
+      containers:
+      - name: consumer-app
+        # 나중에 CI 파이프라인이 실제 백엔드 팀의 도커 이미지 태그로 갈아끼울 예정입니다.
+        image: your-dockerhub-id/consumer-app:latest 
+        env:
+        # 1. 메인 토픽이 아닌 에러가 모이는 DLQ 토픽을 구독함
+        - name: KAFKA_TOPIC
+          value: "dlq-topic" 
+        # 2. 운영 DB 대신 방금 띄운 임시 MongoDB를 바라보도록 강제 설정
+        - name: DB_HOST
+          value: "mongodb-temp.forensic-sandbox.svc.cluster.local"
