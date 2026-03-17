@@ -91,3 +91,29 @@ chown -R prometheus:prometheus /etc/prometheus /var/lib/prometheus
 systemctl daemon-reload
 systemctl enable prometheus
 systemctl start prometheus
+
+# 마스터, 워커 노드 ip를 hosts.ini 파일에 자동 저장(위쪽 코드) 후 자동 실행하여 각 노드에 k3s, argoCD, istio 설치
+
+# 1. SSH 개인키 저장 (엔서블 접속용)
+cat > /home/ubuntu/ansible/id_rsa <<EOF
+${ssh_private_key}
+EOF
+chmod 600 /home/ubuntu/ansible/id_rsa
+chown ubuntu:ubuntu /home/ubuntu/ansible/id_rsa
+
+# 2. 설치용 엔서블 플레이북 파일 생성
+cat > /home/ubuntu/ansible/setup_k3s.yml <<EOF
+- name: Setup K3s Cluster
+  hosts: all
+  become: yes
+  tasks:
+    - name: Wait for connection
+      wait_for_connection:
+        timeout: 300
+
+    # 여기에 K3s, Istio, ArgoCD 설치 태스크들을 정의합니다.
+EOF
+
+# 3. 백그라운드에서 엔서블 실행
+# (스크립트가 바로 종료되어야 테라폼 apply가 완료되므로 nohup 등을 사용합니다)
+nohup sudo -u ubuntu ansible-playbook -i /home/ubuntu/ansible/hosts.ini /home/ubuntu/ansible/setup_k3s.yml --private-key=/home/ubuntu/ansible/id_rsa > /home/ubuntu/ansible/install.log 2>&1 &

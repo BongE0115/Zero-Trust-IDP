@@ -207,6 +207,14 @@ resource "aws_security_group" "monitoring_sg" {
     cidr_blocks = [var.admin_cidr]
   }
 
+  ingress {
+  description = "SSH from Admin IP"
+  from_port   = 22
+  to_port     = 22
+  protocol    = "tcp"
+  cidr_blocks = [var.admin_cidr] # 관리자님의 공인 IP에서만 접속 허용 [cite: 28]
+  }
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -327,6 +335,14 @@ resource "aws_security_group" "k3s_server_sg" {
   }
 
   ingress {
+  description     = "SSH from Monitoring Node (Ansible)"
+  from_port       = 22
+  to_port         = 22
+  protocol        = "tcp"
+  security_groups = [aws_security_group.monitoring_sg.id] # 모니터링 SG를 소스로 지정 
+  }
+
+  ingress {
     description = "ICMP from VPC for testing"
     from_port   = -1
     to_port     = -1
@@ -377,6 +393,14 @@ resource "aws_security_group" "k3s_agent_sg" {
     to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
+  }
+
+  ingress {
+  description     = "SSH from Monitoring Node (Ansible)"
+  from_port       = 22
+  to_port         = 22
+  protocol        = "tcp"
+  security_groups = [aws_security_group.monitoring_sg.id] # 모니터링 SG를 소스로 지정 
   }
 
   ingress {
