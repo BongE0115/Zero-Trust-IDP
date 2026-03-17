@@ -25,3 +25,9 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "ssh_key_name" {
+  description = "AWS에 등록할 키 페어 이름"
+  type        = string
+  default     = "aiops-internal-key"
+}
