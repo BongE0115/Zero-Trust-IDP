@@ -679,6 +679,8 @@ resource "aws_instance" "monitoring_server" {
   user_data = templatefile("${path.module}/templates/monitoring.sh.tpl", {
     k3s_server_private_ip = aws_instance.k3s_server.private_ip
     k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
+    k3s_token             = var.k3s_token
+    ssh_private_key       = var.ssh_private_key # 변수 추가 필요
   })
 
   tags = {
