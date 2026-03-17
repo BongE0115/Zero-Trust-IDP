@@ -103,17 +103,16 @@ systemctl start prometheus
 # ---------------------------------------------------------
 
 # 4-1. 설치용 엔서블 플레이북 파일 생성 (나중에 이 내용을 구체화합니다)
+# monitoring.sh.tpl 하단부
+
+# 💡 테라폼에서 이미 완성된 플레이북 내용을 변수로 받아 파일로 저장만 합니다.
 cat > /home/ubuntu/ansible/setup_k3s.yml <<EOF
-- name: Setup K3s Cluster and Services
-  hosts: all
-  become: yes
-  tasks:
-    - name: Wait for connection
-      wait_for_connection:
-        timeout: 300
+${ansible_playbook_content}
 EOF
 
+# 실행 로직은 동일
 chown ubuntu:ubuntu /home/ubuntu/ansible/setup_k3s.yml
+nohup sudo -u ubuntu ansible-playbook -i /home/ubuntu/ansible/hosts.ini /home/ubuntu/ansible/setup_k3s.yml > /home/ubuntu/ansible/install.log 2>&1 &
 
 # 4-2. 백그라운드에서 엔서블 실행
 # nohup을 사용하여 테라폼 프로세스와 분리해 실행합니다.
