@@ -167,6 +167,7 @@ resource "aws_iam_role" "ssm_role" {
   })
 }
 
+
 # ==========================================
 # Attach SSM Managed Policy
 # ==========================================
@@ -182,6 +183,23 @@ resource "aws_iam_instance_profile" "ssm_profile" {
   name = "aiops-ssm-profile"
   role = aws_iam_role.ssm_role.name
 }
+
+# ===========================================
+# ssh 키 페어 생성
+# =========================================== 
+
+# 1. RSA 알고리즘을 사용한 개인키 생성
+resource "tls_private_key" "aiops_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+# 2. AWS에 공용키(Public Key) 등록
+resource "aws_key_pair" "generated_key" {
+  key_name   = var.ssh_key_name
+  public_key = tls_private_key.aiops_key.public_key_openssh
+}
+
 
 # ==========================================
 # 1. Monitoring Control SG
