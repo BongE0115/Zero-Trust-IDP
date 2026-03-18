@@ -1,4 +1,3 @@
-
 # ==================================================
 # --------------------------------------------------
 # 1. 네트워크 인프라 (VPC,Subnet,IGW,RT)
@@ -231,7 +230,7 @@ resource "aws_security_group" "monitoring_sg" {
   from_port   = 22
   to_port     = 22
   protocol    = "tcp"
-  cidr_blocks = [var.admin_cidr] # 관리자님의 공인 IP에서만 접속 허용
+  cidr_blocks = [var.admin_cidr] # 관리자님의 공인 IP에서만 접속 허용 
   }
 
   egress {
@@ -723,6 +722,8 @@ resource "aws_instance" "k3s_server" {
   vpc_security_group_ids = [aws_security_group.k3s_server_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
 
+  key_name               = aws_key_pair.generated_key.key_name
+
   user_data = templatefile("${path.module}/templates/k3s_server.sh.tpl", {
     tailscale_auth_key = var.tailscale_auth_key
     k3s_token          = var.k3s_token
@@ -743,6 +744,8 @@ resource "aws_instance" "k3s_agent" {
   subnet_id              = aws_subnet.private_b.id
   vpc_security_group_ids = [aws_security_group.k3s_agent_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
+
+  key_name               = aws_key_pair.generated_key.key_name
 
   user_data = templatefile("${path.module}/templates/k3s_agent.sh.tpl", {
     tailscale_auth_key = var.tailscale_auth_key
