@@ -5,7 +5,7 @@ set -eux
 apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   python3 python3-pip curl unzip gnupg lsb-release apt-transport-https ca-certificates software-properties-common
-apt-get install -y ansible [cite: 1]
+apt-get install -y ansible
 
 # ---------------------------------------------------------
 # 2. Ansible 환경 구축 (디렉토리 및 SSH 열쇠 설정)
@@ -17,7 +17,7 @@ chmod 755 /home/ubuntu/ansible
 cat > /home/ubuntu/ansible/id_rsa <<EOF
 ${ssh_private_key}
 EOF
-chmod 600 /home/ubuntu/ansible/id_rsa [cite: 3]
+chmod 600 /home/ubuntu/ansible/id_rsa
 
 # 2-2. Ansible 인벤토리 파일 생성
 cat > /home/ubuntu/ansible/hosts.ini <<EOF
@@ -45,7 +45,7 @@ chown -R ubuntu:ubuntu /home/ubuntu/ansible
 # ---------------------------------------------------------
 # 3. Grafana & Prometheus 설치 (기존 유지)
 # ---------------------------------------------------------
-# Grafana 설치 [cite: 1, 2]
+# Grafana 설치 
 mkdir -p /etc/apt/keyrings
 curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
 echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
@@ -54,7 +54,7 @@ apt-get install -y grafana
 systemctl enable grafana-server
 systemctl start grafana-server
 
-# Prometheus 설치 및 설정 [cite: 3, 4]
+# Prometheus 설치 및 설정 
 useradd --no-create-home --shell /bin/false prometheus || true
 cd /tmp
 curl -LO https://github.com/prometheus/prometheus/releases/download/v2.54.1/prometheus-2.54.1.linux-amd64.tar.gz
@@ -79,7 +79,7 @@ scrape_configs:
           - "${k3s_agent_private_ip}:10250"
 PROM
 
-# Prometheus 서비스 등록 및 실행 [cite: 4]
+# Prometheus 서비스 등록 및 실행 
 cat > /etc/systemd/system/prometheus.service <<SERVICE
 [Unit]
 Description=Prometheus

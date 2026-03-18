@@ -1,3 +1,4 @@
+
 # ==================================================
 # --------------------------------------------------
 # 1. 네트워크 인프라 (VPC,Subnet,IGW,RT)
@@ -230,7 +231,7 @@ resource "aws_security_group" "monitoring_sg" {
   from_port   = 22
   to_port     = 22
   protocol    = "tcp"
-  cidr_blocks = [var.admin_cidr] # 관리자님의 공인 IP에서만 접속 허용 [cite: 28]
+  cidr_blocks = [var.admin_cidr] # 관리자님의 공인 IP에서만 접속 허용
   }
 
   egress {
