@@ -54,7 +54,7 @@ apt-get install -y grafana
 systemctl enable grafana-server
 systemctl start grafana-server
 
-# Prometheus 설치 및 설정 
+# Prometheus 설치 및 설정
 useradd --no-create-home --shell /bin/false prometheus || true
 cd /tmp
 curl -LO https://github.com/prometheus/prometheus/releases/download/v2.54.1/prometheus-2.54.1.linux-amd64.tar.gz
@@ -64,20 +64,25 @@ cp prometheus-2.54.1.linux-amd64/prometheus /usr/local/bin/
 cp prometheus-2.54.1.linux-amd64/promtool /usr/local/bin/
 
 mkdir -p /etc/prometheus /var/lib/prometheus
-cat > /etc/prometheus/prometheus.yml <<PROM
+cat > /etc/prometheus/prometheus.yml <<EOF
 global:
   scrape_interval: 15s
+
 scrape_configs:
   - job_name: "prometheus"
     static_configs:
       - targets: ["localhost:9090"]
+
   - job_name: "k3s-nodes"
-    metrics_path: '/metrics'
+    metrics_path: "/metrics"
     static_configs:
       - targets:
-          - "${k3s_server_private_ip}:10250"
-          - "${k3s_agent_private_ip}:10250"
-PROM
+        - "${k3s_server_private_ip}:10250"
+        - "${k3s_agent_private_ip}:10250"
+EOF
+
+chown -R prometheus:prometheus /etc/prometheus
+chown -R prometheus:prometheus /var/lib/prometheus
 
 # Prometheus 서비스 등록 및 실행 
 cat > /etc/systemd/system/prometheus.service <<SERVICE
