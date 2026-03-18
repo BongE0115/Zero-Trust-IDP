@@ -76,7 +76,8 @@
     - name: Install Strimzi Kafka Operator
       shell: helm upgrade --install strimzi-operator strimzi/strimzi-kafka-operator -n kafka --create-namespace
 
-    - name: Deploy Lightweight Kafka Instance (256MB Memory Limit)
+
+    - name: Deploy Lightweight Kafka Instance (KRaft Mode - 256MB)
       shell: |
         cat <<EOF | kubectl apply -f -
         apiVersion: kafka.strimzi.io/v1beta2
@@ -86,18 +87,32 @@
           namespace: kafka
         spec:
           kafka:
-            version: 3.7.0
+            version: 4.1.0  # 오퍼레이터가 요구한 버전
             replicas: 1
-            listeners: [{ name: plain, port: 9092, type: internal, tls: false }]
+            listeners: 
+              - name: plain
+                port: 9092
+                type: internal
+                tls: false
             config:
               offsets.topic.replication.factor: 1
               transaction.state.log.replication.factor: 1
-            storage: { type: ephemeral }
-            jvmOptions: { "-Xms": "256M", "-Xmx": "256M" }
-          zookeeper:
-            replicas: 1
-            storage: { type: ephemeral }
-        EOF
+              # KRaft 모드에서는 주키퍼 관련 설정이 필요 없습니다.
+              process.roles: "broker,controller"
+              node.id: 0
+              controller.quorum.voters: "0@localhost:9093"
+              controller.listener.names: "CONTROLLER"
+            storage: 
+              type: ephemeral
+            # 메모리 제한 유지
+            jvmOptions: 
+              "-Xms": "256M"
+              "-Xmx": "256M"
+          # 핵심: zookeeper 섹션을 통째로 삭제하고 아래 내용을 추가합니다.
+          entityOperator:
+            topicOperator: {}
+            userOperator: {}
+        EOF    
 
     - name: Install Monitoring Collectors (Node Exporter & KSM)
       shell: |
