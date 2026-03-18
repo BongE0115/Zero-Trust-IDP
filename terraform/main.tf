@@ -717,6 +717,12 @@ resource "aws_instance" "k3s_server" {
 
   key_name               = aws_key_pair.generated_key.key_name
 
+  root_block_device {
+    volume_size = 30  # 기본 8GB에서 30GB로 증설
+    volume_type = "gp3" # 최신 고성능 범용 스토리지
+    delete_on_termination = true
+  }
+
   user_data = templatefile("${path.module}/templates/k3s_server.sh.tpl", {
     tailscale_auth_key = var.tailscale_auth_key
     k3s_token          = var.k3s_token
@@ -739,6 +745,13 @@ resource "aws_instance" "k3s_agent" {
   iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
 
   key_name               = aws_key_pair.generated_key.key_name
+
+  root_block_device {
+    volume_size = 30  # 기본 8GB에서 30GB로 증설
+    volume_type = "gp3" # 최신 고성능 범용 스토리지
+    delete_on_termination = true
+  }
+
 
   user_data = templatefile("${path.module}/templates/k3s_agent.sh.tpl", {
     tailscale_auth_key = var.tailscale_auth_key
