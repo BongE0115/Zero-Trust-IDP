@@ -283,19 +283,12 @@ resource "aws_security_group" "nat_sg" {
   description = "NAT instance SG for private subnet outbound"
   vpc_id      = aws_vpc.main.id
 
+  # 수정된 aiops-nat-sg 부분
   ingress {
-    description = "HTTP from private subnets"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = [aws_subnet.private_a.cidr_block, aws_subnet.private_b.cidr_block]
-  }
-
-  ingress {
-    description = "HTTPS from private subnets"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
+    description = "Allow all from private subnets"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" # 모든 프로토콜 허용
     cidr_blocks = [aws_subnet.private_a.cidr_block, aws_subnet.private_b.cidr_block]
   }
 

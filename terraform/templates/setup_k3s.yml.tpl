@@ -77,7 +77,26 @@
       shell: helm upgrade --install strimzi-operator strimzi/strimzi-kafka-operator -n kafka --create-namespace
 
 
-    - name: Deploy Lightweight Kafka Instance (KRaft Mode - 256MB)
+    - name: Deploy Kafka NodePool (Required for Latest Strimzi)
+      shell: |
+        cat <<EOF | kubectl apply -f -
+        apiVersion: kafka.strimzi.io/v1beta2
+        kind: KafkaNodePool
+        metadata:
+          name: kafka-pool
+          namespace: kafka
+          labels:
+            strimzi.io/cluster: my-cluster
+        spec:
+          replicas: 1
+          roles:
+            - broker
+            - controller
+          storage:
+            type: ephemeral
+        EOF
+
+    - name: Deploy Lightweight Kafka Instance (KRaft Mode with NodePool)
       shell: |
         cat <<EOF | kubectl apply -f -
         apiVersion: kafka.strimzi.io/v1beta2
@@ -85,10 +104,12 @@
         metadata:
           name: my-cluster
           namespace: kafka
+          annotations:
+            strimzi.io/node-pools: enabled
+            strimzi.io/kraft: enabled
         spec:
           kafka:
             version: 4.1.0
-            replicas: 1
             listeners:
               - name: plain
                 port: 9092
@@ -101,13 +122,7 @@
             config:
               offsets.topic.replication.factor: 1
               transaction.state.log.replication.factor: 1
-              process.roles: "broker,controller"
-              node.id: 0
-              controller.quorum.voters: "0@my-cluster-kafka-0.my-cluster-kafka-brokers.kafka.svc:9093"
-              controller.listener.names: "CONTROLLER"
               inter.broker.protocol.version: "4.1"
-            storage:
-              type: ephemeral
             jvmOptions:
               "-Xms": "256M"
               "-Xmx": "256M"
