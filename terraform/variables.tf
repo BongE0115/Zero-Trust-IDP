@@ -1,6 +1,6 @@
 variable "admin_cidr" {
   description = "Admin public IP CIDR, e.g. 1.2.3.4/32"
-  type        = string
+  type        = list(string)
 }
 
 variable "tailscale_auth_key" {
