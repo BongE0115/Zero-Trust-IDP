@@ -78,44 +78,43 @@
 
 
     - name: Deploy Lightweight Kafka Instance (KRaft Mode - 256MB)
-          shell: |
-            cat <<EOF | kubectl apply -f -
-            apiVersion: kafka.strimzi.io/v1beta2
-            kind: Kafka
-            metadata:
-              name: my-cluster
-              namespace: kafka
-            spec:
-              kafka:
-                version: 4.1.0
-                replicas: 1
-                listeners:
-                  - name: plain
-                    port: 9092
-                    type: internal
-                    tls: false
-                  - name: controller      # <--- KRaft 필수 포트 추가
-                    port: 9093
-                    type: internal
-                    tls: false
-                config:
-                  offsets.topic.replication.factor: 1
-                  transaction.state.log.replication.factor: 1
-                  # KRaft 설정 최적화
-                  process.roles: "broker,controller"
-                  node.id: 0
-                  controller.quorum.voters: "0@my-cluster-kafka-0.my-cluster-kafka-brokers.kafka.svc:9093" # <--- 주소 수정
-                  controller.listener.names: "CONTROLLER"
-                  inter.broker.protocol.version: "4.1"
-                storage:
-                  type: ephemeral
-                jvmOptions:
-                  "-Xms": "256M"
-                  "-Xmx": "256M"
-              entityOperator:
-                topicOperator: {}
-                userOperator: {}
-            EOF
+      shell: |
+        cat <<EOF | kubectl apply -f -
+        apiVersion: kafka.strimzi.io/v1beta2
+        kind: Kafka
+        metadata:
+          name: my-cluster
+          namespace: kafka
+        spec:
+          kafka:
+            version: 4.1.0
+            replicas: 1
+            listeners:
+              - name: plain
+                port: 9092
+                type: internal
+                tls: false
+              - name: controller
+                port: 9093
+                type: internal
+                tls: false
+            config:
+              offsets.topic.replication.factor: 1
+              transaction.state.log.replication.factor: 1
+              process.roles: "broker,controller"
+              node.id: 0
+              controller.quorum.voters: "0@my-cluster-kafka-0.my-cluster-kafka-brokers.kafka.svc:9093"
+              controller.listener.names: "CONTROLLER"
+              inter.broker.protocol.version: "4.1"
+            storage:
+              type: ephemeral
+            jvmOptions:
+              "-Xms": "256M"
+              "-Xmx": "256M"
+          entityOperator:
+            topicOperator: {}
+            userOperator: {}
+        EOF
 
     - name: Install Monitoring Collectors (Node Exporter & KSM)
       shell: |
