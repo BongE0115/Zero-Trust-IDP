@@ -47,6 +47,9 @@
 # [4단계] 플랫폼 도구 및 모니터링 연동 설치
 - name: Deploy Platform Tools & Monitoring
   hosts: k3s_master
+  become: yes       # <--- 필수 추가: root 권한으로 실행 (k3s.yaml 읽기 위함)
+  environment:      # <--- 필수 추가: helm과 kubectl이 클러스터 접속 정보를 찾도록 길 안내
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   tasks:
     - name: Install Helm
       shell: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
