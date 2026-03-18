@@ -214,7 +214,7 @@ resource "aws_security_group" "monitoring_sg" {
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
-    cidr_blocks = [var.admin_cidr]
+    cidr_blocks = var.admin_cidr
   }
 
   ingress {
@@ -222,7 +222,7 @@ resource "aws_security_group" "monitoring_sg" {
     from_port   = 9090
     to_port     = 9090
     protocol    = "tcp"
-    cidr_blocks = [var.admin_cidr]
+    cidr_blocks = var.admin_cidr
   }
 
   ingress {
@@ -230,7 +230,7 @@ resource "aws_security_group" "monitoring_sg" {
   from_port   = 22
   to_port     = 22
   protocol    = "tcp"
-  cidr_blocks = [var.admin_cidr] # 관리자님의 공인 IP에서만 접속 허용 
+  cidr_blocks = var.admin_cidr # 관리자님의 공인 IP에서만 접속 허용 
   }
 
   egress {
