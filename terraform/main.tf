@@ -687,16 +687,21 @@ resource "aws_instance" "monitoring_server" {
   iam_instance_profile        = aws_iam_instance_profile.ssm_profile.name
   associate_public_ip_address = true
 
+  # user_data 템플릿 렌더링 시작
   user_data = templatefile("${path.module}/templates/monitoring.sh.tpl", {
     k3s_server_private_ip = aws_instance.k3s_server.private_ip
     k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
     k3s_token             = var.k3s_token
-    ssh_private_key       = tls_private_key.aiops_key.private_key_pem # 변수 추가 필요
+    ssh_private_key       = tls_private_key.aiops_key.private_key_pem
 
-    # 플레이북 파일을 렌더링해서 변수로 넘긴다. 
+    # 1. K3s 및 기본 플랫폼 설치용 플레이북 렌더링
     ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
-    k3s_token = var.k3s_token
+      k3s_token = var.k3s_token
     })
+
+    # 2. ArgoCD Application 등록용 플레이북 렌더링
+    # 주의: templates/argocd-app.yml.tpl 파일이 실제로 존재해야 합니다.
+    argocd_app_content = templatefile("${path.module}/templates/argocd-app.yml.tpl", {})
   })
 
   tags = {
