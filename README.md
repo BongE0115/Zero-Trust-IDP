@@ -29,7 +29,11 @@ Zero-Trust-IDP/
 ├── .github/                      # 🤖 GitHub Actions (CI/CD 자동화)
 │   └── workflows/
 │       ├── ci-build.yml          # 코드 푸시 시 Docker 이미지 빌드 및 푸시
-│       └── cd-sandbox.yml        # Slack 봇이 트리거하는 샌드박스 배포 파이프라인
+│       └── cd-sandbox.yml        # Slack 봇이 트리거하는 샌드박스 배포 파이프라인       
+│       └── jit-debug.yml         # 🚨 Slack 버튼 클릭 시 트리거되어 파드에 netshoot 컨테이너를 붙이고 tcpdump를 실행하는 자동화 워크플로우
+│
+├── templates/
+│   ├── setup_k3s.yml.tpl
 │
 ├── terraform/                    # ☁️ 인프라 프로비저닝 (AWS)
 │   ├── main.tf                   # EC2, RDS(MySQL), 보안 그룹(Security Group) 정의
@@ -38,28 +42,33 @@ Zero-Trust-IDP/
 │
 ├── ansible/                      # 🌉 하이브리드 망 구성 (Tailscale + K3s)
 │   ├── inventory.ini             # AWS EC2 및 로컬 PC의 IP/접속 정보
-│   └── setup-hybrid.yml          # Tailscale VPN 연동 및 K3s 설치 자동화 스크립트
+│   └── setup-hybrid.yml          # Tailscale VPN 연동 및 K3s 설치 자동화 스크립트         
 │
 ├── k8s-manifests/                # ⛵ ArgoCD가 감시하는 K8s 선언문 (GitOps)
 │   ├── core-infra/               # [공통 인프라] 항시 떠 있는 시스템
 │   │   ├── kafka/                # Apache Kafka (Main/DLQ 토픽 설정)
 │   │   ├── monitoring/           # Prometheus & Grafana (에러/트래픽 시각화)
 │   │   └── merlion-ai/           # Salesforce Merlion (DLQ 이상 탐지 AI)
-│   │
+│   │       
 │   ├── apps/                     # [메인 서비스] 비즈니스 로직
 │   │   ├── consumer-aws/         # AWS에서 도는 메인 컨슈머 파드
 │   │   ├── consumer-local/       # 로컬망에서 도는 메인 컨슈머 파드 (Active-Active)
-│   │   └── redrive-api/          # 복구된 에러를 다시 메인 큐로 밀어넣는 API
+│   │   └── redrive-api/          # 복구된 에러를 다시 메인 큐로 밀어넣는 API     
 │   │
 │   └── forensic-sandbox/         # 🛡️ [핵심] On-Demand 격리 샌드박스 구역
-│       ├── sandbox-app.yaml      # 에러 환경을 재현할 샌드박스 파드 (replicas: 0으로 시작)
-│       ├── mongodb-temp.yaml     # 샌드박스 전용 일회용 로컬 MongoDB
-│       └── istio-rules.yaml      # [보안] AWS RDS 접근을 원천 차단하는 Istio Egress 룰
+│       ├── sandbox-app.yaml      # [UPDATE] 앰비언트 메시 라벨 (istio.io/dataplane-mode: ambient) 적용
+│       ├── mongodb-temp.yaml     # 샌드박스 전용 일회용 로컬 MongoDB    
+│       ├── istio-rules.yaml      # L7 Egress 차단 룰 (AuthorizationPolicy)
+│       ├── peer-auth.yaml        # 샌드박스 내 STRICT mTLS 강제 적용
+│       ├── waypoint.yaml         # 앰비언트 메시의 L7 정책(차단 룰)을 실행할 Waypoint Proxy
+│       └── network-policy.yaml   # K8s CNI 레벨의 물리적 심층 방어 (AWS RDS 등 외부 IP 원천 차단 화이트리스트)
 │
-├── src/                          # 💻 실제 애플리케이션 소스 코드 (백엔드/AI 팀용)
-│   ├── consumer-app/             # (Python/Java) 에러를 발생시키고 DLQ로 던지는 앱
-│   ├── merlion-ai/               # (Python) 시계열 이상 탐지 및 Slack 알람 발송 앱
-│   └── redrive-api/              # (Spring/FastAPI) 메시지 재처리(Redrive) 앱
+├── src/                          # 💻 실제 애플리케이션 소스 코드
+│   ├── consumer-app/             
+│   ├── merlion-ai/               # (Python) 시계열 이상 탐지 앱
+│   │   ├── model.py              # Merlion 시계열 모델 
+│   │   └── slack_notifier.py     # 🚨 에러 포트 정보와 '디버깅 권한 부여(JIT)' 대화형 버튼을 Slack으로 쏘는 로직
+│   └── redrive-api/              
 │
 ├── .gitignore                    # 보안 키, tfstate, 로그 파일 등 업로드 방지
 └── README.md                     # 프로젝트 개요, 아키텍처, 실행 가이드
