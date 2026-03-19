@@ -1,0 +1,32 @@
+# argo-apps/forensic-sandbox-app.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: forensic-sandbox
+  namespace: argocd # ArgoCD가 설치된 네임스페이스
+spec:
+  project: default
+  source:
+    # 1. 깃허브 저장소 주소 (네 실제 주소로 변경해!)
+    repoURL: 'https://github.com/your-org/Zero-Trust-IDP.git'
+    targetRevision: HEAD # main 또는 master 브랜치
+    # 2. 감시할 폴더 경로 (우리가 작업한 파일들이 있는 곳)
+    path: k8s-manifests/forensic-sandbox
+  destination:
+    server: 'https://kubernetes.default.svc' # 현재 클러스터
+    namespace: forensic-sandbox # 배포될 타겟 네임스페이스
+  syncPolicy:
+    automated:
+      prune: true      # Git에서 삭제된 파일은 클러스터에서도 삭제
+      selfHeal: true   # 누군가 K8s에서 수동으로 조작하면 다시 Git 상태로 롤백 (보안에 필수!)
+    syncOptions:
+    - CreateNamespace=true # 네임스페이스가 없으면 알아서 생성
+
+# K8s에 ArgoCD 지시서 전달하기 
+# 터미널에서 딱 한 번만 실행
+# kubectl apply -f argo-apps/forensic-sandbox-app.yaml
+
+
+# 앰비언트 메시(Ambient Mesh) 자동 주입 확인
+# forensic-sandbox 네임스페이스의 앰비언트 메시 상태 확인
+# istioctl ztunnel-config workloads -n forensic-sandbox
