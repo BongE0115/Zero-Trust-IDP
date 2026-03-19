@@ -110,12 +110,12 @@ systemctl start prometheus
 # 4-1. 설치용 엔서블 플레이북 파일 생성 (나중에 이 내용을 구체화합니다)
 # monitoring.sh.tpl 하단부
 
-# 💡 테라폼에서 이미 완성된 플레이북 내용을 변수로 받아 파일로 저장만 합니다.
-cat > /home/ubuntu/ansible/setup_k3s.yml <<EOF
+# 
+cat <<'EOF' > /home/ubuntu/ansible/setup_k3s.yml
 ${ansible_playbook_content}
 EOF
 
-cat > /home/ubuntu/ansible/argocd-app.yml <<EOF
+cat <<'EOF' > /home/ubuntu/ansible/argocd-app.yml
 ${argocd_app_content}
 EOF
 
