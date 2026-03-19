@@ -147,4 +147,4 @@
           ArgoCD Admin Password: {{ argocd_password.stdout }}
           Istio Injection: Enabled on 'default' namespace
           Kafka Memory: Limited to 256MB
-        dest: /home/ubuntu/ansible/install_summary.txt
+        dest: /home/ubuntu/install_summary.txt
