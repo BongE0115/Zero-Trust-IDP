@@ -1,19 +1,29 @@
-# sandbox namespace with istio sidecar injection enabled
+# 1. 앰비언트 메시 라벨이 적용된 네임스페이스 (★ 누락됐던 핵심 부분 복구!)
 apiVersion: v1
 kind: Namespace
 metadata:
   name: forensic-sandbox
   labels:
-    istio-injection: enabled
+    # 파드 트래픽을 노드의 ztunnel이 가로채도록 설정
+    istio.io/dataplane-mode: ambient
 
-# sandbox application deployment
+---
+# 2. 전용 Service Account 생성 (신분증)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sandbox-app-sa
+  namespace: forensic-sandbox
+
+---
+# 3. 샌드박스 앱 디플로이먼트
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: forensic-sandbox-app
   namespace: forensic-sandbox
 spec:
-  replicas: 0 
+  replicas: 0 # (평소엔 0, 에러 발생 시 자동화 스크립트가 늘림)
   selector:
     matchLabels:
       app: forensic-sandbox-app
@@ -22,14 +32,39 @@ spec:
       labels:
         app: forensic-sandbox-app
     spec:
+      # 앱에 전용 신분증 장착
+      serviceAccountName: sandbox-app-sa 
+      
+      # 파드 레벨 보안 설정 (root 실행 금지)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+
       containers:
       - name: consumer-app
-        # 나중에 CI 파이프라인이 실제 백엔드 팀의 도커 이미지 태그로 갈아끼울 예정입니다.
         image: your-dockerhub-id/consumer-app:latest 
+        
+        # 컨테이너 레벨 보안 설정 (권한 상승 불가, 읽기 전용 폴더)
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+            
+        # 리소스 제한 (노드 다운 방지)
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+            
         env:
-        # 1. 메인 토픽이 아닌 에러가 모이는 DLQ 토픽을 구독함
         - name: KAFKA_TOPIC
           value: "dlq-topic" 
-        # 2. 운영 DB 대신 방금 띄운 임시 MongoDB를 바라보도록 강제 설정
         - name: DB_HOST
           value: "mongodb-temp.forensic-sandbox.svc.cluster.local"
