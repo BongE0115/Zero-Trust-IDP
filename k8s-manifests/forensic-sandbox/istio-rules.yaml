@@ -6,7 +6,7 @@ metadata:
   namespace: forensic-sandbox
 spec:
   hosts:
-  - "your-production-db.xxxx.ap-northeast-2.rds.amazonaws.com" # AWS RDS 엔드포인트
+  - "${AWS_RDS_HOST}" # AWS RDS 엔드포인트
   ports:
   - number: 3306
     name: tcp-mysql
@@ -29,5 +29,5 @@ spec:
   rules:
   - to:
     - operation:
-        hosts: ["your-production-db.xxxx.ap-northeast-2.rds.amazonaws.com"]
+        hosts: ["${AWS_RDS_HOST}"]
         ports: ["3306"]

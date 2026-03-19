@@ -2,8 +2,7 @@
 import requests
 import json
 
-# 슬랙 채널에 연동한 Incoming Webhook URL을 여기에 넣으면 돼
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 
 def send_anomaly_alert(app_name, anomalous_port, severity, reason):
     """
