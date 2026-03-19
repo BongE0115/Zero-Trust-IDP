@@ -76,59 +76,29 @@
     - name: Install Strimzi Kafka Operator
       shell: helm upgrade --install strimzi-operator strimzi/strimzi-kafka-operator -n kafka --create-namespace
 
-
-    - name: Deploy Kafka NodePool (Required for Latest Strimzi)
+    - name: Register Kafka GitOps Application to ArgoCD
       shell: |
         cat <<EOF | kubectl apply -f -
-        apiVersion: kafka.strimzi.io/v1beta2
-        kind: KafkaNodePool
+        apiVersion: argoproj.io/v1alpha1
+        kind: Application
         metadata:
-          name: kafka-pool
-          namespace: kafka
-          labels:
-            strimzi.io/cluster: my-cluster
+          name: kafka-core-infra
+          namespace: argocd
         spec:
-          replicas: 1
-          roles:
-            - broker
-            - controller
-          storage:
-            type: ephemeral
-        EOF
-
-    - name: Deploy Lightweight Kafka Instance (KRaft Mode with NodePool)
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: kafka.strimzi.io/v1beta2
-        kind: Kafka
-        metadata:
-          name: my-cluster
-          namespace: kafka
-          annotations:
-            strimzi.io/node-pools: enabled
-            strimzi.io/kraft: enabled
-        spec:
-          kafka:
-            version: 4.1.0
-            listeners:
-              - name: plain
-                port: 9092
-                type: internal
-                tls: false
-              - name: controller
-                port: 9093
-                type: internal
-                tls: false
-            config:
-              offsets.topic.replication.factor: 1
-              transaction.state.log.replication.factor: 1
-              inter.broker.protocol.version: "4.1"
-            jvmOptions:
-              "-Xms": "256M"
-              "-Xmx": "256M"
-          entityOperator:
-            topicOperator: {}
-            userOperator: {}
+          project: default
+          source:
+            repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
+            targetRevision: Infra
+            path: 'k3s-mainfests/core-infra' # 팀원들이 yaml 파일을 올릴 경로
+          destination:
+            server: 'https://kubernetes.default.svc'
+            namespace: kafka
+          syncPolicy:
+            automated:
+              prune: true
+              selfHeal: true
+            syncOptions:
+              - CreateNamespace=true
         EOF
 
     - name: Install Monitoring Collectors (Node Exporter & KSM)
