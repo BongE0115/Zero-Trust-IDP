@@ -124,11 +124,37 @@ chown ubuntu:ubuntu /home/ubuntu/ansible/*.yml
 # 4-2. 엔서블 실행 (동기 방식: 설치 완료까지 대기)
 cd /home/ubuntu/ansible
 
-# k3s 및 argocd 기초 설치 
+# 1단계: k3s 및 argocd 기초 설치 (Ansible 실행)
 sudo -u ubuntu ansible-playbook -i hosts.ini setup_k3s.yml > install.log 2>&1
-# 아르고 cd에게 깃허브 지시서 전달 
-sudo -u ubuntu ansible-playbook -i hosts.ini argocd-app.yml >> install.log 2>&1
 
-# 앤서블이 끝난 직후, ArgoCD 비밀번호를 파일로 저장 (이제는 확실히 저장됩니다!)
+# 2단계: ArgoCD ALB 연동을 위한 Insecure 모드 설정 및 재시작
+sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl patch configmap argocd-cmd-params-cm -n argocd -p '{\"data\": {\"server.insecure\": \"true\"}}'" >> install.log 2>&1
+sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl rollout restart deployment argocd-server -n argocd" >> install.log 2>&1
+
+# 3단계: 외부 접속을 위한 Ingress(길 안내 표지판) 자동 생성
+sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "cat << 'EOF' | sudo k3s kubectl apply -f -
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-ingress
+  namespace: argocd
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: argocd-server
+            port:
+              number: 80
+EOF" >> install.log 2>&1
+
+# 4단계: 아르고CD에게 깃허브 지시서 전달 (k8s manifest 적용)
+sudo -u ubuntu scp -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no /home/ubuntu/ansible/argocd-app.yml ubuntu@${k3s_server_private_ip}:/tmp/argocd-app.yml
+sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl apply -f /tmp/argocd-app.yml" >> install.log 2>&1
+
+# 5단계: 앤서블이 끝난 직후, ArgoCD 비밀번호를 모니터링 서버로 추출
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d" > /home/ubuntu/ansible/argocd_password.txt
 chown ubuntu:ubuntu /home/ubuntu/ansible/argocd_password.txt
