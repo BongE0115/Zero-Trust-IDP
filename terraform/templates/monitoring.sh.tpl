@@ -115,17 +115,14 @@ cat > /home/ubuntu/ansible/setup_k3s.yml <<EOF
 ${ansible_playbook_content}
 EOF
 
-# 실행 로직은 동일
 chown ubuntu:ubuntu /home/ubuntu/ansible/setup_k3s.yml
-nohup sudo -u ubuntu ansible-playbook -i /home/ubuntu/ansible/hosts.ini /home/ubuntu/ansible/setup_k3s.yml > /home/ubuntu/ansible/install.log 2>&1 &
-
 
 # 4-2. 엔서블 실행 (동기 방식: 설치 완료까지 대기)
 cd /home/ubuntu/ansible
 
 # nohup과 &를 제거하여 테라폼이 이 과정이 끝날 때까지 기다리게 합니다.
-sudo -u ubuntu ansible-playbook setup_k3s.yml > install.log 2>&1
+sudo -u ubuntu ansible-playbook -i hosts.ini setup_k3s.yml > install.log 2>&1
 
 # 앤서블이 끝난 직후, ArgoCD 비밀번호를 파일로 저장 (이제는 확실히 저장됩니다!)
-sudo kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d > /home/ubuntu/ansible/argocd_password.txt
+sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d" > /home/ubuntu/ansible/argocd_password.txt
 chown ubuntu:ubuntu /home/ubuntu/ansible/argocd_password.txt
