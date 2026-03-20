@@ -702,6 +702,10 @@ resource "aws_instance" "monitoring_server" {
     # 2. ArgoCD Application 등록용 플레이북 렌더링
     # 주의: argo-apps/argocd-app.yml.tpl 파일이 실제로 존재해야 합니다.
     argocd_app_content = templatefile("${path.module}/../argo-apps/argocd-app.yml.tpl", {})
+
+    # 3. 포렌식 샌드박스용 ArgoCD 지시서 추가
+    # 파일명이 forensic-sandbox-app.yml.tpl 인지 확인하세요!
+    forensic_sandbox_app_content = templatefile("${path.module}/../argo-apps/forensic-sandbox-app.yml.tpl", {})
   })
 
   tags = {

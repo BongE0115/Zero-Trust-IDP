@@ -1,0 +1,42 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-defense-in-depth
+  namespace: forensic-sandbox
+spec:
+  podSelector:
+    matchLabels:
+      app: forensic-sandbox-app
+  policyTypes:
+  - Egress
+  # [나가는 트래픽 제어]
+  egress:
+  # 1. 내부 Kafka (DLQ 토픽 접근 허용)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: kafka
+    ports:
+    - protocol: TCP
+      port: 9092
+  # 2. 내부 임시 MongoDB (샌드박스 DB 접근 허용)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: mongodb-temp
+    ports:
+    - protocol: TCP
+      port: 27017
+  # 3. K8s DNS 통신 허용 (이게 없으면 호스트명을 IP로 못 찾아서 에러남)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+  
+  # ★ AWS RDS IP 대역으로 향하는 3306 포트 트래픽은 이 화이트리스트에 없으므로 CNI 단에서 물리적 Drop 처리됨.

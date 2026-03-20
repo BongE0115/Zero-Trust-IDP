@@ -1,0 +1,14 @@
+# forensic-sandbox 네임스페이스의 L7 트래픽 제어를 담당할 Waypoint 프록시 배포
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: sandbox-waypoint
+  namespace: forensic-sandbox
+  labels:
+    istio.io/waypoint-for: service
+spec:
+  gatewayClassName: istio-waypoint
+  listeners:
+  - name: mesh
+    port: 15008
+    protocol: HBONE

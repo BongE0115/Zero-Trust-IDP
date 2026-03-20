@@ -110,13 +110,19 @@ systemctl start prometheus
 # 4-1. 설치용 엔서블 플레이북 파일 생성 (나중에 이 내용을 구체화합니다)
 # monitoring.sh.tpl 하단부
 
-# 
+# setup_k3s 파일 생성
 cat <<'EOF' > /home/ubuntu/ansible/setup_k3s.yml
 ${ansible_playbook_content}
 EOF
 
+# kafka용 아르고cd 어플리케이션 파일 생성
 cat <<'EOF' > /home/ubuntu/ansible/argocd-app.yml
 ${argocd_app_content}
+EOF
+
+# 샌드박스용 아르고 cd 어플리케이션 파일 생성
+cat <<'EOF' > /home/ubuntu/ansible/forensic-sandbox-app.yml
+${forensic_sandbox_app_content}
 EOF
 
 chown ubuntu:ubuntu /home/ubuntu/ansible/*.yml
@@ -151,9 +157,13 @@ spec:
               number: 80
 EOF" >> install.log 2>&1
 
-# 4단계: 아르고CD에게 깃허브 지시서 전달 (k8s manifest 적용)
+# 4단계: 아르고CD에게 깃허브 지시서 전달 (kafka용)
 sudo -u ubuntu scp -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no /home/ubuntu/ansible/argocd-app.yml ubuntu@${k3s_server_private_ip}:/tmp/argocd-app.yml
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl apply -f /tmp/argocd-app.yml" >> install.log 2>&1
+
+# 4단계: 아르고CD에게 깃허브 지시서 전달 (sandbox용)
+sudo -u ubuntu scp -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no /home/ubuntu/ansible/forensic-sandbox-app.yml ubuntu@${k3s_server_private_ip}:/tmp/forensic-sandbox-app.yml
+sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl apply -f /tmp/forensic-sandbox-app.yml" >> /home/ubuntu/ansible/install.log 2>&1
 
 # 5단계: 앤서블이 끝난 직후, ArgoCD 비밀번호를 모니터링 서버로 추출
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d" > /home/ubuntu/ansible/argocd_password.txt
