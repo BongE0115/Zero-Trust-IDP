@@ -33,7 +33,9 @@ spec:
         app: forensic-sandbox-app
     spec:
       # 앱에 전용 신분증 장착
-      serviceAccountName: sandbox-app-sa 
+      serviceAccountName: sandbox-app-sa
+      # 앱이 종료될 때 충분히 정리할 수 있도록 종료 유예 시간 늘리기 (처리중이던 작업이 날아가지 않도록)
+      terminationGracePeriodSeconds: 60 
       
       # 파드 레벨 보안 설정 (root 실행 금지)
       securityContext:
