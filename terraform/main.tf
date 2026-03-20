@@ -700,8 +700,8 @@ resource "aws_instance" "monitoring_server" {
     })
 
     # 2. ArgoCD Application 등록용 플레이북 렌더링
-    # 주의: templates/argocd-app.yml.tpl 파일이 실제로 존재해야 합니다.
-    argocd_app_content = templatefile("${path.module}/templates/argocd-app.yml.tpl", {})
+    # 주의: argo-apps/argocd-app.yml.tpl 파일이 실제로 존재해야 합니다.
+    argocd_app_content = templatefile("${path.module}/../argo-apps/argocd-app.yml.tpl", {})
   })
 
   tags = {
