@@ -1,0 +1,15 @@
+# k8s-manifests/argocd-config/argocd-rbac-cm.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+data:
+  # 우리가 아까 설계한 정책을 여기에 넣습니다.
+  policy.csv: |
+    p, role:sandbox-admin, applications, *, forensic-sandbox-project/*, allow
+    p, role:sandbox-admin, clusters, get, *, allow
+    p, role:sandbox-viewer, applications, get, forensic-sandbox-project/*, allow
+    g, your-github-id, role:sandbox-admin
