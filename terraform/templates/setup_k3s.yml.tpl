@@ -76,31 +76,6 @@
     - name: Install Strimzi Kafka Operator
       shell: helm upgrade --install strimzi-operator strimzi/strimzi-kafka-operator -n kafka --create-namespace
 
-    - name: Register Kafka GitOps Application to ArgoCD
-      shell: |
-        cat <<EOF | kubectl apply -f -
-        apiVersion: argoproj.io/v1alpha1
-        kind: Application
-        metadata:
-          name: kafka-core-infra
-          namespace: argocd
-        spec:
-          project: default
-          source:
-            repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
-            targetRevision: Infra
-            path: 'k3s-mainfests/core-infra' # 팀원들이 yaml 파일을 올릴 경로
-          destination:
-            server: 'https://kubernetes.default.svc'
-            namespace: kafka
-          syncPolicy:
-            automated:
-              prune: true
-              selfHeal: true
-            syncOptions:
-              - CreateNamespace=true
-        EOF
-
     - name: Install Monitoring Collectors (Node Exporter & KSM)
       shell: |
         helm upgrade --install node-exporter prometheus-community/prometheus-node-exporter -n monitoring --create-namespace
