@@ -70,3 +70,22 @@ jobs:
           path: ./capture.pcap
           channel: "알림을_받을_슬랙_채널명"
           initial_comment: "🚨 JIT 디버깅 완료: `${{ env.POD_NAME }}`의 `${{ env.PORT }}`번 포트 평문 패킷 캡처 파일입니다. Wireshark로 열어보세요!"
+
+      # 디버깅 세션 종료 및 권한 회수
+      - name: 🧹 Security GC - Delete Compromised Pod
+        run: |
+          echo "디버깅 세션 및 패킷 캡처가 완료되었습니다."
+          echo "보안을 위해 netshoot이 부착된 기존 파드를 강제 삭제합니다."
+          # 슬랙 버튼에서 넘어온 파드 이름을 변수($POD_NAME)로 받아 삭제
+          kubectl delete pod ${{ github.event.client_payload.pod_name }} -n forensic-sandbox
+
+      # 슬랙으로 완료 알림 발송
+      - name: 📢 Send Cleanup Notification to Slack
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "🛡️ *[보안 알림]* 디버깅이 완료되어 대상 파드(${{ github.event.client_payload.pod_name }})가 안전하게 폐기되고, 깨끗한 새 파드로 교체되었습니다."
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
