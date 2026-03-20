@@ -1,0 +1,27 @@
+# .github/workflows/kube-linter.yml
+name: 🛡️ K8s Static Security Check
+
+# 실행 조건 - main이나 security 브랜치에 코드가 푸시될 때마다 자동으로 실행됩니다.
+on:
+  push:
+    branches: [ "main", "security" ] # main이나 security 브랜치에 푸시될 때
+  pull_request:
+    branches: [ "main" ]           # main으로 합쳐달라는 요청(PR)이 올 때
+
+jobs:
+  scan:
+    name: Kube-Linter Scan
+    runs-on: ubuntu-latest # 깃허브가 제공하는 최신 우분투 서버에서 실행
+    
+    steps:
+      # 1. 현재 저장소의 코드를 가상 서버로 가져옵니다.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. kube-linter를 실행합니다. (깃허브 액션이 자동으로 도구를 준비해줍니다.)
+      - name: Run kube-linter
+        uses: stackrox/kube-linter-action@v1.0.4
+        with:
+          # 우리가 검사할 YAML 파일들이 모여있는 폴더 경로입니다.
+          directory: k8s-manifests/forensic-sandbox
+          config: .kube-linter.yaml
