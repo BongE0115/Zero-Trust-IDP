@@ -7,7 +7,6 @@ spec:
   project: default
   source:
     # 1. 깃허브 저장소 주소 (테라폼에서 주입하거나 직접 수정)
-    # repoURL: '${repo_url}' # 테라폼 변수를 쓸 경우
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
     
     # 2. 브랜치명 (Kafka 설정과 동일하게 Infra 브랜치 권장)
