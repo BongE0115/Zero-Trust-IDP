@@ -358,7 +358,7 @@ resource "aws_security_group" "k3s_server_sg" {
     from_port   = -1
     to_port     = -1
     protocol    = "icmp"
-    cidr_blocks = [aws_security_group.monitoring_sg.id]
+    security_groups = [aws_security_group.monitoring_sg.id]
   }
 
   egress {
@@ -419,7 +419,7 @@ resource "aws_security_group" "k3s_agent_sg" {
     from_port   = -1
     to_port     = -1
     protocol    = "icmp"
-    cidr_blocks = [aws_security_group.monitoring_sg.id]
+    security_groups = [aws_security_group.monitoring_sg.id]
   }
 
   egress {
