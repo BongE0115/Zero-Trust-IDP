@@ -358,7 +358,7 @@ resource "aws_security_group" "k3s_server_sg" {
     from_port   = -1
     to_port     = -1
     protocol    = "icmp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    cidr_blocks = [aws_security_group.monitoring_sg.id]
   }
 
   egress {
@@ -419,7 +419,7 @@ resource "aws_security_group" "k3s_agent_sg" {
     from_port   = -1
     to_port     = -1
     protocol    = "icmp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    cidr_blocks = [aws_security_group.monitoring_sg.id]
   }
 
   egress {
@@ -485,7 +485,7 @@ resource "aws_lb" "aiops_alb" {
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.alb_sg.id]
   subnets                    = [aws_subnet.public_a.id, aws_subnet.public_b.id]
-  enable_deletion_protection = false
+  enable_deletion_protection = false # terraform destroy 하기 위해 false로 설정
 
   tags = {
     Name      = "aiops-alb"
