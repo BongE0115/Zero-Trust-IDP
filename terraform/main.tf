@@ -687,28 +687,25 @@ resource "aws_instance" "monitoring_server" {
   iam_instance_profile        = aws_iam_instance_profile.ssm_profile.name
   associate_public_ip_address = true
 
-  # [수정] 용량 초과 문제를 피하기 위해 기존 로직을 주석 처리하고 임시 문자열만 남깁니다.
-  user_data = "# Temporary empty for destroy"
+  # [중요] user_data 대신 user_data_base64를 사용하고 base64encode로 감쌉니다.
+  # 이렇게 하면 테라폼이 텍스트를 압축해서 보내므로 16KB 제한을 피할 수 있습니다.
+  user_data_base64 = base64encode(templatefile("${path.module}/templates/monitoring.sh.tpl", {
+    k3s_server_private_ip = aws_instance.k3s_server.private_ip
+    k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
+    k3s_token             = var.k3s_token
+    ssh_private_key       = tls_private_key.aiops_key.private_key_pem
 
-  # /* 기존 user_data 로직 주석 시작
-  # user_data = templatefile("${path.module}/templates/monitoring.sh.tpl", {
-  #  k3s_server_private_ip = aws_instance.k3s_server.private_ip
-  #  k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
-  #  k3s_token             = var.k3s_token
-  #  ssh_private_key       = tls_private_key.aiops_key.private_key_pem
-  #
-  #  # 1. K3s 및 기본 플랫폼 설치용 플레이북 렌더링
-  #  ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
-  #    k3s_token = var.k3s_token
-  #  })
-  #
-  #  # 2. ArgoCD Application 등록용 플레이북 렌더링
-  #  argocd_app_content = templatefile("${path.module}/../argo-apps/argocd-app.yml.tpl", {})
-  #
-  #  # 3. 포렌식 샌드박스용 ArgoCD 지시서 추가
-  #  forensic_sandbox_app_content = templatefile("${path.module}/../argo-apps/forensic-sandbox-app.yml.tpl", {})
-  # })
-  # 주석 끝 */
+    # 1. K3s 및 기본 플랫폼 설치용 플레이북 렌더링
+    ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
+      k3s_token = var.k3s_token
+    })
+
+    # 2. Kafka용 ArgoCD Application 등록용 플레이북 렌더링
+    argocd_app_content = templatefile("${path.module}/../argo-apps/argocd-app.yml.tpl", {})
+
+    # 3. 포렌식 샌드박스용 ArgoCD 지시서 추가
+    forensic_sandbox_app_content = templatefile("${path.module}/../argo-apps/forensic-sandbox-app.yml.tpl", {})
+  }))
 
   tags = {
     Name = "aiops-monitoring-control"
