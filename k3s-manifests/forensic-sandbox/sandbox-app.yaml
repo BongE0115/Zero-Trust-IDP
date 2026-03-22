@@ -6,6 +6,9 @@ metadata:
   labels:
     # 파드 트래픽을 노드의 ztunnel이 가로채도록 설정
     istio.io/dataplane-mode: ambient
+    # 깃옵스 기반 온-디멘드 샌드박스 완전 구현을 위해 샌드박스 생성 및 istio 보안 규칙 순서 동기화 wave 추가
+    annotations:
+      argocd.argoproj.io/sync-wave: "-1"
 
 ---
 # 2. 전용 Service Account 생성 (신분증)
@@ -14,6 +17,9 @@ kind: ServiceAccount
 metadata:
   name: sandbox-app-sa
   namespace: forensic-sandbox
+  # 깃옵스 기반 온-디멘드 샌드박스 완전 구현을 위해 샌드박스 생성 및 istio 보안 규칙 순서 동기화 wave 추가
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 
 ---
 # 3. 샌드박스 앱 디플로이먼트
@@ -22,6 +28,9 @@ kind: Deployment
 metadata:
   name: forensic-sandbox-app
   namespace: forensic-sandbox
+   # 깃옵스 기반 온-디멘드 샌드박스 완전 구현을 위해 샌드박스 생성 및 istio 보안 규칙 순서 동기화 wave 추가
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   replicas: 0 # (평소엔 0, 에러 발생 시 자동화 스크립트가 늘림)
   selector:

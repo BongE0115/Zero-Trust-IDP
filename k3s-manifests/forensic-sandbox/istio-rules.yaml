@@ -4,12 +4,14 @@ kind: ServiceEntry
 metadata:
   name: aws-rds-external
   namespace: forensic-sandbox
+  annotations:
+    argocd.argoproj.io/sync-wave: "0" # Wave 0 유지
 spec:
   hosts:
   - "${AWS_RDS_HOST}" # AWS RDS 엔드포인트
   ports:
-  - number: 3306
-    name: tcp-mysql
+  - number: 5432      # ★ 3306(MySQL)에서 5432(PostgreSQL)로 수정
+    name: tcp-postgres # ★ 이름도 역할에 맞게 변경
     protocol: TCP
   location: MESH_EXTERNAL
   resolution: DNS
@@ -21,6 +23,8 @@ kind: AuthorizationPolicy
 metadata:
   name: deny-aws-rds-egress
   namespace: forensic-sandbox
+  annotations:
+    argocd.argoproj.io/sync-wave: "0" # Wave 0 유지
 spec:
   selector:
     matchLabels:
@@ -30,4 +34,4 @@ spec:
   - to:
     - operation:
         hosts: ["${AWS_RDS_HOST}"]
-        ports: ["3306"]
+        ports: ["5432"] # ★ 차단할 포트 번호도 5432로 수정
