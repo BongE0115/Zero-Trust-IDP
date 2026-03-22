@@ -137,34 +137,21 @@ sudo -u ubuntu ansible-playbook -i hosts.ini setup_k3s.yml > install.log 2>&1
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl patch configmap argocd-cmd-params-cm -n argocd -p '{\"data\": {\"server.insecure\": \"true\"}}'" >> install.log 2>&1
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl rollout restart deployment argocd-server -n argocd" >> install.log 2>&1
 
-# 3단계: 외부 접속을 위한 Ingress(길 안내 표지판) 자동 생성
-sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "cat << 'EOF' | sudo k3s kubectl apply -f -
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: argocd-ingress
-  namespace: argocd
-spec:
-  rules:
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: argocd-server
-            port:
-              number: 80
-EOF" >> install.log 2>&1
-
+# 3단계: ArgoCD 서비스를 NodePort 타입으로 변경하고 포트를 30080으로 고정
+sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
+  "sudo k3s kubectl patch svc argocd-server -n argocd --patch '{\"spec\": {\"type\": \"NodePort\", \"ports\": [{\"port\": 80, \"nodePort\": 30080}]}}'" >> install.log 2>&1
+# 2. (선택사항) 기존에 생성된 ingress가 있다면 혼란을 줄 수 있으므로 삭제
+sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
+  "sudo k3s kubectl delete ingress argocd-ingress -n argocd || true" >> install.log 2>&1
+  
 # 4단계: 아르고CD에게 깃허브 지시서 전달 (kafka용)
 sudo -u ubuntu scp -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no /home/ubuntu/ansible/argocd-app.yml ubuntu@${k3s_server_private_ip}:/tmp/argocd-app.yml
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl apply -f /tmp/argocd-app.yml" >> install.log 2>&1
 
-# 4단계: 아르고CD에게 깃허브 지시서 전달 (sandbox용)
+# 5단계: 아르고CD에게 깃허브 지시서 전달 (sandbox용)
 sudo -u ubuntu scp -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no /home/ubuntu/ansible/forensic-sandbox-app.yml ubuntu@${k3s_server_private_ip}:/tmp/forensic-sandbox-app.yml
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl apply -f /tmp/forensic-sandbox-app.yml" >> /home/ubuntu/ansible/install.log 2>&1
 
-# 5단계: 앤서블이 끝난 직후, ArgoCD 비밀번호를 모니터링 서버로 추출
+# 6단계: 앤서블이 끝난 직후, ArgoCD 비밀번호를 모니터링 서버로 추출
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} "sudo k3s kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d" > /home/ubuntu/ansible/argocd_password.txt
 chown ubuntu:ubuntu /home/ubuntu/ansible/argocd_password.txt

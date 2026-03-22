@@ -469,6 +469,25 @@ resource "aws_security_group_rule" "k3s_agent_flannel_from_server" {
   description              = "Flannel VXLAN from master"
 }
 
+# ALB에서 K3s 노드(Master/Worker)의 NodePort로 가는 트래픽 허용
+resource "aws_security_group_rule" "allow_alb_to_nodeport_master" {
+  type                     = "ingress"
+  from_port                = 30080
+  to_port                  = 30080
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.k3s_server_sg.id
+  source_security_group_id = aws_security_group.alb_sg.id
+}
+
+resource "aws_security_group_rule" "allow_alb_to_nodeport_worker" {
+  type                     = "ingress"
+  from_port                = 30080
+  to_port                  = 30080
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.k3s_agent_sg.id
+  source_security_group_id = aws_security_group.alb_sg.id
+}
+
 
 # ==================================================
 # --------------------------------------------------
@@ -499,18 +518,19 @@ resource "aws_lb" "aiops_alb" {
 # ==========================================
 resource "aws_lb_target_group" "aiops_tg" {
   name     = "aiops-tg"
-  port     = 80
+  port     = 30080
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
   health_check {
     interval            = 30
-    path                = "/"
-    port                = "80"
+    path                = "/healthz" # ArgoCD 전용 건강 검진 경로
+    port                = "30080"
     protocol            = "HTTP"
     timeout             = 5
     healthy_threshold   = 3
     unhealthy_threshold = 3
+    matcher             = "200-399"
   }
 
   tags = {
@@ -540,13 +560,13 @@ resource "aws_lb_listener" "http" {
 resource "aws_lb_target_group_attachment" "k3s_server_attachment" {
   target_group_arn = aws_lb_target_group.aiops_tg.arn
   target_id        = aws_instance.k3s_server.id
-  port             = 80
+  port             = 30080
 }
 
 resource "aws_lb_target_group_attachment" "k3s_agent_attachment" {
   target_group_arn = aws_lb_target_group.aiops_tg.arn
   target_id        = aws_instance.k3s_agent.id
-  port             = 80
+  port             = 30080
 }
 
 
