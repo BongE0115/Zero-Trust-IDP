@@ -687,26 +687,28 @@ resource "aws_instance" "monitoring_server" {
   iam_instance_profile        = aws_iam_instance_profile.ssm_profile.name
   associate_public_ip_address = true
 
-  # user_data 템플릿 렌더링 시작
-  user_data = templatefile("${path.module}/templates/monitoring.sh.tpl", {
-    k3s_server_private_ip = aws_instance.k3s_server.private_ip
-    k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
-    k3s_token             = var.k3s_token
-    ssh_private_key       = tls_private_key.aiops_key.private_key_pem
+  # [수정] 용량 초과 문제를 피하기 위해 기존 로직을 주석 처리하고 임시 문자열만 남깁니다.
+  user_data = "# Temporary empty for destroy"
 
-    # 1. K3s 및 기본 플랫폼 설치용 플레이북 렌더링
-    ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
-      k3s_token = var.k3s_token
-    })
-
-    # 2. ArgoCD Application 등록용 플레이북 렌더링
-    # 주의: argo-apps/argocd-app.yml.tpl 파일이 실제로 존재해야 합니다.
-    argocd_app_content = templatefile("${path.module}/../argo-apps/argocd-app.yml.tpl", {})
-
-    # 3. 포렌식 샌드박스용 ArgoCD 지시서 추가
-    # 파일명이 forensic-sandbox-app.yml.tpl 인지 확인하세요!
-    forensic_sandbox_app_content = templatefile("${path.module}/../argo-apps/forensic-sandbox-app.yml.tpl", {})
-  })
+  # /* 기존 user_data 로직 주석 시작
+  # user_data = templatefile("${path.module}/templates/monitoring.sh.tpl", {
+  #  k3s_server_private_ip = aws_instance.k3s_server.private_ip
+  #  k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
+  #  k3s_token             = var.k3s_token
+  #  ssh_private_key       = tls_private_key.aiops_key.private_key_pem
+  #
+  #  # 1. K3s 및 기본 플랫폼 설치용 플레이북 렌더링
+  #  ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
+  #    k3s_token = var.k3s_token
+  #  })
+  #
+  #  # 2. ArgoCD Application 등록용 플레이북 렌더링
+  #  argocd_app_content = templatefile("${path.module}/../argo-apps/argocd-app.yml.tpl", {})
+  #
+  #  # 3. 포렌식 샌드박스용 ArgoCD 지시서 추가
+  #  forensic_sandbox_app_content = templatefile("${path.module}/../argo-apps/forensic-sandbox-app.yml.tpl", {})
+  # })
+  # 주석 끝 */
 
   tags = {
     Name = "aiops-monitoring-control"
