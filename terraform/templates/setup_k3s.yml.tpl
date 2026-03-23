@@ -95,6 +95,25 @@
           --namespace kafka --create-namespace \
           --version 0.40.0  # k3s-manifests\core-infra 내 kafka 관련 deploy 코드 버전에 따라 오퍼레이터 버전을 수정하면 됨.
     
+    
+    # Sandbox용 AWS RDS 별명(DNS) 미리 등록하기
+    
+    - name: Create Forensic Sandbox Namespace
+      shell: kubectl create namespace forensic-sandbox
+      ignore_errors: yes  # 이미 있어도 에러 무시
+
+    - name: Create RDS ExternalName Service
+      shell: |
+        cat <<EOF | kubectl apply -f -
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: aws-rds-host  # 우리가 정한 별명
+          namespace: forensic-sandbox
+        spec:
+          type: ExternalName
+          externalName: {{ rds_endpoint }} # outputs.tf rds_address를 main에서 모니터링 서버 user_data를 통해 서버 안으로 집어 넣고, 마스터 노드에서 실행될 setup_k3s 파일의 변수로 사용한다.  
+        EOF
 
     - name: Install ArgoCD & Other Tools
       shell: |

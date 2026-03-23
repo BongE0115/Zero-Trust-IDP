@@ -8,7 +8,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "0" # Wave 0 유지
 spec:
   hosts:
-  - "${AWS_RDS_HOST}" # AWS RDS 엔드포인트
+  - "aws-rds-host" # AWS RDS 엔드포인트
   ports:
   - number: 5432      # ★ 3306(MySQL)에서 5432(PostgreSQL)로 수정
     name: tcp-postgres # ★ 이름도 역할에 맞게 변경
@@ -33,5 +33,5 @@ spec:
   rules:
   - to:
     - operation:
-        hosts: ["${AWS_RDS_HOST}"]
+        hosts: ["aws-rds-host"] # yaml 파일은 쉘 스크립트 같은 환경 변수 치환을 못함. 
         ports: ["5432"] # ★ 차단할 포트 번호도 5432로 수정

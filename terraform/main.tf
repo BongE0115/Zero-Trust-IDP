@@ -714,6 +714,7 @@ resource "aws_instance" "monitoring_server" {
     k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
     k3s_token             = var.k3s_token
     ssh_private_key       = tls_private_key.aiops_key.private_key_pem
+    rds_endpoint = aws_db_instance.aiops_rds.address
 
     # 1. K3s 및 기본 플랫폼 설치용 플레이북 렌더링
     ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
