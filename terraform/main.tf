@@ -696,6 +696,33 @@ resource "aws_instance" "nat" {
   }
 }
 
+# =================================================================
+# 1. 모니터링 서버에 넣을 압축된 User Data 생성기
+# =================================================================
+data "cloudinit_config" "monitoring_config" {
+  gzip          = true  
+  base64_encode = true
+
+  part {
+    content_type = "text/x-shellscript"
+    content      = templatefile("${path.module}/templates/monitoring.sh.tpl", {
+      k3s_server_private_ip = aws_instance.k3s_server.private_ip
+      k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
+      k3s_token             = var.k3s_token
+      ssh_private_key       = tls_private_key.aiops_key.private_key_pem
+      
+      ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
+        k3s_token    = var.k3s_token
+        rds_endpoint = aws_db_instance.aiops_rds.address
+      })
+
+      argocd_app_content           = templatefile("${path.module}/../argo-apps/argocd-app.yml.tpl", {})
+      forensic_sandbox_app_content = templatefile("${path.module}/../argo-apps/forensic-sandbox-app.yml.tpl", {})
+    })
+  }
+}
+
+
 # ==========================================
 # Monitoring + Ansible Control Node
 # ==========================================
@@ -707,26 +734,8 @@ resource "aws_instance" "monitoring_server" {
   iam_instance_profile        = aws_iam_instance_profile.ssm_profile.name
   associate_public_ip_address = true
 
-  # [중요] user_data 대신 user_data_base64를 사용하고 base64encode로 감쌉니다.
-  # 이렇게 하면 테라폼이 텍스트를 압축해서 보내므로 16KB 제한을 피할 수 있습니다.
-  user_data_base64 = base64encode(templatefile("${path.module}/templates/monitoring.sh.tpl", {
-    k3s_server_private_ip = aws_instance.k3s_server.private_ip
-    k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
-    k3s_token             = var.k3s_token
-    ssh_private_key       = tls_private_key.aiops_key.private_key_pem
-    rds_endpoint = aws_db_instance.aiops_rds.address
-
-    # 1. K3s 및 기본 플랫폼 설치용 플레이북 렌더링
-    ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
-      k3s_token = var.k3s_token
-    })
-
-    # 2. Kafka용 ArgoCD Application 등록용 플레이북 렌더링
-    argocd_app_content = templatefile("${path.module}/../argo-apps/argocd-app.yml.tpl", {})
-
-    # 3. 포렌식 샌드박스용 ArgoCD 지시서 추가
-    forensic_sandbox_app_content = templatefile("${path.module}/../argo-apps/forensic-sandbox-app.yml.tpl", {})
-  }))
+  # 위에서 만든 압축 monitoring_config를 가져와서 넣어준다. 
+  user_data_base64 = data.cloudinit_config.monitoring_config.rendered
 
   tags = {
     Name = "aiops-monitoring-control"
