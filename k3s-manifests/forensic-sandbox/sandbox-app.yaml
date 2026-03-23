@@ -53,7 +53,8 @@ spec:
 
       containers:
       - name: consumer-app
-        image: your-dockerhub-id/consumer-app:latest 
+        image: alpine:latest # 가벼운 리눅스 이미지 -> 추후 진짜 컨슈머 앱으로 수정해야 됨. 
+        command: ["/bin/sh", "-c", "sleep infinity"] # alpine 파드가 즉시 종료되지 않도록 유지하는 명령어
         
         # 컨테이너 레벨 보안 설정 (권한 상승 불가, 읽기 전용 폴더)
         securityContext:
