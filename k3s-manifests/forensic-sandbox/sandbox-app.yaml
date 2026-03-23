@@ -32,7 +32,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  replicas: 0 # (평소엔 0, 에러 발생 시 자동화 스크립트가 늘림)
+  replicas: 1 # (평소엔 0, 에러 발생 시 자동화 스크립트가 늘림)
   selector:
     matchLabels:
       app: forensic-sandbox-app
