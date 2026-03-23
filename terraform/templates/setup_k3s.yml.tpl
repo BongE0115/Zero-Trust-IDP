@@ -58,6 +58,7 @@
         helm repo add argo https://argoproj.github.io/argo-helm
         helm repo add istio https://istio-release.storage.googleapis.com/charts
         helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo add strimzi https://strimzi.io/charts/
         helm repo update
 
     # Waypoint Proxy 운영을 위한 Kubernetes 표준 Gateway API CRD 설치
@@ -88,8 +89,11 @@
       shell: kubectl create namespace kafka
       ignore_errors: yes  # 이미 네임스페이스가 있어도 에러 내지 않고 패스
 
-    - name: Install Strimzi Operator (CRDs)
-      shell: kubectl apply -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
+    - name: Install Strimzi Operator (CRDs pinned to version)
+      shell: |
+        helm upgrade --install strimzi strimzi/strimzi-kafka-operator \
+          --namespace kafka --create-namespace \
+          --version 0.40.0  # k3s-manifests\core-infra 내 kafka 관련 deploy 코드 버전에 따라 오퍼레이터 버전을 수정하면 됨.
     
 
     - name: Install ArgoCD & Other Tools
