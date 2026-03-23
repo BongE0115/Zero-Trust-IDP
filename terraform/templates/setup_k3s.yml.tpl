@@ -1,4 +1,3 @@
----
 # [1단계] 모든 노드 공통 설정: 자원 최적화 및 기초 환경
 - name: Prepare all nodes for K3s
   hosts: all
@@ -82,8 +81,18 @@
     - name: Install Ztunnel (Node Proxy)
       shell: helm upgrade --install ztunnel istio/ztunnel -n istio-system
 
+   
+    # Kafka 인프라를 위한 Strimzi Operator 사전 설치
+    
+    - name: Create Kafka Namespace
+      shell: kubectl create namespace kafka
+      ignore_errors: yes  # 이미 네임스페이스가 있어도 에러 내지 않고 패스
+
+    - name: Install Strimzi Operator (CRDs)
+      shell: kubectl apply -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
+    
+
     - name: Install ArgoCD & Other Tools
       shell: |
         helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace
         helm upgrade --install node-exporter prometheus-community/prometheus-node-exporter -n monitoring --create-namespace
-
