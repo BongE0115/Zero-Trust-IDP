@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: YOUR_DOCKER_IMAGE   # ← 바꿔라
+        image: haseok/aiops-backend:latest
         ports:
         - containerPort: 8000
         env:
