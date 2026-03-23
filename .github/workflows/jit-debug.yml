@@ -1,0 +1,91 @@
+name: 🚑 JIT Debugging (Slack ChatOps)
+
+on:
+  # 1. Slack 버튼 클릭 시 외부 API(Webhook)로 찔러서 실행되는 조건
+  repository_dispatch:
+    types: [trigger-jit-debug]
+  
+  # 2. GitHub 웹 화면에서 수동으로 테스트해 볼 수 있는 조건
+  workflow_dispatch:
+    inputs:
+      pod_name:
+        description: '디버깅할 파드 이름 (예: forensic-sandbox-app-xyz)'
+        required: true
+      target_port:
+        description: '캡처할 포트 번호 (예: 8080)'
+        required: true
+      duration:
+        description: '패킷 캡처 시간(초)'
+        required: false
+        default: '30'
+
+jobs:
+  capture-traffic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 변수 설정 (Slack 연동 or 수동 실행 대응)
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            # 슬랙 버튼에서 넘어온 JSON 데이터 파싱
+            echo "POD_NAME=${{ github.event.client_payload.pod_name }}" >> $GITHUB_ENV
+            echo "PORT=${{ github.event.client_payload.target_port }}" >> $GITHUB_ENV
+            echo "DURATION=30" >> $GITHUB_ENV
+          else
+            # 수동 실행 시 입력한 데이터 파싱
+            echo "POD_NAME=${{ github.event.inputs.pod_name }}" >> $GITHUB_ENV
+            echo "PORT=${{ github.event.inputs.target_port }}" >> $GITHUB_ENV
+            echo "DURATION=${{ github.event.inputs.duration }}" >> $GITHUB_ENV
+          fi
+
+      - name: 🔐 K8s 클러스터 접속 (Kubeconfig 세팅)
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          # GitHub Secrets에 하이브리드 K3s 클러스터 접속 정보를 미리 넣어둬야 해!
+          kubeconfig: ${{ secrets.KUBECONFIG }} 
+
+      - name: 🛠️ 임시 컨테이너(netshoot) 부착 및 tcpdump 실행
+        run: |
+          echo "🎯 대상 파드: $POD_NAME / 포트: $PORT / 시간: $DURATION 초"
+          
+          # 1. 대상 파드에 netshoot 컨테이너 몰래 붙이기
+          kubectl debug -n forensic-sandbox $POD_NAME --image=nicolaka/netshoot --container=debugger --target=consumer-app || true
+          
+          # 컨테이너 뜰 때까지 5초 대기
+          sleep 5
+          
+          # 2. 이중 암호화 전 평문 패킷 캡처 (지정된 시간만큼 돌고 멈춤)
+          echo "📡 패킷 캡처를 시작합니다..."
+          kubectl exec -n forensic-sandbox $POD_NAME -c debugger -- timeout $DURATION tcpdump -i eth0 port $PORT -w /tmp/capture.pcap || true
+          
+          # 3. K8s 파드 안에 있는 .pcap 파일을 깃허브 액션 서버(로컬)로 복사해오기
+          kubectl cp forensic-sandbox/$POD_NAME:/tmp/capture.pcap ./capture.pcap -c debugger
+
+      - name: 📤 Slack으로 캡처 파일(.pcap) 배달하기
+        uses: adrey/slack-file-upload-action@master
+        with:
+          # GitHub Secrets에 슬랙 봇 토큰을 넣어둬야 해!
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          path: ./capture.pcap
+          channel: "알림을_받을_슬랙_채널명"
+          initial_comment: "🚨 JIT 디버깅 완료: `${{ env.POD_NAME }}`의 `${{ env.PORT }}`번 포트 평문 패킷 캡처 파일입니다. Wireshark로 열어보세요!"
+
+      # 디버깅 세션 종료 및 권한 회수
+      - name: 🧹 Security GC - Delete Compromised Pod
+        run: |
+          echo "디버깅 세션 및 패킷 캡처가 완료되었습니다."
+          echo "보안을 위해 netshoot이 부착된 기존 파드를 강제 삭제합니다."
+          # 슬랙 버튼에서 넘어온 파드 이름을 변수($POD_NAME)로 받아 삭제
+          kubectl delete pod ${{ github.event.client_payload.pod_name }} -n forensic-sandbox
+
+      # 슬랙으로 완료 알림 발송
+      - name: 📢 Send Cleanup Notification to Slack
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "🛡️ *[보안 알림]* 디버깅이 완료되어 대상 파드(${{ github.event.client_payload.pod_name }})가 안전하게 폐기되고, 깨끗한 새 파드로 교체되었습니다."
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

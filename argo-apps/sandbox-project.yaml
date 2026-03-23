@@ -1,0 +1,27 @@
+# argo-apps/sandbox-project.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: forensic-sandbox-project
+  namespace: argocd
+spec:
+  description: "보안 분석 전용 샌드박스 프로젝트 (Zero-Trust)"
+  
+  # 1. 허용할 소스 저장소
+  sourceRepos:
+  - "https://github.com/your-org/Zero-Trust-IDP.git"
+
+  # 2. 배포 가능한 목적지 (샌드박스 네임스페이스로 한정)
+  destinations:
+  - namespace: forensic-sandbox
+    server: https://kubernetes.default.svc
+
+  # 3. 생성 가능한 리소스 제한 (위험한 리소스 차단 가능)
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*' # 일단 모두 허용하되, 나중에 Namespace 삭제 권한 등을 뺄 수 있음
+
+  # 4. 보안을 위한 고립 설정
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'

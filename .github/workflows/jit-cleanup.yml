@@ -1,0 +1,27 @@
+# .github/workflows/jit-cleanup.yml
+name: 🧹 JIT Security Cleanup
+
+# 슬랙에서 '초기화 버튼'을 눌렀을 때 발생하는 이벤트(repository_dispatch)를 대기합니다.
+on:
+  repository_dispatch:
+    types: [cleanup_pod]
+
+jobs:
+  revoke-and-restart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Compromised Pod (Revoke Access)
+        # 슬랙에서 넘겨준 파드 이름을 받아서 삭제 명령을 내립니다.
+        run: |
+          echo "개발자(관리자)의 요청으로 디버깅 권한을 회수합니다."
+          kubectl delete pod ${{ github.event.client_payload.pod_name }} -n forensic-sandbox
+
+      - name: Send Final Slack Notification
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "✅ *[보안 권한 회수 완료]* 디버깅용 임시 컨테이너가 안전하게 제거되었으며, 샌드박스가 무결성 상태로 복구되었습니다."
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

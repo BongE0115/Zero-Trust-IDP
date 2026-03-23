@@ -71,6 +71,10 @@ env/
 # 환경 변수 파일 (API 키, DB 접속 주소 등)
 .env
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
 
 # 패키징 및 배포
 build/
@@ -105,3 +109,9 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# ==========================================
+# 7. Debugging & Traces
+# ==========================================
+*.pcap
+*.cap

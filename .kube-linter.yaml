@@ -1,0 +1,17 @@
+# .kube-linter.yaml
+checks:
+  # 1. ruleset
+  include:
+    - "no-read-only-root-fs"      # 파일 시스템은 '읽기 전용'이어야 함 (해킹 방지)
+    - "run-as-non-root"           # 관리자(Root) 권한으로 실행 금지
+    - "unset-cpu-requirements"    # CPU 사용량 제한 필수 (자원 고갈 방지)
+    - "unset-memory-requirements" # 메모리 사용량 제한 필수 (OOM 방지)
+    - "privileged-container"      # 특권 권한 금지 (컨테이너 탈출 공격 방지)
+    - "host-ipc"                  # 호스트 통신 격리
+    - "host-network"              # 호스트 네트워크 격리
+
+  # 2. exclude
+  exclude:
+    - "no-liveness-probe"         # 아직 개발 중이니 헬스체크 없어도 통과
+    - "no-readiness-probe"
+    - "latest-tag"                # 테스트 때는 :latest 태그 쓸 수도 있으니 허용
