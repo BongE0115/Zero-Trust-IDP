@@ -112,7 +112,7 @@
           namespace: forensic-sandbox
         spec:
           type: ExternalName
-          externalName: {{ rds_endpoint }} # outputs.tf rds_address를 main에서 모니터링 서버 user_data를 통해 서버 안으로 집어 넣고, 마스터 노드에서 실행될 setup_k3s 파일의 변수로 사용한다.  
+          externalName: ${ rds_endpoint } # outputs.tf rds_address를 main에서 모니터링 서버 user_data를 통해 서버 안으로 집어 넣고, 마스터 노드에서 실행될 setup_k3s 파일의 변수로 사용한다.  
         EOF
 
     - name: Install ArgoCD & Other Tools
