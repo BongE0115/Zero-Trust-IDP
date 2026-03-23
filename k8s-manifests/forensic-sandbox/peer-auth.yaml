@@ -1,9 +1,0 @@
-# peer-auth.yaml 샌드박스 네임스페이스의 모든 서비스 간 통신에 대해 mTLS 암호화를 강제하는 PeerAuthentication 리소스
-apiVersion: security.istio.io/v1beta1
-kind: PeerAuthentication
-metadata:
-  name: default-strict-mtls
-  namespace: forensic-sandbox
-spec:
-  mtls:
-    mode: STRICT
