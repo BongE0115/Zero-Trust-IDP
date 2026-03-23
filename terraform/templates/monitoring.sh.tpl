@@ -157,31 +157,7 @@ sudo -u ubuntu scp -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no \
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
   "sudo k3s kubectl apply -f /tmp/argocd-kafka-operator-app.yml" >> install.log 2>&1
 
-# 5단계: Strimzi Operator 준비 대기
-echo "Waiting for Kafka namespace to be created by Argo CD..." >> install.log
-for i in {1..40}; do
-  if sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-    "sudo k3s kubectl get namespace kafka" > /dev/null 2>&1; then
-    echo "Kafka namespace found." >> install.log
-    break
-  fi
-  echo "Still waiting for kafka namespace... ($i/40)" >> install.log
-  sleep 15
-done
-
-echo "Waiting for Strimzi operator deployment to be created..." >> install.log
-for i in {1..40}; do
-  if sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-    "sudo k3s kubectl -n kafka get deployment strimzi-cluster-operator" > /dev/null 2>&1; then
-    echo "Strimzi operator deployment found." >> install.log
-    break
-  fi
-  echo "Still waiting for Strimzi deployment... ($i/40)" >> install.log
-  sleep 15
-done
-
-sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-  "sudo k3s kubectl -n kafka rollout status deployment/strimzi-cluster-operator --timeout=600s" >> install.log 2>&1
+# 5단계 삭제 : 
 
 # 6단계: Kafka Cluster App 적용
 sudo -u ubuntu scp -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no \

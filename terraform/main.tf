@@ -748,7 +748,8 @@ resource "aws_instance" "monitoring_server" {
 
   # 위에서 만든 압축 monitoring_config를 가져와서 넣어준다. 
   user_data_base64 = data.cloudinit_config.monitoring_config.rendered
-
+  user_data_replace_on_change = true
+  
   tags = {
     Name = "aiops-monitoring-control"
     Role = "Monitoring_And_Ansible_Control_Node"
