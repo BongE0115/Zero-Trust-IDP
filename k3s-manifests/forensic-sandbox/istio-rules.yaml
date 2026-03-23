@@ -33,5 +33,5 @@ spec:
   rules:
   - to:
     - operation:
-        hosts: ["aws-rds-host"] # yaml 파일은 쉘 스크립트 같은 환경 변수 치환을 못함. 
+        # hosts: ["aws-rds-host"] # yaml 파일은 쉘 스크립트 같은 환경 변수 치환을 못함. 
         ports: ["5432"] # ★ 차단할 포트 번호도 5432로 수정
