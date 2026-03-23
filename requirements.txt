@@ -4,3 +4,7 @@ python-dotenv
 pydantic
 kafka-python
 slack-sdk
+requests
+scikit-learn
+pandas
+salesforce-merlion

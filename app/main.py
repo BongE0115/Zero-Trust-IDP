@@ -21,22 +21,30 @@ def start_kafka_consumer():
     print("🔥 Consumer startup called")
 
     # 🔹 Main Kafka Consumer
-    consumer = AnomalyKafkaConsumer(
-        bootstrap_servers="localhost:9092",
-        topic="anomaly-topic",
-        group_id="anomaly-consumer-group",
-    )
+    try:
+        consumer = AnomalyKafkaConsumer(
+            bootstrap_servers="localhost:9092",
+            topic="anomaly-topic",
+            group_id="anomaly-consumer-group",
+        )
+        threading.Thread(target=consumer.start, daemon=True).start()
+        print("✅ Main Kafka Consumer started")
 
-    threading.Thread(target=consumer.start, daemon=True).start()
+    except Exception as e:
+        print(f"❌ Main Kafka Consumer error: {e}")
 
     # 🔥 DLQ Consumer
-    dlq_consumer = DLQKafkaConsumer(
-        bootstrap_servers="localhost:9092",
-        topic="anomaly-dlq",
-        group_id="dlq-consumer-group",
-    )
+    try:
+        dlq_consumer = DLQKafkaConsumer(
+            bootstrap_servers="localhost:9092",
+            topic="anomaly-dlq",
+            group_id="dlq-consumer-group",
+        )
+        threading.Thread(target=dlq_consumer.start, daemon=True).start()
+        print("✅ DLQ Kafka Consumer started")
 
-    threading.Thread(target=dlq_consumer.start, daemon=True).start()
+    except Exception as e:
+        print(f"❌ DLQ Kafka Consumer error: {e}")
 
 
 @app.get("/")
