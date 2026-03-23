@@ -93,7 +93,7 @@
       shell: |
         helm upgrade --install strimzi strimzi/strimzi-kafka-operator \
           --namespace kafka --create-namespace \
-          --version 0.40.0  # k3s-manifests\core-infra 내 kafka 관련 deploy 코드 버전에 따라 오퍼레이터 버전을 수정하면 됨.
+          --version 0.43.0  # k3s-manifests\core-infra 내 kafka 관련 deploy 코드 버전에 따라 오퍼레이터 버전을 수정하면 됨.
     
     
     # Sandbox용 AWS RDS 별명(DNS) 미리 등록하기

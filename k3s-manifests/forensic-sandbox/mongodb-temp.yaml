@@ -8,7 +8,7 @@ metadata:
     # ★ [추가] 3순위: 보안망과 이름표(Service)가 다 준비된 후, 마지막에 실제 DB 파드를 투입합니다.
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  replicas: 1
+  replicas: 0 # 샌드박스 생성 트리거 시 0 -> 1 로 수정되어야 함. 
   selector:
     matchLabels:
       app: mongodb-temp
