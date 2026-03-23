@@ -700,7 +700,7 @@ resource "aws_instance" "nat" {
 # 1. 모니터링 서버에 넣을 압축된 User Data 생성기
 # =================================================================
 data "cloudinit_config" "monitoring_config" {
-  gzip          = true  
+  gzip          = true
   base64_encode = true
 
   part {
@@ -710,14 +710,26 @@ data "cloudinit_config" "monitoring_config" {
       k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
       k3s_token             = var.k3s_token
       ssh_private_key       = tls_private_key.aiops_key.private_key_pem
-      
+
       ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
         k3s_token    = var.k3s_token
         rds_endpoint = aws_db_instance.aiops_rds.address
       })
 
-      argocd_app_content           = templatefile("${path.module}/../argo-apps/argocd-app.yml.tpl", {})
-      forensic_sandbox_app_content = templatefile("${path.module}/../argo-apps/forensic-sandbox-app.yml.tpl", {})
+      argocd_kafka_operator_app_content = templatefile(
+        "${path.module}/../argo-apps/argocd-kafka-operator-app.yml.tpl",
+        {}
+      )
+
+      argocd_kafka_cluster_app_content = templatefile(
+        "${path.module}/../argo-apps/argocd-kafka-cluster-app.yml.tpl",
+        {}
+      )
+
+      forensic_sandbox_app_content = templatefile(
+        "${path.module}/../argo-apps/forensic-sandbox-app.yml.tpl",
+        {}
+      )
     })
   }
 }

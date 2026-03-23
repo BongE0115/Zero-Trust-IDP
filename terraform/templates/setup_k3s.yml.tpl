@@ -27,10 +27,16 @@
 - name: Install K3s Master
   hosts: k3s_master
   become: yes
+  vars:
+    k3s_version: "v1.33.9+k3s1"
   tasks:
     - name: Install K3s Server
-      shell: curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644" K3S_TOKEN={{ k3s_token }} sh -
-    
+      shell: |
+        curl -sfL https://get.k3s.io | \
+        INSTALL_K3S_VERSION="{{ k3s_version }}" \
+        INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644" \
+        K3S_TOKEN="{{ k3s_token }}" sh -
+
     - name: Wait for node-token
       wait_for:
         path: /var/lib/rancher/k3s/server/node-token
@@ -39,9 +45,15 @@
 - name: Join Worker Nodes to Cluster
   hosts: k3s_worker
   become: yes
+  vars:
+    k3s_version: "v1.33.9+k3s1"
   tasks:
     - name: Join K3s Cluster
-      shell: "curl -sfL https://get.k3s.io | K3S_URL=https://{{ hostvars['master']['ansible_host'] }}:6443 K3S_TOKEN={{ k3s_token }} sh -"
+      shell: |
+        curl -sfL https://get.k3s.io | \
+        INSTALL_K3S_VERSION="{{ k3s_version }}" \
+        K3S_URL="https://{{ hostvars['master']['ansible_host'] }}:6443" \
+        K3S_TOKEN="{{ k3s_token }}" sh -
 
 # [4단계] 플랫폼 도구 및 Istio Ambient Mesh 설치
 - name: Deploy Platform Tools & Ambient Mesh
@@ -58,7 +70,6 @@
         helm repo add argo https://argoproj.github.io/argo-helm
         helm repo add istio https://istio-release.storage.googleapis.com/charts
         helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-        helm repo add strimzi https://strimzi.io/charts/
         helm repo update
 
     # Waypoint Proxy 운영을 위한 Kubernetes 표준 Gateway API CRD 설치
@@ -82,25 +93,10 @@
     - name: Install Ztunnel (Node Proxy)
       shell: helm upgrade --install ztunnel istio/ztunnel -n istio-system
 
-   
-    # Kafka 인프라를 위한 Strimzi Operator 사전 설치
-    
-    - name: Create Kafka Namespace
-      shell: kubectl create namespace kafka
-      ignore_errors: yes  # 이미 네임스페이스가 있어도 에러 내지 않고 패스
-
-    - name: Install Strimzi Operator (CRDs pinned to version)
-      shell: |
-        helm upgrade --install strimzi strimzi/strimzi-kafka-operator \
-          --namespace kafka --create-namespace \
-          --version 0.43.0  # k3s-manifests\core-infra 내 kafka 관련 deploy 코드 버전에 따라 오퍼레이터 버전을 수정하면 됨.
-    
-    
     # Sandbox용 AWS RDS 별명(DNS) 미리 등록하기
-    
     - name: Create Forensic Sandbox Namespace
       shell: kubectl create namespace forensic-sandbox
-      ignore_errors: yes  # 이미 있어도 에러 무시
+      ignore_errors: yes
 
     - name: Create RDS ExternalName Service
       shell: |
@@ -108,14 +104,17 @@
         apiVersion: v1
         kind: Service
         metadata:
-          name: aws-rds-host  # 우리가 정한 별명
+          name: aws-rds-host
           namespace: forensic-sandbox
         spec:
           type: ExternalName
-          externalName: ${ rds_endpoint } # outputs.tf rds_address를 main에서 모니터링 서버 user_data를 통해 서버 안으로 집어 넣고, 마스터 노드에서 실행될 setup_k3s 파일의 변수로 사용한다.  
+          externalName: ${ rds_endpoint }
         EOF
 
     - name: Install ArgoCD & Other Tools
       shell: |
         helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace
         helm upgrade --install node-exporter prometheus-community/prometheus-node-exporter -n monitoring --create-namespace
+
+    - name: Wait for ArgoCD server rollout
+      shell: kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
