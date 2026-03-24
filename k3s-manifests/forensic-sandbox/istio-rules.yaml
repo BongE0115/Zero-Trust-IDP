@@ -13,6 +13,5 @@ spec:
   action: DENY 
   rules:
   - to:
-    - operation:
-        hosts: ["aws-rds-host"]  
+    - operation:  
         ports: ["5432"] 
