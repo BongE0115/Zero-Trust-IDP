@@ -19,6 +19,10 @@ spec:
       containers:
       - name: mongodb
         image: mongo:7.0 
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999             # (통상적인 MongoDB 일반 유저 ID)
+          readOnlyRootFilesystem: true
         ports:
         - containerPort: 27017
         
