@@ -23,5 +23,5 @@ jobs:
         uses: stackrox/kube-linter-action@v1.0.4
         with:
           # 우리가 검사할 YAML 파일들이 모여있는 폴더 경로입니다.
-          directory: k8s-manifests/forensic-sandbox
+          directory: k3s-manifests/forensic-sandbox
           config: .kube-linter.yaml
