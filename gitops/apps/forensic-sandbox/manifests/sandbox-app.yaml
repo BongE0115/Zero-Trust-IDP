@@ -76,6 +76,6 @@ spec:
             
         env:
         - name: KAFKA_TOPIC
-          value: "dlq-topic" 
+          value: "orders-dlq" 
         - name: DB_HOST
           value: "mongodb-temp.forensic-sandbox.svc.cluster.local"
