@@ -10,9 +10,7 @@ from sklearn.metrics import precision_score, recall_score, f1_score
 from app.aiops.merlion_detector import MerlionAnomalyDetector
 from app.services.slack_notifier import send_slack_alert
 
-# 🔥 로그 최소화
 logging.getLogger().setLevel(logging.ERROR)
-
 logger = logging.getLogger(__name__)
 
 times = 10
@@ -31,6 +29,10 @@ class DLQKafkaConsumer:
         self.label_threshold = 20
 
         self.detector = MerlionAnomalyDetector()
+
+        # 🔥 persistence
+        self.anomaly_streak = 0
+        self.persistence = 3
 
         self.consumer = KafkaConsumer(
             self.topic,
@@ -84,31 +86,50 @@ class DLQKafkaConsumer:
         self.dlq_count = 0
 
     def run_anomaly_detection(self):
-        if len(self.time_series) >= 2 and not self.detector.is_trained:
+        # 🔹 모델 학습
+        if len(self.time_series) >= 5 and not self.detector.is_trained:
             print("🧠 Training Merlion model...")
             self.detector.train(self.time_series)
 
-        if not self.detector.is_trained:
-            print("[Merlion] Waiting for more data...")
-            return
-
-        score = self.detector.detect(self.time_series)
-
-        if score is None:
-            return
-
-        print(f"🧠 Anomaly Score: {score}")
+        score = None
+        if self.detector.is_trained:
+            score = self.detector.detect(self.time_series)
+            print(f"🧠 Anomaly Score: {score:.4f}")
 
         current_count = self.time_series[-1]["count"]
-        prev_count = self.time_series[-2]["count"] if len(self.time_series) >= 2 else current_count
 
-        # 🔥 핵심 수정 부분 (이게 중요)
-        prediction = 1 if (
-            self.detector.is_anomaly(score)
-            and current_count > 20
-            and (current_count >= prev_count or current_count > 40)
-        ) else 0
+        # 🔥 baseline (최근 5개 중 정상값 평균)
+        window = self.time_series[-5:]
+        normal_values = [x["count"] for x in window if x["count"] < 30]
 
+        if len(normal_values) == 0:
+            baseline = current_count
+        else:
+            baseline = sum(normal_values) / len(normal_values)
+
+        ratio = current_count / baseline if baseline > 0 else 0
+
+        print(f"📈 Baseline: {baseline:.2f}, Ratio: {ratio:.2f}")
+
+        # 🔥 핵심 로직 (완성형)
+        is_spike = ratio > 2.5
+        is_model_anomaly = score >= 0.5 if score is not None else False
+
+        if is_spike:
+            if self.anomaly_streak == 0:
+                # 🔥 첫 진입 → Merlion 필요
+                if is_model_anomaly:
+                    self.anomaly_streak = 1
+            else:
+                # 🔥 이후 → baseline만으로 유지
+                self.anomaly_streak += 1
+        else:
+            # 🔥 정상 복귀
+            self.anomaly_streak = 0
+
+        print(f"🔥 Anomaly Streak: {self.anomaly_streak}")
+
+        prediction = 1 if self.anomaly_streak >= self.persistence else 0
         label = self.time_series[-1]["label"]
 
         self.eval_buffer.append((label, prediction))
@@ -119,13 +140,17 @@ class DLQKafkaConsumer:
             event = {
                 "metric_name": "dlq_message_count",
                 "metric_value": current_count,
-                "threshold": "dynamic (Merlion)",
+                "threshold": "merlion(trigger) + baseline + persistence",
                 "severity": "CRITICAL",
-                "message": "DLQ spike detected"
+                "message": f"DLQ spike detected (ratio={ratio:.2f})"
             }
 
             send_slack_alert(event=event, score=score)
 
+            # 🔥 중복 알림 방지
+            self.anomaly_streak = 0
+
+        # 🔹 평가
         if len(self.eval_buffer) >= 10:
             y_true = [x[0] for x in self.eval_buffer]
             y_pred = [x[1] for x in self.eval_buffer]
