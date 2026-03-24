@@ -31,3 +31,9 @@ variable "ssh_key_name" {
   type        = string
   default     = "aiops-internal-key"
 }
+
+variable "private_dns_zone_name" {
+  description = "Private Route53 hosted zone name for internal services"
+  type        = string
+  default     = "internal.aiops"
+}

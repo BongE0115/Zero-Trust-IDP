@@ -330,6 +330,14 @@ resource "aws_security_group" "k3s_server_sg" {
   }
 
   ingress {
+    description     = "Node Exporter metrics from monitoring node"
+    from_port       = 9100
+    to_port         = 9100
+    protocol        = "tcp"
+    security_groups = [aws_security_group.monitoring_sg.id]
+  }
+
+  ingress {
     description = "Flannel VXLAN self"
     from_port   = 8472
     to_port     = 8472
@@ -386,6 +394,14 @@ resource "aws_security_group" "k3s_agent_sg" {
     description     = "Kubelet metrics from monitoring node"
     from_port       = 10250
     to_port         = 10250
+    protocol        = "tcp"
+    security_groups = [aws_security_group.monitoring_sg.id]
+  }
+
+  ingress {
+    description     = "Node Exporter metrics from monitoring node"
+    from_port       = 9100
+    to_port         = 9100
     protocol        = "tcp"
     security_groups = [aws_security_group.monitoring_sg.id]
   }
@@ -655,6 +671,28 @@ resource "aws_db_instance" "aiops_rds" {
   }
 }
 
+resource "aws_route53_zone" "private_internal" {
+  name = var.private_dns_zone_name
+
+  vpc {
+    vpc_id = aws_vpc.main.id
+  }
+
+  comment = "Private hosted zone for AIOps internal service discovery"
+
+  tags = {
+    Name = "aiops-private-dns-zone"
+  }
+}
+
+resource "aws_route53_record" "rds_cname" {
+  zone_id = aws_route53_zone.private_internal.zone_id
+  name    = "rds.${var.private_dns_zone_name}"
+  type    = "CNAME"
+  ttl     = 60
+  records = [aws_db_instance.aiops_rds.address]
+}
+
 
 # ==================================================
 # --------------------------------------------------
@@ -712,28 +750,16 @@ data "cloudinit_config" "monitoring_config" {
       ssh_private_key       = tls_private_key.aiops_key.private_key_pem
 
       ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
-        k3s_token    = var.k3s_token
-        rds_endpoint = aws_db_instance.aiops_rds.address
+        k3s_token = var.k3s_token
       })
 
-      argocd_kafka_operator_app_content = templatefile(
-        "${path.module}/../argo-apps/argocd-kafka-operator-app.yml.tpl",
-        {}
-      )
-
-      argocd_kafka_cluster_app_content = templatefile(
-        "${path.module}/../argo-apps/argocd-kafka-cluster-app.yml.tpl",
-        {}
-      )
-
-      forensic_sandbox_app_content = templatefile(
-        "${path.module}/../argo-apps/forensic-sandbox-app.yml.tpl",
+      argocd_root_app_content = templatefile(
+        "${path.module}/../gitops/bootstrap/root-app.yaml",
         {}
       )
     })
   }
 }
-
 
 # ==========================================
 # Monitoring + Ansible Control Node

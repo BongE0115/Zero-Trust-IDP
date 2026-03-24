@@ -20,6 +20,11 @@ output "rds_address" {
   value       = aws_db_instance.aiops_rds.address
 }
 
+output "rds_internal_dns_name" {
+  description = "Private Route53 CNAME for RDS"
+  value       = aws_route53_record.rds_cname.fqdn
+}
+
 output "argocd_access_info" {
   description = "ArgoCD 접속 정보 및 비밀번호 확인 가이드"
   value = <<EOF
