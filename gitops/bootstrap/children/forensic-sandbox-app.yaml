@@ -1,19 +1,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root-app
+  name: forensic-sandbox-app
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
 spec:
   project: default
   source:
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
-    targetRevision: jy # 브랜치에 맞춰 수정해야 됨. 
-    path: gitops/bootstrap/children
-    directory:
-      recurse: true
+    targetRevision: jy # 브랜치에 따라 수정하면 됨.
+    path: gitops/apps/forensic-sandbox/manifests
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: argocd
+    namespace: forensic-sandbox
   syncPolicy:
     automated:
       prune: true

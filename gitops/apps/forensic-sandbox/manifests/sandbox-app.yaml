@@ -6,6 +6,7 @@ metadata:
   labels:
     # 파드 트래픽을 노드의 ztunnel이 가로채도록 설정
     istio.io/dataplane-mode: ambient
+    istio.io/use-waypoint: sandbox-waypoint
     # 깃옵스 기반 온-디멘드 샌드박스 완전 구현을 위해 샌드박스 생성 및 istio 보안 규칙 순서 동기화 wave 추가
   annotations:
     argocd.argoproj.io/sync-wave: "-1"

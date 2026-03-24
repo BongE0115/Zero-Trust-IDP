@@ -77,6 +77,8 @@ scrape_configs:
       - targets:
         - "${k3s_server_private_ip}:10250"
         - "${k3s_agent_private_ip}:10250"
+        - "${k3s_server_private_ip}:9100"
+        - "${k3s_agent_private_ip}:9100"
 EOF
 
 chown -R prometheus:prometheus /etc/prometheus
@@ -111,16 +113,8 @@ cat <<'EOF' > /home/ubuntu/ansible/setup_k3s.yml
 ${ansible_playbook_content}
 EOF
 
-cat <<'EOF' > /home/ubuntu/ansible/argocd-kafka-operator-app.yml
-${argocd_kafka_operator_app_content}
-EOF
-
-cat <<'EOF' > /home/ubuntu/ansible/argocd-kafka-cluster-app.yml
-${argocd_kafka_cluster_app_content}
-EOF
-
-cat <<'EOF' > /home/ubuntu/ansible/forensic-sandbox-app.yml
-${forensic_sandbox_app_content}
+cat <<'EOF' > /home/ubuntu/ansible/root-app.yaml
+${argocd_root_app_content}
 EOF
 
 chown -R ubuntu:ubuntu /home/ubuntu/ansible
@@ -129,53 +123,23 @@ chown -R ubuntu:ubuntu /home/ubuntu/ansible
 cd /home/ubuntu/ansible
 sudo -u ubuntu touch install.log
 
-# 1단계: k3s / istio / argocd 기초 설치
+# 1단계: setup_k3s 실행
 sudo -u ubuntu ansible-playbook -i hosts.ini setup_k3s.yml >> install.log 2>&1
 
-# 2단계: ArgoCD insecure 모드 설정
-sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-  "sudo k3s kubectl patch configmap argocd-cmd-params-cm -n argocd -p '{\"data\": {\"server.insecure\": \"true\"}}'" >> install.log 2>&1
-
-sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-  "sudo k3s kubectl rollout restart deployment argocd-server -n argocd" >> install.log 2>&1
-
+# 2단계: ArgoCD 기본 readiness 확인
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
   "sudo k3s kubectl rollout status deployment argocd-server -n argocd --timeout=300s" >> install.log 2>&1
 
-# 3단계: ArgoCD 서비스를 NodePort 타입으로 변경
-sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-  "sudo k3s kubectl patch svc argocd-server -n argocd --type merge --patch '{\"spec\": {\"type\": \"NodePort\", \"ports\": [{\"name\":\"http\",\"port\":80,\"protocol\":\"TCP\",\"targetPort\":8080,\"nodePort\":30080},{\"name\":\"https\",\"port\":443,\"protocol\":\"TCP\",\"targetPort\":8080}]}}'" >> install.log 2>&1
-
-sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-  "sudo k3s kubectl delete ingress argocd-ingress -n argocd || true" >> install.log 2>&1
-
-# 4단계: Kafka Operator App 적용
+# 3단계: root app 전달
 sudo -u ubuntu scp -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no \
-  /home/ubuntu/ansible/argocd-kafka-operator-app.yml \
-  ubuntu@${k3s_server_private_ip}:/tmp/argocd-kafka-operator-app.yml
+  /home/ubuntu/ansible/root-app.yaml \
+  ubuntu@${k3s_server_private_ip}:/tmp/root-app.yaml
 
+# 4단계: root app 등록
 sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-  "sudo k3s kubectl apply -f /tmp/argocd-kafka-operator-app.yml" >> install.log 2>&1
+  "sudo k3s kubectl apply -f /tmp/root-app.yaml" >> install.log 2>&1
 
-# 5단계 삭제 : 
-
-# 6단계: Kafka Cluster App 적용
-sudo -u ubuntu scp -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no \
-  /home/ubuntu/ansible/argocd-kafka-cluster-app.yml \
-  ubuntu@${k3s_server_private_ip}:/tmp/argocd-kafka-cluster-app.yml
-
-sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-  "sudo k3s kubectl apply -f /tmp/argocd-kafka-cluster-app.yml" >> install.log 2>&1
-
-# 7단계: Sandbox App 적용
-sudo -u ubuntu scp -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no \
-  /home/ubuntu/ansible/forensic-sandbox-app.yml \
-  ubuntu@${k3s_server_private_ip}:/tmp/forensic-sandbox-app.yml
-
-sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-  "sudo k3s kubectl apply -f /tmp/forensic-sandbox-app.yml" >> install.log 2>&1
-
-# 8단계: ArgoCD 초기 비밀번호 생성 대기
+# 5단계: ArgoCD 초기 비밀번호 생성 대기
 echo "Waiting for ArgoCD initial secret to be generated..." >> install.log
 for i in {1..20}; do
   if sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
@@ -186,10 +150,3 @@ for i in {1..20}; do
   echo "Still waiting for ArgoCD secret... ($i/20)" >> install.log
   sleep 15
 done
-
-# 9단계: ArgoCD 초기 비밀번호 추출
-sudo -u ubuntu ssh -i /home/ubuntu/ansible/id_rsa -o StrictHostKeyChecking=no ubuntu@${k3s_server_private_ip} \
-  "sudo k3s kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d" \
-  > /home/ubuntu/ansible/argocd_password.txt
-
-chown -R ubuntu:ubuntu /home/ubuntu/ansible

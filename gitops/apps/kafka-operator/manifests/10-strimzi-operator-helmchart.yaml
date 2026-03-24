@@ -1,0 +1,24 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: strimzi-kafka-operator
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  repo: https://strimzi.io/charts/
+  chart: strimzi-kafka-operator
+  version: 0.46.1
+  targetNamespace: kafka
+  createNamespace: false
+  valuesContent: |-
+    replicas: 1
+    watchAnyNamespace: false
+    watchNamespaces:
+      - kafka
+
+    resources:
+      requests:
+        memory: 512Mi
+      limits:
+        memory: 1Gi
