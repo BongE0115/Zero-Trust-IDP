@@ -11,7 +11,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: forensic-sandbox-app # 샌드박스 컨슈머 파드만 타겟팅
+      app: forensic-sandbox-app* # 샌드박스 컨슈머 파드만 타겟팅
   action: DENY # ★ 차단!
   rules:
   - to:
