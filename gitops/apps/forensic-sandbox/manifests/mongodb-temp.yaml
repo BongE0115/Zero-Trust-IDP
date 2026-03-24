@@ -1,0 +1,50 @@
+# MongoDB Deployment for Forensic Sandbox
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-temp
+  namespace: forensic-sandbox
+  annotations:
+    # ★ [추가] 3순위: 보안망과 이름표(Service)가 다 준비된 후, 마지막에 실제 DB 파드를 투입합니다.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 1 # 샌드박스 생성 트리거 시 0 -> 1 로 수정되어야 함. 
+  selector:
+    matchLabels:
+      app: mongodb-temp
+  template:
+    metadata:
+      labels:
+        app: mongodb-temp
+    spec:
+      containers:
+      - name: mongodb
+        image: mongo:7.0 
+        ports:
+        - containerPort: 27017
+        
+        # ★ [시니어의 디테일 추가] K3s 워커 노드가 OOM(메모리 부족)으로 죽는 것을 방지하는 안전장치
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+
+---
+# MongoDB Service for Forensic Sandbox
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-temp
+  namespace: forensic-sandbox
+  annotations:
+    # ★ [추가] 2순위: DB 파드가 뜨기 전이나 샌드박스 앱이 뜨기 전에 DNS(이름)를 먼저 쿠버네티스에 등록해 둡니다.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    app: mongodb-temp
+  ports:
+  - port: 27017
+    targetPort: 27017
