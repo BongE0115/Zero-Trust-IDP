@@ -1,24 +1,4 @@
-# [1] Istio에 외부 DB 정보 등록 (Postgres & MySQL 대비)
-apiVersion: networking.istio.io/v1beta1
-kind: ServiceEntry
-metadata:
-  name: rds-egress-entry
-  namespace: forensic-sandbox
-spec:
-  hosts:
-  - "aws-rds-host"
-  location: MESH_EXTERNAL
-  ports:
-  - number: 5432
-    name: tcp-postgres
-    protocol: TCP
-  - number: 3306
-    name: tcp-mysql
-    protocol: TCP
-  resolution: DNS
-
----
-# [2] Waypoint 검문소에서 실제로 트래픽을 거부(DENY)하고 로그를 남김
+# 샌드박스 앱이 AWS RDS로 나가는 것을 '무조건 거부(DENY)'하는 AuthorizationPolicy
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
@@ -27,12 +7,8 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  targetRefs:
-  - kind: Gateway
-    group: gateway.networking.k8s.io
-    name: sandbox-waypoint
-  action: DENY # <--- 이 설정이 로그에 'DENY'를 남깁니다.
+  action: DENY 
   rules:
   - to:
-    - operation:
-        ports: ["5432", "3306"]        
+    - operation:  
+        ports: ["5432"] 
