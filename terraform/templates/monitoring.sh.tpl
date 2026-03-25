@@ -168,6 +168,7 @@ COMMAND_ID="$(aws ssm send-command \
   --parameters commands='[
     "#!/bin/bash",
     "set -euxo pipefail",
+    "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
     "if ! command -v helm >/dev/null 2>&1; then curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; fi",
     "if ! command -v git >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y git; fi",
     "helm repo add argo https://argoproj.github.io/argo-helm || true",
@@ -177,20 +178,19 @@ COMMAND_ID="$(aws ssm send-command \
     "'"$ARGOCD_VALUES_B64"'",
     "EOF",
     "base64 -d /tmp/argocd-values.b64 | sudo tee /opt/gitops/bootstrap/argocd/values.yaml >/dev/null",
-    "helm upgrade --install argocd argo/argo-cd --version 8.0.0 -n argocd --create-namespace -f /opt/gitops/bootstrap/argocd/values.yaml",
-    "sudo k3s kubectl rollout status deployment/argocd-server -n argocd --timeout=300s",
-    "sudo k3s kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s",
-    "sudo k3s kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install argocd argo/argo-cd --version 8.0.0 -n argocd --create-namespace -f /opt/gitops/bootstrap/argocd/values.yaml",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-server -n argocd --timeout=300s",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s",
     "sudo rm -rf /opt/gitops-repo",
     "git clone -b '"$GITOPS_TARGET_REVISION"' '"$GITOPS_REPO_URL"' /opt/gitops-repo",
-    "sudo k3s kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml",
-    "sudo k3s kubectl get applications -n argocd || true"
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get applications -n argocd || true"
   ]' \
   --query 'Command.CommandId' \
   --output text)"
 
 echo "[INFO] Command sent. CommandId=$COMMAND_ID" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-
 # ---------------------------------------------------------
 # 8. Run Command 완료 대기
 # ---------------------------------------------------------
@@ -242,11 +242,12 @@ PASSWORD_COMMAND_ID="$(aws ssm send-command \
   --parameters commands='[
     "#!/bin/bash",
     "set -euxo pipefail",
+    "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
     "for i in {1..20}; do",
-    "  if sudo k3s kubectl get secret -n argocd argocd-initial-admin-secret >/dev/null 2>&1; then break; fi",
+    "  if sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get secret -n argocd argocd-initial-admin-secret >/dev/null 2>&1; then break; fi",
     "  sleep 15",
     "done",
-    "sudo k3s kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='\''{.data.password}'\'' | base64 -d"
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='\''{.data.password}'\'' | base64 -d"
   ]' \
   --query 'Command.CommandId' \
   --output text)"
