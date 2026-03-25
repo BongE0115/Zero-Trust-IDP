@@ -1,6 +1,7 @@
 from kafka import KafkaProducer
 import json
 import time
+from datetime import datetime
 
 producer = KafkaProducer(
     bootstrap_servers="localhost:9092",
@@ -9,16 +10,47 @@ producer = KafkaProducer(
 
 topic = "anomaly-dlq"
 
-# 🔥 여러 개 보내기 (중요)
-for i in range(72):
+# 1️⃣ 정상
+for i in range(10):
     data = {
-        "metric_name": "cpu_usage",
-        "metric_value": 100 + i
+        "service": "payment",
+        "error_type": "normal",
+        "payload": {
+            "metric_name": "cpu_usage",
+            "metric_value": 25 + i
+        },
+        "created_at": datetime.utcnow().isoformat()
     }
-
     producer.send(topic, data)
-    print(f"Sent: {data}")
-    time.sleep(0.1)
+    time.sleep(0.2)
+
+# 2️⃣ 약한 이상
+for i in range(5):
+    data = {
+        "service": "payment",
+        "error_type": "warning",
+        "payload": {
+            "metric_name": "cpu_usage",
+            "metric_value": 300 + i
+        },
+        "created_at": datetime.utcnow().isoformat()
+    }
+    producer.send(topic, data)
+    time.sleep(0.2)
+
+# 3️⃣ 강한 이상
+for i in range(5):
+    data = {
+        "service": "payment",
+        "error_type": "critical",
+        "payload": {
+            "metric_name": "cpu_usage",
+            "metric_value": 120 + i
+        },
+        "created_at": datetime.utcnow().isoformat()
+    }
+    producer.send(topic, data)
+    time.sleep(0.2)
 
 producer.flush()
 print("✅ done")

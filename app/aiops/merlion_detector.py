@@ -51,7 +51,7 @@ class MerlionAnomalyDetector:
 
         return latest_score
 
-    def is_anomaly(self, score: float, threshold: float = 0.55):
+    def is_anomaly(self, score: float, threshold: float = 0.45):
         if score is None:
             return False
 
