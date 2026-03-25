@@ -1,35 +1,15 @@
-# [1] Istio가 외부 주소를 인식하도록 등록
-apiVersion: networking.istio.io/v1beta1
-kind: ServiceEntry
-metadata:
-  name: rds-external-entry
-  namespace: forensic-sandbox
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-spec:
-  hosts: ["aws-rds-host"]
-  location: MESH_EXTERNAL
-  ports:
-  - number: 5432
-    name: tcp-postgres
-    protocol: TCP
-  resolution: DNS
-
----
-# [2] 특정 라벨의 5432 포트 사용을 금지하고 로그 생성
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
-  name: deny-restricted-label-5432
+  name: block-everything-sandbox
   namespace: forensic-sandbox
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
+  # [핵심] 이 라벨이 붙은 파드는 무조건 검사 대상
   selector:
     matchLabels:
-      app: forensic-sandbox-app # 이 라벨이 붙은 파드만 검사
+      app: forensic-sandbox-app
   action: DENY
   rules:
-  - to:
-    - operation:
-        ports: ["5432"] # 5432 포트만 차단 (나머지는 통과)
+  - {} # [중요] rules가 비어있으면 "모든 트래픽"을 의미합니다.

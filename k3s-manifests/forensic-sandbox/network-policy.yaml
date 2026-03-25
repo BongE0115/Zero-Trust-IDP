@@ -8,48 +8,10 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: forensic-sandbox-app  # 테스트 시 이 라벨을 가진 파드에서 실행하세요.
+      app: forensic-sandbox-app
   policyTypes:
-  - Egress  
-  egress: 
-  # 1. Kafka 통신 허용 
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kafka
-      podSelector:
-        matchLabels:
-          strimzi.io/cluster: my-cluster
-    ports:
-    - protocol: TCP  
-      port: 9092  
-      
-  # 2. 내부 임시 MongoDB 허용
-  - to:
-    - podSelector:
-        matchLabels:
-          app: mongodb-temp  
-    ports:
-    - protocol: TCP  
-      port: 27017  
-      
-  # 3. K8s DNS 통신 허용
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system  
-      podSelector:
-        matchLabels:
-          k8s-app: kube-dns  
-    ports:
-    - protocol: UDP  
-      port: 53  
-
-  # 🎯 4. [추가] Istio Waypoint DENY 로그 수집을 위한 5432 임시 통과
-  # 이게 없으면 Istio가 로그를 남기기 전에 여기서 먼저 패킷이 죽어버립니다.
+  - Egress
+  egress:
   - to:
     - ipBlock:
         cidr: 0.0.0.0/0
-    ports:
-    - protocol: TCP
-      port: 5432
