@@ -1,4 +1,4 @@
-  # 1. Istio에 외부 DB 정보 등록 (PostgreSQL & MySQL 모두 대비)
+# [1] Istio에 외부 DB 정보 등록 (Postgres & MySQL 대비)
 apiVersion: networking.istio.io/v1beta1
 kind: ServiceEntry
 metadata:
@@ -6,7 +6,7 @@ metadata:
   namespace: forensic-sandbox
 spec:
   hosts:
-  - "aws-rds-host" # sandbox-app.yaml에서 만든 이름과 동일해야 함
+  - "aws-rds-host"
   location: MESH_EXTERNAL
   ports:
   - number: 5432
@@ -18,7 +18,7 @@ spec:
   resolution: DNS
 
 ---
-# 2. Waypoint 검문소에서 나가는 트래픽 원천 차단
+# [2] Waypoint 검문소에서 실제로 트래픽을 거부(DENY)하고 로그를 남김
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
@@ -31,8 +31,8 @@ spec:
   - kind: Gateway
     group: gateway.networking.k8s.io
     name: sandbox-waypoint
-  action: DENY
+  action: DENY # <--- 이 설정이 로그에 'DENY'를 남깁니다.
   rules:
   - to:
     - operation:
-        ports: ["5432", "3306"] # 현재 Postgres와 향후 바뀔 MySQL 포트 동시 차단
+        ports: ["5432", "3306"]        
