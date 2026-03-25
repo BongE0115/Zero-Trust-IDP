@@ -7,9 +7,6 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  selector:
-    matchLabels:
-      app: forensic-sandbox-app
   action: DENY 
   rules:
   - to:

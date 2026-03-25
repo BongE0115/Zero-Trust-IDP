@@ -5,6 +5,7 @@ metadata:
   name: forensic-sandbox
   labels:
     istio.io/dataplane-mode: ambient
+    istio.io/use-waypoint: sandbox-waypoint
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 
