@@ -1,18 +1,18 @@
-# 샌드박스 앱이 AWS RDS로 나가는 것을 '무조건 거부(DENY)'하는 AuthorizationPolicy
-apiVersion: security.istio.io/v1beta1
-kind: AuthorizationPolicy
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
 metadata:
-  name: deny-aws-rds-egress
+  name: block-aws-rds-egress
   namespace: forensic-sandbox
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  targetRefs:
-  - kind: Gateway
-    group: gateway.networking.k8s.io
-    name: sandbox-waypoint
-  action: DENY 
-  rules:
-  - to:
-    - operation:  
-        ports: ["5432"] 
+  hosts:
+  - aws-rds-host 
+  location: MESH_EXTERNAL
+  ports:
+  - number: 5432
+    name: tcp-db
+    protocol: TCP
+  resolution: STATIC
+  endpoints:
+  - address: 127.0.0.254
