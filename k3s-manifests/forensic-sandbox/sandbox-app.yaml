@@ -81,4 +81,4 @@ metadata:
   namespace: forensic-sandbox
 spec:
   type: ExternalName
-  externalName: fake-dummy-db.ap-northeast-2.rds.amazonaws.com
+  externalName: google.com
