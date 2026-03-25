@@ -72,3 +72,13 @@ spec:
           value: "dlq-topic" 
         - name: DB_HOST
           value: "mongodb-temp.forensic-sandbox.svc.cluster.local"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws-rds-host
+  namespace: forensic-sandbox
+spec:
+  type: ExternalName
+  externalName: fake-dummy-db.ap-northeast-2.rds.amazonaws.com
