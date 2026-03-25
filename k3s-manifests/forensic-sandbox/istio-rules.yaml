@@ -7,6 +7,10 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
+  targetRefs:
+  - kind: Gateway
+    group: gateway.networking.k8s.io
+    name: sandbox-waypoint
   action: DENY 
   rules:
   - to:

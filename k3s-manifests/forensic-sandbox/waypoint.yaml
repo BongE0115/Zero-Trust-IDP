@@ -5,7 +5,7 @@ metadata:
   name: sandbox-waypoint
   namespace: forensic-sandbox
   labels:
-    istio.io/waypoint-for: service
+    istio.io/waypoint-for: all
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
