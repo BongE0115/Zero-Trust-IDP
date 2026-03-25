@@ -87,11 +87,17 @@
 # ---------------------------------------------------------
 # 4. ArgoCD bootstrap
 # ---------------------------------------------------------
-- name: Install and Configure ArgoCD
+- name: Install and Bootstrap ArgoCD
   hosts: k3s_master
   become: yes
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  vars:
+    argocd_chart_version: "8.0.0"   # 반드시 argocd-app.yaml과 동일 버전으로 맞출 것
+    bootstrap_local_root: "/home/ubuntu/ansible/gitops/bootstrap"
+    bootstrap_remote_root: "/opt/gitops/bootstrap"
+    argocd_values_file: "/opt/gitops/bootstrap/argocd/values.yaml"
+
   tasks:
     - name: Install Helm if not present
       shell: |
@@ -108,11 +114,25 @@
       args:
         executable: /bin/bash
 
-    - name: Install ArgoCD
+    - name: Ensure bootstrap remote directory exists
+      file:
+        path: "{{ bootstrap_remote_root }}/argocd"
+        state: directory
+        mode: "0755"
+
+    - name: Copy ArgoCD values.yaml from monitoring node to master
+      copy:
+        src: "{{ bootstrap_local_root }}/argocd/values.yaml"
+        dest: "{{ argocd_values_file }}"
+        mode: "0644"
+
+    - name: Install ArgoCD with declarative values
       shell: |
         helm upgrade --install argocd argo/argo-cd \
+          --version "{{ argocd_chart_version }}" \
           -n argocd \
-          --create-namespace
+          --create-namespace \
+          -f "{{ argocd_values_file }}"
       args:
         executable: /bin/bash
 
@@ -128,53 +148,6 @@
 
     - name: Wait for ArgoCD application-controller rollout
       shell: kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=300s
-      args:
-        executable: /bin/bash
-
-    - name: Enable ArgoCD insecure mode
-      shell: |
-        kubectl patch configmap argocd-cmd-params-cm -n argocd \
-          -p '{"data":{"server.insecure":"true"}}'
-      args:
-        executable: /bin/bash
-
-    - name: Restart ArgoCD server after config change
-      shell: kubectl rollout restart deployment argocd-server -n argocd
-      args:
-        executable: /bin/bash
-
-    - name: Wait for ArgoCD server rollout after restart
-      shell: kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
-      args:
-        executable: /bin/bash
-
-    - name: Expose ArgoCD server via NodePort 30080
-      shell: |
-        kubectl patch svc argocd-server -n argocd --type merge --patch '{
-          "spec": {
-            "type": "NodePort",
-            "ports": [
-              {
-                "name": "http",
-                "port": 80,
-                "protocol": "TCP",
-                "targetPort": 8080,
-                "nodePort": 30080
-              },
-              {
-                "name": "https",
-                "port": 443,
-                "protocol": "TCP",
-                "targetPort": 8080
-              }
-            ]
-          }
-        }'
-      args:
-        executable: /bin/bash
-
-    - name: Delete ArgoCD ingress if exists
-      shell: kubectl delete ingress argocd-ingress -n argocd || true
       args:
         executable: /bin/bash
 

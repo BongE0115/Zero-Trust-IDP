@@ -757,6 +757,9 @@ data "cloudinit_config" "monitoring_config" {
         "${path.module}/../gitops/bootstrap/root-app.yaml",
         {}
       )
+
+      # ArgoCD 선언형 설정을 위한 values.yaml 내용 주입
+      argocd_values_content = file("${path.module}/../gitops/bootstrap/argocd/values.yaml")
     })
   }
 }

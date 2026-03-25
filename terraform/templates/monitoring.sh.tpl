@@ -109,12 +109,19 @@ systemctl start prometheus
 # ---------------------------------------------------------
 
 # 4-1. 설치용 파일 생성
+# 디렉토리 구조 생성 
+mkdir -p /home/ubuntu/ansible/gitops/bootstrap/argocd
+
 cat <<'EOF' > /home/ubuntu/ansible/setup_k3s.yml
 ${ansible_playbook_content}
 EOF
 
 cat <<'EOF' > /home/ubuntu/ansible/root-app.yaml
 ${argocd_root_app_content}
+EOF
+
+cat <<'EOF' > /home/ubuntu/ansible/gitops/bootstrap/argocd/values.yaml
+${argocd_values_content}
 EOF
 
 chown -R ubuntu:ubuntu /home/ubuntu/ansible
