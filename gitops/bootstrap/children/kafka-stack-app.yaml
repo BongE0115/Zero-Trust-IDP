@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kafka-stack-app
+  namespace: argocd
+  # 기존에 있던 kafka-operator나 kafka-cluster와의 순서를 맞추기 위해 
+  # 필요하다면 sync-wave를 조절할 수 있습니다.
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    # 사용자님의 GitHub 저장소 주소
+    repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
+    # 현재 작업 중인 브랜치 (jy) => 변경해야됨
+    targetRevision: jy 
+    # Kustomization.yaml 파일이 위치한 경로
+    path: gitops/apps/kafka-stack/manifests
+  destination:
+    server: 'https://kubernetes.default.svc'
+    # Kafka와 Zookeeper가 배포될 네임스페이스
+    namespace: kafka
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
