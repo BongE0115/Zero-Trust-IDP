@@ -148,10 +148,11 @@ resource "aws_route_table_association" "private_b" {
 # ==================================================
 
 # ==========================================
-# IAM Role for EC2 SSM Access
+# IAM Role for K3s nodes (master / worker)
+# - only managed-node permissions
 # ==========================================
-resource "aws_iam_role" "ssm_role" {
-  name = "aiops-ssm-role"
+resource "aws_iam_role" "ssm_node_role" {
+  name = "aiops-ssm-node-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -167,37 +168,99 @@ resource "aws_iam_role" "ssm_role" {
   })
 }
 
-
-# ==========================================
-# Attach SSM Managed Policy
-# ==========================================
-resource "aws_iam_role_policy_attachment" "ssm_attach" {
-  role       = aws_iam_role.ssm_role.name
+resource "aws_iam_role_policy_attachment" "ssm_node_attach" {
+  role       = aws_iam_role.ssm_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# ==========================================
-# EC2 Instance Profile
-# ==========================================
-resource "aws_iam_instance_profile" "ssm_profile" {
-  name = "aiops-ssm-profile"
-  role = aws_iam_role.ssm_role.name
+resource "aws_iam_instance_profile" "ssm_node_profile" {
+  name = "aiops-ssm-node-profile"
+  role = aws_iam_role.ssm_node_role.name
 }
 
-# ===========================================
-# ssh 키 페어 생성
-# =========================================== 
+# ==========================================
+# IAM Role for Monitoring node
+# - managed-node permissions
+# - operator permissions for SSM Run Command
+#   only to instances tagged Role=K3s_Server
+# ==========================================
+resource "aws_iam_role" "ssm_monitoring_role" {
+  name = "aiops-ssm-monitoring-role"
 
-# 1. RSA 알고리즘을 사용한 개인키 생성
-resource "tls_private_key" "aiops_key" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
 }
 
-# 2. AWS에 공용키(Public Key) 등록
-resource "aws_key_pair" "generated_key" {
-  key_name   = var.ssh_key_name
-  public_key = tls_private_key.aiops_key.public_key_openssh
+resource "aws_iam_role_policy_attachment" "ssm_monitoring_attach" {
+  role       = aws_iam_role.ssm_monitoring_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
+  name = "aiops-monitoring-ssm-operator-policy"
+  role = aws_iam_role.ssm_monitoring_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # AWS-RunShellScript 같은 SSM 문서를 사용할 수 있도록 허용
+      {
+        Sid    = "AllowRunCommandWithAwsDocuments"
+        Effect = "Allow"
+        Action = [
+          "ssm:SendCommand"
+        ]
+        Resource = [
+          "arn:aws:ssm:*:*:document/AWS-RunShellScript",
+          "arn:aws:ssm:*:*:document/AWS-*"
+        ]
+      },
+
+      # Role=K3s_Server 태그가 붙은 EC2 인스턴스에만 명령 허용
+      {
+        Sid    = "AllowRunCommandToTaggedMasterOnly"
+        Effect = "Allow"
+        Action = [
+          "ssm:SendCommand"
+        ]
+        Resource = "arn:aws:ec2:*:*:instance/*"
+        Condition = {
+          StringLike = {
+            "ssm:resourceTag/Role" = "K3s_Server"
+          }
+        }
+      },
+
+      # 명령 결과 조회 및 대상 탐색
+      {
+        Sid    = "AllowCommandReadOps"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetCommandInvocation",
+          "ssm:ListCommandInvocations",
+          "ssm:ListCommands",
+          "ssm:DescribeInstanceInformation",
+          "ec2:DescribeInstances"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "ssm_monitoring_profile" {
+  name = "aiops-ssm-monitoring-profile"
+  role = aws_iam_role.ssm_monitoring_role.name
 }
 
 
@@ -225,13 +288,6 @@ resource "aws_security_group" "monitoring_sg" {
     cidr_blocks = var.admin_cidr
   }
 
-  ingress {
-  description = "SSH from Admin IP"
-  from_port   = 22
-  to_port     = 22
-  protocol    = "tcp"
-  cidr_blocks = var.admin_cidr # 관리자님의 공인 IP에서만 접속 허용 
-  }
 
   egress {
     description = "Allow all outbound"
@@ -353,13 +409,7 @@ resource "aws_security_group" "k3s_server_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
-  ingress {
-  description     = "SSH from Monitoring Node (Ansible)"
-  from_port       = 22
-  to_port         = 22
-  protocol        = "tcp"
-  security_groups = [aws_security_group.monitoring_sg.id] # 모니터링 SG를 소스로 지정 
-  }
+
 
   ingress {
     description = "ICMP from VPC for testing"
@@ -422,13 +472,6 @@ resource "aws_security_group" "k3s_agent_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
-  ingress {
-  description     = "SSH from Monitoring Node (Ansible)"
-  from_port       = 22
-  to_port         = 22
-  protocol        = "tcp"
-  security_groups = [aws_security_group.monitoring_sg.id] # 모니터링 SG를 소스로 지정 
-  }
 
   ingress {
     description = "ICMP from VPC for testing"
@@ -709,7 +752,7 @@ resource "aws_instance" "nat" {
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public_a.id
   vpc_security_group_ids      = [aws_security_group.nat_sg.id]
-  iam_instance_profile        = aws_iam_instance_profile.ssm_profile.name
+  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
   associate_public_ip_address = true
   source_dest_check           = false
 
@@ -744,21 +787,13 @@ data "cloudinit_config" "monitoring_config" {
   part {
     content_type = "text/x-shellscript"
     content      = templatefile("${path.module}/templates/monitoring.sh.tpl", {
+      aws_region            = "ap-northeast-2"
       k3s_server_private_ip = aws_instance.k3s_server.private_ip
       k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
-      k3s_token             = var.k3s_token
-      ssh_private_key       = tls_private_key.aiops_key.private_key_pem
 
-      ansible_playbook_content = templatefile("${path.module}/templates/setup_k3s.yml.tpl", {
-        k3s_token = var.k3s_token
-      })
+      gitops_repo_url       = "https://github.com/BongE0115/Zero-Trust-IDP.git"
+      gitops_target_revision = "jy"
 
-      argocd_root_app_content = templatefile(
-        "${path.module}/../gitops/bootstrap/root-app.yaml",
-        {}
-      )
-
-      # ArgoCD 선언형 설정을 위한 values.yaml 내용 주입
       argocd_values_content = file("${path.module}/../gitops/bootstrap/argocd/values.yaml")
     })
   }
@@ -772,7 +807,7 @@ resource "aws_instance" "monitoring_server" {
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public_a.id
   vpc_security_group_ids      = [aws_security_group.monitoring_sg.id]
-  iam_instance_profile        = aws_iam_instance_profile.ssm_profile.name
+  iam_instance_profile = aws_iam_instance_profile.ssm_monitoring_profile.name
   associate_public_ip_address = true
 
   # 위에서 만든 압축 monitoring_config를 가져와서 넣어준다. 
@@ -781,7 +816,7 @@ resource "aws_instance" "monitoring_server" {
   
   tags = {
     Name = "aiops-monitoring-control"
-    Role = "Monitoring_And_Ansible_Control_Node"
+    Role = "Monitoring_Node"
   }
 }
 
@@ -793,9 +828,7 @@ resource "aws_instance" "k3s_server" {
   instance_type          = "m7i-flex.large"
   subnet_id              = aws_subnet.private_a.id
   vpc_security_group_ids = [aws_security_group.k3s_server_sg.id]
-  iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
-
-  key_name               = aws_key_pair.generated_key.key_name
+  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
 
   root_block_device {
     volume_size = 30  # 기본 8GB에서 30GB로 증설
@@ -822,9 +855,7 @@ resource "aws_instance" "k3s_agent" {
   instance_type          = "c7i-flex.large"
   subnet_id              = aws_subnet.private_b.id
   vpc_security_group_ids = [aws_security_group.k3s_agent_sg.id]
-  iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
-
-  key_name               = aws_key_pair.generated_key.key_name
+  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
 
   root_block_device {
     volume_size = 30  # 기본 8GB에서 30GB로 증설

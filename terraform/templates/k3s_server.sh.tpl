@@ -1,24 +1,80 @@
 #!/bin/bash
-set -eux
+set -euxo pipefail
 
-# 1. 패키지 업데이트 및 엔서블 실행을 위한 파이썬 설치
+LOG_FILE="/var/log/k3s-server-bootstrap.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+K3S_VERSION="v1.33.9+k3s1"
+K3S_TOKEN="${k3s_token}"
+TAILSCALE_AUTH_KEY="${tailscale_auth_key}"
+
+# ---------------------------------------------------------
+# 1. 공통 준비
+# ---------------------------------------------------------
+if ! swapon --show | grep -q "/swapfile"; then
+  if [ ! -f /swapfile ]; then
+    fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+    chmod 600 /swapfile
+    mkswap /swapfile
+  fi
+  swapon /swapfile
+  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 apt-get update -y
-DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip curl
-
-# 2. 네트워크 연결을 위한 Tailscale 설치 및 설정
-curl -fsSL https://tailscale.com/install.sh | sh
-tailscale up --auth-key=${tailscale_auth_key} --hostname=k3s-server --ssh=false || true
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
+  curl nfs-common ca-certificates apt-transport-https jq
 
 # ---------------------------------------------------------
-# [추가] 부팅 후 SSM 에이전트 강제 기상 및 상태 확정
-# K3s 및 네트워크(CNI) 초기화 과정에서 에이전트 통신이 끊기는 현상 방지
+# 2. SSM Agent 보장
 # ---------------------------------------------------------
+if ! systemctl list-unit-files | grep -q amazon-ssm-agent; then
+  snap install amazon-ssm-agent --classic || true
+fi
+systemctl enable amazon-ssm-agent || true
+systemctl restart amazon-ssm-agent || true
 
-# 1. snap 데몬이 완전히 뜰 때까지 잠시 대기
-sleep 10
+# ---------------------------------------------------------
+# 3. Tailscale 설치 (기존 구조 유지 시)
+# ---------------------------------------------------------
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+  curl -fsSL https://tailscale.com/install.sh | sh
+  systemctl enable tailscaled
+  systemctl restart tailscaled
+  tailscale up --authkey "$TAILSCALE_AUTH_KEY" || true
+fi
 
-# 2. 확실한 이름표(snap.amazon-ssm-agent...)로 서비스 활성화
-systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+# ---------------------------------------------------------
+# 4. K3s Server 설치
+# ---------------------------------------------------------
+if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
+  curl -sfL https://get.k3s.io | \
+    INSTALL_K3S_VERSION="$K3S_VERSION" \
+    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik" \
+    K3S_TOKEN="$K3S_TOKEN" sh -
+fi
 
-# 3. AWS 시스템 매니저로 다시 통신하라고 등 떠밀기 (재시작)
-systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
+# ---------------------------------------------------------
+# 5. K3s readiness 대기
+# ---------------------------------------------------------
+for i in {1..40}; do
+  if [ -f /etc/rancher/k3s/k3s.yaml ]; then
+    break
+  fi
+  sleep 10
+done
+
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+for i in {1..40}; do
+  if kubectl get nodes >/dev/null 2>&1; then
+    echo "[INFO] Kubernetes API is ready."
+    break
+  fi
+  echo "[INFO] Waiting for Kubernetes API... ($i/40)"
+  sleep 15
+done
+
+kubectl get nodes || true
+
+echo "[INFO] k3s server bootstrap completed."
