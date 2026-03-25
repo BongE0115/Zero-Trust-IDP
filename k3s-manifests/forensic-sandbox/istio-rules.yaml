@@ -28,10 +28,6 @@ spec:
   selector:
     matchLabels:
       app: forensic-sandbox-app # 이 라벨이 붙은 파드만 검사
-  targetRefs:
-  - kind: Gateway
-    group: gateway.networking.k8s.io
-    name: sandbox-waypoint
   action: DENY
   rules:
   - to:
