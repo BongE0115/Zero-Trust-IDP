@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kafka
+  namespace: kafka
 spec:
   replicas: 1
   selector:
@@ -14,32 +15,53 @@ spec:
     spec:
       containers:
       - name: kafka
-        image: bitnami/kafka:3.7 # 최신 안정 버전 권장
+        image: bitnami/kafka:3.7
         ports:
-        - containerPort: 9092
+        - containerPort: 9092 # Kafka 브로커가 내부 통신을 위해 사용하는 기본 포트
         env:
+        # 1. Zookeeper 연결 설정
         - name: KAFKA_CFG_ZOOKEEPER_CONNECT
-          value: zookeeper:2181
+          value: zookeeper:2181 # zookeeper.yaml에 정의된 서비스 이름을 통해 통신
+          
+        # 2. 보안 및 리스너 설정
         - name: ALLOW_PLAINTEXT_LISTENER
-          value: "yes"
+          value: "yes" # 인증 없는 평문(Plaintext) 통신을 허용 (개발 단계에서 사용)
         - name: KAFKA_CFG_LISTENERS
-          value: PLAINTEXT://:9092
+          value: PLAINTEXT://:9092 # 브로커가 들어오는 연결을 대기할 프로토콜과 포트
         - name: KAFKA_CFG_ADVERTISED_LISTENERS
-          value: PLAINTEXT://kafka:9092
-        # 백엔드에 맞춘 자동 토픽 생성 설정
+          value: PLAINTEXT://kafka:9092 # 클라이언트(백엔드)가 브로커에 접속할 때 사용하는 주소
+          
+        # 3. 토픽 관리 설정 (백엔드 코드와 정합성 유지)
         - name: KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE
-          value: "true"
-        # 시작 시 특정 토픽을 미리 만들고 싶다면 (선택 사항)
+          value: "true" # 존재하지 않는 토픽에 데이터를 보낼 때 자동으로 생성할지 여부
         - name: KAFKA_CREATE_TOPICS
-          value: "aiops-topic:3:1" # 토픽명:파티션:복제본
+          value: "aiops-topic:3:1" # 시작 시 생성할 토픽 (이름:파티션수:복제본수)
+          
+        # 4. 성능 및 리소스 최적화 (보완 사항)
+        - name: KAFKA_HEAP_OPTS
+          value: "-Xms512m -Xmx512m" # JVM 힙 메모리 크기 (시작값과 최대값을 동일하게 권장)
+          
+        # 5. 로그 보관 정책 (디스크 관리용)
+        - name: KAFKA_CFG_LOG_RETENTION_HOURS
+          value: "168" # 메시지를 며칠 동안 보관할지 설정 (168시간 = 7일)
+
+        # 컨테이너 자원 할당량 제한 (클러스터 안정성 확보)
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: kafka # 백엔드 ENV의 'kafka:9092'와 일치됨
+  name: kafka # 백엔드 환경변수 KAFKA_BOOTSTRAP_SERVERS의 'kafka:9092'와 매칭됨
+  namespace: kafka
 spec:
   selector:
     app: kafka
   ports:
-    - port: 9092
-      targetPort: 9092
+    - port: 9092 # 외부(백엔드 파드 등)에서 접근하는 포트
+      targetPort: 9092 # 실제 컨테이너 내부로 전달되는 포트
