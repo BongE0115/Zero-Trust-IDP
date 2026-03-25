@@ -1,14 +1,39 @@
-# 샌드박스 앱이 AWS RDS로 나가는 것을 '무조건 거부(DENY)'하는 AuthorizationPolicy
-apiVersion: security.istio.io/v1beta1
-kind: AuthorizationPolicy
+# [1] Istio가 외부 주소를 인식하도록 등록
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
 metadata:
-  name: deny-aws-rds-egress
+  name: rds-external-entry
   namespace: forensic-sandbox
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  action: DENY 
+  hosts: ["aws-rds-host"]
+  location: MESH_EXTERNAL
+  ports:
+  - number: 5432
+    name: tcp-postgres
+    protocol: TCP
+  resolution: DNS
+
+---
+# [2] 특정 라벨의 5432 포트 사용을 금지하고 로그 생성
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-restricted-label-5432
+  namespace: forensic-sandbox
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      app: forensic-sandbox-app # 이 라벨이 붙은 파드만 검사
+  targetRefs:
+  - kind: Gateway
+    group: gateway.networking.k8s.io
+    name: sandbox-waypoint
+  action: DENY
   rules:
   - to:
-    - operation:  
-        ports: ["5432"] 
+    - operation:
+        ports: ["5432"] # 5432 포트만 차단 (나머지는 통과)

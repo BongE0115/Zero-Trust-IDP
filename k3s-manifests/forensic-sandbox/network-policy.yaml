@@ -8,11 +8,11 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: forensic-sandbox-app  
+      app: forensic-sandbox-app  # 테스트 시 이 라벨을 가진 파드에서 실행하세요.
   policyTypes:
   - Egress  
   egress: 
-  # Kafka 통신 허용 (샌드박스 앱이 Kafka로 나가는 것을 허용) 
+  # 1. Kafka 통신 허용 
   - to:
     - namespaceSelector:
         matchLabels:
@@ -24,7 +24,7 @@ spec:
     - protocol: TCP  
       port: 9092  
       
-  # 내부 임시 MongoDB (샌드박스 DB 접근 허용)
+  # 2. 내부 임시 MongoDB 허용
   - to:
     - podSelector:
         matchLabels:
@@ -33,7 +33,7 @@ spec:
     - protocol: TCP  
       port: 27017  
       
-  # K8s DNS 통신 허용
+  # 3. K8s DNS 통신 허용
   - to:
     - namespaceSelector:
         matchLabels:
@@ -44,4 +44,12 @@ spec:
     ports:
     - protocol: UDP  
       port: 53  
-  
+
+  # 🎯 4. [추가] Istio Waypoint DENY 로그 수집을 위한 5432 임시 통과
+  # 이게 없으면 Istio가 로그를 남기기 전에 여기서 먼저 패킷이 죽어버립니다.
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 5432
