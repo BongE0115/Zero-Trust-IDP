@@ -1,18 +1,38 @@
-apiVersion: networking.istio.io/v1alpha3
+  # 1. Istio에 외부 DB 정보 등록 (PostgreSQL & MySQL 모두 대비)
+apiVersion: networking.istio.io/v1beta1
 kind: ServiceEntry
 metadata:
-  name: block-aws-rds-egress
+  name: rds-egress-entry
+  namespace: forensic-sandbox
+spec:
+  hosts:
+  - "aws-rds-host" # sandbox-app.yaml에서 만든 이름과 동일해야 함
+  location: MESH_EXTERNAL
+  ports:
+  - number: 5432
+    name: tcp-postgres
+    protocol: TCP
+  - number: 3306
+    name: tcp-mysql
+    protocol: TCP
+  resolution: DNS
+
+---
+# 2. Waypoint 검문소에서 나가는 트래픽 원천 차단
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-aws-rds-egress
   namespace: forensic-sandbox
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  hosts:
-  - aws-rds-host 
-  location: MESH_EXTERNAL
-  ports:
-  - number: 5432
-    name: tcp-db
-    protocol: TCP
-  resolution: STATIC
-  endpoints:
-  - address: 127.0.0.254
+  targetRefs:
+  - kind: Gateway
+    group: gateway.networking.k8s.io
+    name: sandbox-waypoint
+  action: DENY
+  rules:
+  - to:
+    - operation:
+        ports: ["5432", "3306"] # 현재 Postgres와 향후 바뀔 MySQL 포트 동시 차단

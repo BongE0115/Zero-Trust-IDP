@@ -81,4 +81,4 @@ metadata:
   namespace: forensic-sandbox
 spec:
   type: ExternalName
-  externalName: google.com
+  externalName: aiops-postgres-db.cz4qe6c6ibrd.ap-northeast-2.rds.amazonaws.com
