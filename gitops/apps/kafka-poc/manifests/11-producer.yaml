@@ -30,6 +30,7 @@ metadata:
   name: producer-api
   namespace: kafka-poc
 spec:
+  type: LoadBalancer # 외부에서 프로듀서 api에 접속하기 위해 로드 밸런스 생성?
   selector:
     app: producer-api
   ports:
