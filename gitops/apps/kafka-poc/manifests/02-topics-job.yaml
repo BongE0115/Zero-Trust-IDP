@@ -9,7 +9,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: create-topics
-          image: bitnami/kafka:latest  # 🚨 3.7.0 대신 latest 로 변경!
+          image: bitnamilegacy/kafka:3.7
           command:
             - /bin/bash
             - -c
