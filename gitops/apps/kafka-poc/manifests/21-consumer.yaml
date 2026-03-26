@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-consumer
+  namespace: kafka-poc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker-consumer
+  template:
+    metadata:
+      labels:
+        app: worker-consumer
+    spec:
+      containers:
+        - name: worker-consumer
+          image: ghcr.io/your-org/worker-consumer:poc-v1 # 이미지는 ghcr로 만든다. 이후 yout-org를 수정
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: kafka.kafka-poc.svc.cluster.local:9092
+            - name: SOURCE_TOPIC
+              value: orders
+            - name: DLQ_TOPIC
+              value: orders-dlq
+            - name: GROUP_ID
+              value: orders-consumer-prod
+
+            - name: SERVICE_NAME
+              value: worker-consumer
+            - name: NAMESPACE
+              value: kafka-poc
+            - name: DEPLOYMENT_NAME
+              value: worker-consumer
+
+            - name: IMAGE_REF
+              value: ghcr.io/your-org/worker-consumer:poc-v1
+            - name: CONFIG_VERSION
+              value: v1
+            - name: DEPENDENCY_PROFILE
+              value: prod
+
+            - name: DB_MODE
+              value: mongo
+            - name: DB_HOST
+              value: mongodb-temp.forensic-sandbox.svc.cluster.local
+
+            - name: CACHE_MODE
+              value: prod
+            - name: CACHE_HOST
+              value: cache-prod.default.svc.cluster.local
+
+            - name: EXTERNAL_API_MODE
+              value: prod
+            - name: EXTERNAL_API_BASE_URL
+              value: http://external-api.default.svc.cluster.local:8080
+
+            - name: FORCE_FAIL_FIELD
+              value: should_fail

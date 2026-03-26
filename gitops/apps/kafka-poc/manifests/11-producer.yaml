@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer-api
+  namespace: kafka-poc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: producer-api
+  template:
+    metadata:
+      labels:
+        app: producer-api
+    spec:
+      containers:
+        - name: producer-api
+          image: ghcr.io/your-org/producer-api:poc-v1 # 이미지는 ghcr로 만든다. 이후 your-org는 실제 계정으로 수정
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: kafka.kafka-poc.svc.cluster.local:9092
+            - name: KAFKA_TOPIC
+              value: orders
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: producer-api
+  namespace: kafka-poc
+spec:
+  selector:
+    app: producer-api
+  ports:
+    - port: 8000
+      targetPort: 8000

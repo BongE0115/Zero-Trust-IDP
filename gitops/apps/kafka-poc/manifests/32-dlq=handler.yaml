@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dlq-handler
+  namespace: kafka-poc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dlq-handler
+  template:
+    metadata:
+      labels:
+        app: dlq-handler
+    spec:
+      serviceAccountName: dlq-handler-sa
+      containers:
+        - name: dlq-handler
+          image: ghcr.io/your-org/dlq-handler:poc-v1
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: kafka.kafka-poc.svc.cluster.local:9092
+            - name: DLQ_TOPIC
+              value: orders-dlq
+            - name: REPLAY_TOPIC
+              value: orders-replay
+            - name: GROUP_ID
+              value: orders-dlq-handler
+
+            - name: SANDBOX_NAMESPACE
+              value: forensic-sandbox
+            - name: SANDBOX_DEPLOYMENT
+              value: forensic-sandbox-app
+            - name: MONGO_DEPLOYMENT
+              value: mongodb-temp
+
+            - name: AUTO_SCALE_SANDBOX
+              value: "true"
+            - name: AUTO_REPLAY
+              value: "true"
