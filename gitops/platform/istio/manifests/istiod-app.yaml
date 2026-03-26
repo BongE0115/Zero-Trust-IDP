@@ -15,6 +15,9 @@ spec:
       releaseName: istiod
       values: |
         profile: ambient
+        meshConfig:
+          outboundTrafficPolicy:
+            mode: REGISTRY_ONLY 
   destination:
     server: https://kubernetes.default.svc
     namespace: istio-system
