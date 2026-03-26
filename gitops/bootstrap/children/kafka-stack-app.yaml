@@ -15,7 +15,7 @@ spec:
     # 현재 작업 중인 브랜치 (jy) => 변경해야됨
     targetRevision: jy 
     # Kustomization.yaml 파일이 위치한 경로
-    path: gitops/apps/kafka-stack/manifests
+    path: gitops/apps/kafka-poc/manifests # kafka 백엔드 완료 시 poc -> stack으로 수정
   destination:
     server: 'https://kubernetes.default.svc'
     # Kafka와 Zookeeper가 배포될 네임스페이스
