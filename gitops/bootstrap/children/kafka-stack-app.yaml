@@ -19,7 +19,7 @@ spec:
   destination:
     server: 'https://kubernetes.default.svc'
     # Kafka와 Zookeeper가 배포될 네임스페이스
-    namespace: kafka - poc # poc -> 제거 or stack
+    namespace: kafka-poc # poc -> 제거 or stack
   syncPolicy:
     automated:
       prune: true
