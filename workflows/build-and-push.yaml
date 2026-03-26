@@ -1,0 +1,57 @@
+name: Build and Push to GHCR
+
+on:
+  push:
+    branches:
+      - jy  # main 브랜치에 코드가 푸시될 때만 실행
+    paths:
+      - 'services/**'  # services 폴더 안의 파일이 변경될 때만 실행
+
+env:
+  REGISTRY: ghcr.io
+  # 🚨 아주 중요한 주의사항: 도커 이미지는 무조건 '소문자'여야 합니다! (BongE0115 -> bonge0115)
+  IMAGE_OWNER: bonge0115
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write  # GHCR 진열장에 이미지를 올릴 수 있는 권한 부여
+
+    steps:
+      # 1. 내 GitHub 저장소의 코드를 Actions 서버로 가져옴
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. GHCR 로그인 (토큰 발급 필요 없음! 깃허브가 알아서 처리함)
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 3. producer-api 빌드 및 푸시
+      - name: Build and push producer-api
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/producer-api
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:poc-v1
+
+      # 4. worker-consumer 빌드 및 푸시
+      - name: Build and push worker-consumer
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/worker-consumer
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:poc-v1
+
+      # 5. dlq-handler 빌드 및 푸시
+      - name: Build and push dlq-handler
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/dlq-handler
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:poc-v1
