@@ -16,7 +16,7 @@ spec:
       serviceAccountName: dlq-handler-sa
       containers:
         - name: dlq-handler
-          image: ghcr.io/your-org/dlq-handler:poc-v1
+          image: ghcr.io/bonge0115/dlq-handler:poc-v1 # GHCR 이미지 경로 수정 
           env:
             - name: KAFKA_BOOTSTRAP
               value: kafka.kafka-poc.svc.cluster.local:9092

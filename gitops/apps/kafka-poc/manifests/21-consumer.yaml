@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: worker-consumer
-          image: ghcr.io/your-org/worker-consumer:poc-v1 # 이미지는 ghcr로 만든다. 이후 yout-org를 수정
+          image: ghcr.io/bonge0115/worker-consumer:poc-v1 # 이미지는 ghcr로 만든다. 이후 yout-org를 수정
           env:
             - name: KAFKA_BOOTSTRAP
               value: kafka.kafka-poc.svc.cluster.local:9092
