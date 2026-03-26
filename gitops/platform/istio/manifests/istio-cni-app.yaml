@@ -16,7 +16,7 @@ spec:
       values: |
         profile: ambient
         cni:
-          cniBinDir: /var/lib/rancher/k3s/data/current/bin
+          cniBinDir: /var/lib/rancher/k3s/data/cni
           cniConfDir: /var/lib/rancher/k3s/agent/etc/cni/net.d
   destination:
     server: https://kubernetes.default.svc
