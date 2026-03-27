@@ -38,7 +38,9 @@ jobs:
         with:
           context: ./services/producer-api
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:poc-v1
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:${{ github.sha }}
 
       # 4. worker-consumer 빌드 및 푸시
       - name: Build and push worker-consumer
@@ -46,7 +48,9 @@ jobs:
         with:
           context: ./services/worker-consumer
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:poc-v1
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:${{ github.sha }}
 
       # 5. dlq-handler 빌드 및 푸시
       - name: Build and push dlq-handler
@@ -54,4 +58,6 @@ jobs:
         with:
           context: ./services/dlq-handler
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:poc-v1
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:${{ github.sha }}
