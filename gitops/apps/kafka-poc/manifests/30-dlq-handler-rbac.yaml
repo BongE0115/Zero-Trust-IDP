@@ -11,7 +11,7 @@ metadata:
   namespace: forensic-sandbox
 rules:
   - apiGroups: ["apps"]
-    resources: ["deployments/scale"]
+    resources: ["deployments","deployments/scale"]
     verbs: ["get", "patch", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
