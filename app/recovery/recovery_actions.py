@@ -1,19 +1,43 @@
-import os
+import subprocess
 
 
 def handle_cpu_recovery(event: dict):
     print("\n🔥 CPU Recovery 실행")
-    print("→ Docker 컨테이너 재시작 시도")
+    print("→ Pod restart 시도")
 
-    os.system("echo 'docker restart my-app-container'")
+    try:
+        result = subprocess.run(
+            ["kubectl", "rollout", "restart", "deployment", "my-app"],
+            capture_output=True,
+            text=True
+        )
 
-    print("→ Recovery 명령 실행 완료")
+        if result.returncode != 0:
+            raise Exception(result.stderr)
+
+        print("✅ CPU Recovery 성공")
+
+    except Exception as e:
+        print(f"❌ CPU Recovery 실패: {e}")
+        raise e
 
 
 def handle_memory_recovery(event: dict):
     print("\n🔥 Memory Recovery 실행")
-    print("→ 메모리 정리 또는 재시작 예정")
+    print("→ Pod restart 시도")
 
-    os.system("echo 'memory cleanup or restart'")
+    try:
+        result = subprocess.run(
+            ["kubectl", "rollout", "restart", "deployment", "my-app"],
+            capture_output=True,
+            text=True
+        )
 
-    print("→ Recovery 명령 실행 완료")
+        if result.returncode != 0:
+            raise Exception(result.stderr)
+
+        print("✅ Memory Recovery 성공")
+
+    except Exception as e:
+        print(f"❌ Memory Recovery 실패: {e}")
+        raise e

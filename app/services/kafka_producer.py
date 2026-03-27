@@ -1,5 +1,6 @@
 from kafka import KafkaProducer
 import json
+from datetime import datetime
 from app.config.settings import settings
 
 
@@ -14,12 +15,20 @@ class KafkaEventProducer:
                 value_serializer=lambda v: json.dumps(v).encode("utf-8")
             )
 
-    def send(self, topic: str, event: dict):
+    def send(self, event: dict):
         try:
             self._connect()
-            self.producer.send(topic, event)
+
+            # 🔥 표준 이벤트 구조
+            message = {
+                "event_type": event.get("event_type", "unknown"),
+                "timestamp": datetime.utcnow().isoformat(),
+                "payload": event
+            }
+
+            self.producer.send(settings.KAFKA_TOPIC_MAIN, message)
             self.producer.flush()
-            # print(f"[Kafka] Event sent to {topic}")
+
         except Exception as e:
             print(f"[Kafka ERROR] {e}")
 

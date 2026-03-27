@@ -1,100 +1,85 @@
 # ==========================================
-# 1. Terraform (인프라 프로비저닝)
+# 1. Terraform
 # ==========================================
-# 로컬 환경 설정 디렉토리
 **/.terraform/*
 .terraform/
 
-# 인프라 상태 파일 (★매우 중요: 클라우드 인프라 정보와 DB 비밀번호가 평문으로 저장됨)
 *.tfstate
 *.tfstate.*
 
-# 에러 로그 및 오버라이드 파일
 crash.log
 crash.*.log
+
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
 
-# 변수 파일 (★매우 중요: AWS 엑세스 키, 진짜 DB 비밀번호 등을 여기에 넣고 올려야 함)
 *.tfvars
 *.tfvars.json
 
-# CLI 설정 파일 및 플랜 파일
 .terraformrc
 terraform.rc
 *tfplan*
 
 # ==========================================
-# 2. Ansible (하이브리드 망 및 K3s 구성)
+# 2. Ansible / SSH / Secrets
 # ==========================================
 *.retry
 ansible.log
 
-# SSH Keys (★절대 Github에 올라가면 안 되는 서버 접속용 키 파일들)
 *.pem
 *.key
 *.id_rsa
 *.pub
 
-# 비밀번호가 포함될 수 있는 민감한 변수 파일
 secrets.yml
-# inventory.ini (IP나 비밀번호를 하드코딩했다면 주석을 풀고 무시 처리하세요)
 # inventory.ini
 
 # ==========================================
-# 3. Kubernetes / Helm / Istio
+# 3. Kubernetes / Helm
 # ==========================================
-# 클러스터 접근 권한 파일
 kubeconfig
 *.kubeconfig
 
-# Helm 차트 다운로드 아카이브
 *.tgz
 .helm/
 
 # ==========================================
-# 4. Python (Merlion AI / FastAPI 백엔드)
+# 4. Python / FastAPI / AIOps
 # ==========================================
-# 바이트코드
 __pycache__/
 *.py[cod]
 *$py.class
 
-# 가상환경 (용량이 매우 크므로 절대 올리면 안 됨)
 venv/
 .venv/
 env/
-.env/
 
-# 환경 변수 파일 (API 키, DB 접속 주소 등)
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
 !.env.example
 
-# 패키징 및 배포
 build/
 dist/
 *.egg-info/
 
 # ==========================================
-# 5. Java / Spring Boot (Redrive API 등)
+# 5. Java / Spring Boot
 # ==========================================
-# 컴파일된 클래스 및 패키지
 target/
-build/
 .gradle/
 *.jar
 *.war
 
 # ==========================================
-# 6. OS 및 에디터 (VSCode, IntelliJ 등)
+# 6. Logs
 # ==========================================
-# macOS / Windows 시스템 파일
+*.log
+
+# ==========================================
+# 7. OS / Editor
+# ==========================================
 .DS_Store
 .DS_Store?
 ._*
@@ -103,9 +88,12 @@ build/
 ehthumbs.db
 Thumbs.db
 
-# IDE 설정 파일
 .idea/
 .vscode/
 *.swp
 *.swo
-*~
+*~minikube-linux-amd64
+User
+Configuring
+__pycache__/
+minikube-linux-amd64

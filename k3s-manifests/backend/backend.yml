@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiops-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aiops-backend
+  template:
+    metadata:
+      labels:
+        app: aiops-backend
+    spec:
+      containers:
+      - name: backend
+        image: haseok2/error-recovery:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+
+        env:
+        # =========================
+        # Kafka
+        # =========================
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: kafka-service:9092
+        - name: KAFKA_TOPIC_MAIN
+          value: events-main
+        - name: KAFKA_TOPIC_DLQ
+          value: events-dlq
+        - name: KAFKA_TOPIC_REPLAY
+          value: events-replay
+
+        # =========================
+        # MongoDB
+        # =========================
+        - name: MONGO_URI
+          value: mongodb-service:27017
+        - name: MONGO_DB
+          value: sandbox_db
+        - name: MONGO_COLLECTION
+          value: cases
+
+        # =========================
+        # Slack
+        # =========================
+        - name: SLACK_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: slack-secrets
+              key: SLACK_BOT_TOKEN
+        - name: SLACK_CHANNEL
+          value: "#anomaly-alert"
+
+        # =========================
+        # App
+        # =========================
+        - name: RESET_DB_ON_START
+          value: "false"

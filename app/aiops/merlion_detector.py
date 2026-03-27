@@ -8,12 +8,15 @@ logger = logging.getLogger(__name__)
 
 
 class MerlionAnomalyDetector:
-    def __init__(self):
-        # 🔥 config 필수
+    def __init__(self, persistence=3):
         config = IsolationForestConfig()
         self.model = IsolationForest(config)
 
         self.is_trained = False
+
+        # 🔥 추가: 연속 이상 카운트
+        self.persistence = persistence
+        self.anomaly_streak = 0
 
     def train(self, time_series_data: list):
         if len(time_series_data) < 5:
@@ -48,5 +51,18 @@ class MerlionAnomalyDetector:
 
         return latest_score
 
-    def is_anomaly(self, score: float, threshold: float = 0.55):
-        return score > threshold
+    def is_anomaly(self, score: float, threshold: float = 0.45):
+        if score is None:
+            return False
+
+        # 🔥 threshold 초과 시 streak 증가
+        if score > threshold:
+            self.anomaly_streak += 1
+        else:
+            # 🔥 정상으로 돌아오면 초기화
+            self.anomaly_streak = 0
+
+        logger.info(f"[Merlion] Streak: {self.anomaly_streak}")
+
+        # 🔥 연속 N번 이상일 때만 anomaly
+        return self.anomaly_streak >= self.persistence

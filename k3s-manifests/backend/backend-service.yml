@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: aiops-backend
+  name: backend-service
 spec:
   selector:
     app: aiops-backend
   ports:
-    - port: 80
+    - port: 8000
       targetPort: 8000
   type: ClusterIP

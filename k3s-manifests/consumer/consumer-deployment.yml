@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anomaly-consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anomaly-consumer
+  template:
+    metadata:
+      labels:
+        app: anomaly-consumer
+    spec:
+      containers:
+        - name: consumer
+          image: haseok2/error-recovery:latest
+          command: ["python", "-m", "app.consumer_runner"]
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-service:9092"
+
+            - name: KAFKA_TOPIC_MAIN
+              value: "events-main"
+
+            - name: KAFKA_TOPIC_DLQ
+              value: "events-dlq"
+
+            - name: KAFKA_TOPIC_REPLAY
+              value: "events-replay"
+
+            - name: MONGO_URI
+              value: "mongodb://mongodb-service:27017"
+
+            - name: MONGO_DB
+              value: "sandbox_db"
+
+            - name: RESET_DB_ON_START
+              value: "false"
+
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slack-secrets
+                  key: SLACK_BOT_TOKEN
+
+            - name: SLACK_CHANNEL
+              value: "#새-채널"

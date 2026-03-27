@@ -1,14 +1,15 @@
 import json
 import logging
 from kafka import KafkaConsumer
+from pymongo import MongoClient
 
 from app.services.slack_notifier import send_slack_alert
 from app.services.dlq_producer import send_to_dlq
 from app.recovery.recovery_dispatcher import dispatch_recovery
+from app.config.settings import settings
 
-# 🔥 로그 최소화
+# 로그 최소화
 logging.getLogger().setLevel(logging.ERROR)
-
 logger = logging.getLogger(__name__)
 
 
@@ -25,19 +26,37 @@ class AnomalyKafkaConsumer:
             value_deserializer=lambda m: json.loads(m.decode("utf-8")),
         )
 
+        # Mongo (결과 기록)
+        self.mongo_client = MongoClient(settings.MONGO_URI)
+        self.mongo_db = self.mongo_client[settings.MONGO_DB]
+        self.result_collection = self.mongo_db["redrive_results"]
+
     def start(self):
         print("🚀 Kafka Consumer started")
 
         for message in self.consumer:
-
             event = message.value
 
             try:
                 self.process_event(event)
 
+                # ✅ 성공 기록
+                if "redrive_id" in event:
+                    self.result_collection.insert_one({
+                        "redrive_id": event["redrive_id"],
+                        "status": "success"
+                    })
+
             except Exception as e:
-                # 🔥 실패 시 DLQ만 처리 (로그 제거)
-                send_to_dlq(event, reason=str(e))
+                # ❗ DLQ는 여기서만 처리 (단일 진입점)
+                send_to_dlq(event, reason=type(e).__name__)
+
+                # ❌ 실패 기록
+                if "redrive_id" in event:
+                    self.result_collection.insert_one({
+                        "redrive_id": event["redrive_id"],
+                        "status": "failed"
+                    })
 
     def process_event(self, event: dict):
         severity = event.get("severity")
@@ -48,18 +67,13 @@ class AnomalyKafkaConsumer:
         elif severity == "WARNING":
             self.handle_warning(event)
 
-    def handle_critical(self, event: dict):
-        try:
-            dispatch_recovery(event)
+        else:
+            raise ValueError("Unknown severity")
 
-        except Exception as e:
-            # 🔥 Recovery 실패 → DLQ만
-            send_to_dlq(event, reason=f"recovery_failed")
+    def handle_critical(self, event: dict):
+        # ❗ 여기서는 DLQ 보내지 않는다
+        dispatch_recovery(event)
 
     def handle_warning(self, event: dict):
-        try:
-            send_slack_alert(event)
-
-        except Exception as e:
-            # 🔥 Slack 실패 → DLQ만
-            send_to_dlq(event, reason=f"slack_failed")
+        # ❗ 여기서도 DLQ 보내지 않는다
+        send_slack_alert(event, 0.0)
