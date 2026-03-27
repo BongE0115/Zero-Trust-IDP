@@ -7,10 +7,18 @@ from app.config.settings import settings
 logger = logging.getLogger(__name__)
 
 
+<<<<<<< HEAD
 def get_producer():
     try:
         return KafkaProducer(
             bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+=======
+
+def get_producer():
+    try:
+        return KafkaProducer(
+            bootstrap_servers="localhost:9092",
+>>>>>>> c56df95f91839c06e4d9c285fda960a4e249b796
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
         )
     except Exception as e:

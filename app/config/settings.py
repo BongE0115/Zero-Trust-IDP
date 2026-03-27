@@ -12,6 +12,7 @@ class Settings:
     APP_NAME = os.getenv("APP_NAME", "error-recovery-system")
     APP_ENV = os.getenv("APP_ENV", "dev")
 
+<<<<<<< HEAD
     # =========================
     # Kafka
     # =========================
@@ -54,6 +55,19 @@ class Settings:
     # =========================
     # Slack
     # =========================
+=======
+    # Kafka
+    KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+    KAFKA_TOPIC_MAIN = os.getenv("KAFKA_TOPIC_MAIN", "anomaly-topic")
+    KAFKA_TOPIC_DLQ = os.getenv("KAFKA_TOPIC_DLQ", "anomaly-dlq")
+
+    # MongoDB
+    MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+    MONGO_DB = os.getenv("MONGO_DB", "sandbox_db")
+    MONGO_COLLECTION = os.getenv("MONGO_COLLECTION", "errors")
+
+    # Slack
+>>>>>>> c56df95f91839c06e4d9c285fda960a4e249b796
     SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
     SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "")
 
