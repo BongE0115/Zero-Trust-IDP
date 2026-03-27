@@ -9,7 +9,7 @@ import time
 
 app = FastAPI()
 
-KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092")
+KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.kafka:9092") # 메시지 전송 확인 방법 1 (ssm에서 확인)로 확인하기 위해 local -> kafka로 변경함.
 TOPIC = os.getenv("KAFKA_TOPIC", "orders")
 
 producer = None

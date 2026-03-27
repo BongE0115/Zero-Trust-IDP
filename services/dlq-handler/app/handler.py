@@ -10,7 +10,7 @@ def getenv(name: str, default: str = "") -> str:
     return os.getenv(name, default)
 
 
-KAFKA_BOOTSTRAP = getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092")
+KAFKA_BOOTSTRAP = getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.kafka:9092") # 메시지 전송 확인 방법 1 (ssm에서 확인)로 확인하기 위해 local -> kafka로 변경함.
 DLQ_TOPIC = getenv("DLQ_TOPIC", "orders-dlq")
 REPLAY_TOPIC = getenv("REPLAY_TOPIC", "orders-replay")
 GROUP_ID = getenv("GROUP_ID", "orders-dlq-handler")
