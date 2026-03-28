@@ -13,9 +13,13 @@ spec:
       labels:
         app: producer-api
     spec:
+      # --- [수정 및 추가된 부분] ---
+      imagePullSecrets:
+        - name: ghcr-secret
+      # ---------------------------
       containers:
         - name: producer-api
-          image: ghcr.io/bonge0115/producer-api:latest # 이미지는 ghcr로 만든다. 이후 your-org는 실제 계정으로 수정
+          image: ghcr.io/haseolc/producer-api:latest
           imagePullPolicy: Always 
           env:
             - name: KAFKA_BOOTSTRAP
@@ -31,7 +35,7 @@ metadata:
   name: producer-api
   namespace: kafka-poc
 spec:
-  type: LoadBalancer # 외부에서 프로듀서 api에 접속하기 위해 로드 밸런스 생성?
+  type: LoadBalancer # 외부에서 프로듀서 api에 접속하기 위해 로드 밸런스 생성
   selector:
     app: producer-api
   ports:

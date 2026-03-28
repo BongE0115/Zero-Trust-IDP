@@ -13,9 +13,12 @@ spec:
       labels:
         app: worker-consumer
     spec:
+      serviceAccountName: dlq-handler-sa
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
         - name: worker-consumer
-          image: ghcr.io/bonge0115/worker-consumer:latest # 이미지는 ghcr로 만든다. 이후 yout-org를 수정
+          image: ghcr.io/haseolc/worker-consumer:latest # 이미지는 ghcr로 만든다. 이후 yout-org를 수정
           imagePullPolicy: Always
           env:
             - name: KAFKA_BOOTSTRAP
@@ -35,7 +38,7 @@ spec:
               value: worker-consumer
 
             - name: IMAGE_REF
-              value: ghcr.io/your-org/worker-consumer:poc-v1
+              value: ghcr.io/haseolc/worker-consumer:poc-v1
             - name: CONFIG_VERSION
               value: v1
             - name: DEPENDENCY_PROFILE
