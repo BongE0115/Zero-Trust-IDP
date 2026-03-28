@@ -14,6 +14,8 @@ spec:
         app: dlq-handler
     spec:
       serviceAccountName: dlq-handler-sa
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
         - name: dlq-handler
           image: ghcr.io/haseolc/dlq-handler:latest # GHCR 이미지 경로 수정 
