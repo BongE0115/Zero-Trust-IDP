@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
     targetRevision: hs
-    path: error_category_map/gitops/apps/dlq-handler/manifests
+    path: error_category_map/gitops/apps/kafka-poc/manifests  # <--- 이 부분을 수정했습니다!
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: kafka-poc
