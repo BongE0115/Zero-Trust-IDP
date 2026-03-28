@@ -16,7 +16,7 @@ spec:
       serviceAccountName: dlq-handler-sa
       containers:
         - name: dlq-handler
-          image: ghcr.io/bonge0115/dlq-handler:latest # GHCR 이미지 경로 수정 
+          image: ghcr.io/haseolc/dlq-handler:latest # GHCR 이미지 경로 수정 
           imagePullPolicy: Always
           env:
             - name: KAFKA_BOOTSTRAP
