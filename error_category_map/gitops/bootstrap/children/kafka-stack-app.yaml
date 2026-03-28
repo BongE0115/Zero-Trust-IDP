@@ -13,7 +13,7 @@ spec:
     # 사용자님의 GitHub 저장소 주소
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
     # 현재 작업 중인 브랜치 (jy) => 변경해야됨
-    targetRevision: jy 
+    targetRevision: hs 
     # Kustomization.yaml 파일이 위치한 경로
     path: gitops/apps/kafka-poc/manifests # poc -> stack
   destination:

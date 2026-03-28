@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
-    targetRevision: jy
+    targetRevision: hs
     path: gitops/platform/observability/manifests
   destination:
     server: 'https://kubernetes.default.svc'
