@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd-app
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  project: default
+
+  sources:
+    - repoURL: 'https://argoproj.github.io/argo-helm'
+      chart: argo-cd
+      targetRevision: 8.0.0   # setup의 argocd_chart_version과 반드시 동일하게 맞출 것
+      helm:
+        releaseName: argocd
+        valueFiles:
+          - $values/gitops/bootstrap/argocd/values.yaml
+
+    - repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
+      targetRevision: jy
+      ref: values
+
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
