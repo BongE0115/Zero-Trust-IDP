@@ -77,48 +77,49 @@ jobs:
           yq -i '
             .spec.template.spec.containers[0].image =
             "ghcr.io/bonge0115/producer-api:" + strenv(SHA_TAG)
-          ' gitops/apps/kafka-poc/11-producer.yaml
+          ' gitops/apps/kafka-poc/manifests/11-producer.yaml
 
           # worker-consumer image
           yq -i '
             .spec.template.spec.containers[0].image =
             "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
-          ' gitops/apps/kafka-poc/21-consumer.yaml
+          ' gitops/apps/kafka-poc/manifests/21-consumer.yaml
 
           # worker-consumer IMAGE_REF env
           yq -i '
             (.spec.template.spec.containers[0].env[] | select(.name == "IMAGE_REF") | .value) =
             "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
-          ' gitops/apps/kafka-poc/21-consumer.yaml
+          ' gitops/apps/kafka-poc/manifests/21-consumer.yaml
 
           # dlq-handler image
           yq -i '
             .spec.template.spec.containers[0].image =
             "ghcr.io/bonge0115/dlq-handler:" + strenv(SHA_TAG)
-          ' gitops/apps/kafka-poc/32-dlq-handler.yaml
+          ' gitops/apps/kafka-poc/manifests/32-dlq-handler.yaml
 
           # forensic sandbox image
           yq -i '
             .spec.template.spec.containers[0].image =
             "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
-          ' gitops/apps/forensic-sandbox/sandbox-app.yaml
+          ' gitops/apps/forensic-sandbox/manifests/sandbox-app.yaml
 
           # forensic sandbox IMAGE_REF env
           yq -i '
             (.spec.template.spec.containers[0].env[] | select(.name == "IMAGE_REF") | .value) =
             "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
-          ' gitops/apps/forensic-sandbox/sandbox-app.yaml
+          ' gitops/apps/forensic-sandbox/manifests/sandbox-app.yaml
 
       - name: Commit and push updated GitOps manifests
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          
           git add \
-            gitops/apps/kafka-poc/11-producer.yaml \
-            gitops/apps/kafka-poc/21-consumer.yaml \
-            gitops/apps/kafka-poc/32-dlq-handler.yaml \
-            gitops/apps/forensic-sandbox/sandbox-app.yaml
+            gitops/apps/kafka-poc/manifests/11-producer.yaml \ 
+            gitops/apps/kafka-poc/manifests/21-consumer.yaml \
+            gitops/apps/kafka-poc/manifests/32-dlq-handler.yaml \
+            gitops/apps/forensic-sandbox/manifests/sandbox-app.yaml
 
           if git diff --cached --quiet; then
             echo "No manifest changes to commit."
@@ -128,3 +129,4 @@ jobs:
           git commit -m "chore(gitops): update images to ${SHORT_SHA}"
           git push origin jy
 
+# 파일 경로 수정

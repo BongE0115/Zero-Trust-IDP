@@ -1,3 +1,4 @@
+# 트리거 1 
 from kafka import KafkaConsumer
 import json
 import os
