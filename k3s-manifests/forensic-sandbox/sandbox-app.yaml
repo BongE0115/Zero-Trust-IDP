@@ -30,7 +30,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   # 💡 [수정 1] 테스트를 위해 레플리카를 1로 변경 (0이면 파드가 안 뜹니다)
-  replicas: 1 
+  replicas: 1
   selector:
     matchLabels:
       app: forensic-sandbox-app
