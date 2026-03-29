@@ -4,6 +4,17 @@
 # --------------------------------------------------
 # ==================================================
 
+terraform {
+  backend "s3" {
+    bucket         = "my-team-zerotrust-tfstate-1234"
+    key            = "terraform.tfstate"
+    region         = "ap-northeast-2"
+    dynamodb_table = "terraform-state-lock" 
+    encrypt        = true
+  }
+}
+
+
 provider "aws" {
   region = "ap-northeast-2"
 }
@@ -17,6 +28,7 @@ data "aws_ami" "ubuntu" {
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 }
+
 
 # ==========================================
 # 1. VPC
