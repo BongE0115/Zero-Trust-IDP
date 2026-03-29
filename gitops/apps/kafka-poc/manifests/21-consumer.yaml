@@ -35,7 +35,7 @@ spec:
               value: worker-consumer
 
             - name: IMAGE_REF
-              value: ghcr.io/your-org/worker-consumer:poc-v1
+              value: ghcr.io/bonge0115/worker-consumer:latest # 여기도 수정해야 됨
             - name: CONFIG_VERSION
               value: v1
             - name: DEPENDENCY_PROFILE
