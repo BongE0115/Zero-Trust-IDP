@@ -11,4 +11,4 @@ resources:
   - peer-auth.yaml
   - waypoint.yaml
   - istio-rules.yaml
-  - dlq-handler-cross-ns-rbac.yaml
+  - currentcase.yaml

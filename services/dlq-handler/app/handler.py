@@ -1,39 +1,31 @@
-# trigger
-from kafka import KafkaConsumer, KafkaProducer
-from kubernetes import client, config
+from kafka import KafkaConsumer
 import json
 import os
 import time
+from datetime import datetime, timezone
 
 
 def getenv(name: str, default: str = "") -> str:
     return os.getenv(name, default)
 
 
-KAFKA_BOOTSTRAP = getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092") # 메시지 전송 확인 방법 1 (ssm에서 확인)로 확인하기 위해 local -> kafka로 변경함.
+KAFKA_BOOTSTRAP = getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092")
 DLQ_TOPIC = getenv("DLQ_TOPIC", "orders-dlq")
-REPLAY_TOPIC = getenv("REPLAY_TOPIC", "orders-replay")
 GROUP_ID = getenv("GROUP_ID", "orders-dlq-handler")
 
-SANDBOX_NAMESPACE = getenv("SANDBOX_NAMESPACE", "forensic-sandbox")
-SANDBOX_DEPLOYMENT = getenv("SANDBOX_DEPLOYMENT", "forensic-sandbox-app")
-MONGO_DEPLOYMENT = getenv("MONGO_DEPLOYMENT", "mongodb-temp")
-
-AUTO_SCALE_SANDBOX = getenv("AUTO_SCALE_SANDBOX", "true").lower() == "true"
-AUTO_REPLAY = getenv("AUTO_REPLAY", "true").lower() == "true"
+ENABLE_REPLAY = getenv("ENABLE_REPLAY", "false").lower() == "true"
 
 
-def get_producer():
-    for _ in range(60):
-        try:
-            return KafkaProducer(
-                bootstrap_servers=KAFKA_BOOTSTRAP,
-                value_serializer=lambda v: json.dumps(v).encode("utf-8")
-            )
-        except Exception as e:
-            print(f"[WARN] Kafka producer init failed: {e}")
-            time.sleep(2)
-    raise RuntimeError("Kafka producer init failed")
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def build_case_id(event: dict) -> str:
+    source_service = event.get("source_service", "unknown-service")
+    original_payload = event.get("original_payload", {}) or {}
+    order_id = original_payload.get("order_id", "unknown-order")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"{source_service}-{order_id}-{timestamp}"
 
 
 def get_consumer():
@@ -53,53 +45,63 @@ def get_consumer():
     raise RuntimeError("Kafka consumer init failed")
 
 
-def get_apps_api():
-    for _ in range(30):
-        try:
-            config.load_incluster_config()
-            return client.AppsV1Api()
-        except Exception as e:
-            print(f"[WARN] Kubernetes API init failed: {e}")
-            time.sleep(2)
-    raise RuntimeError("Kubernetes API init failed")
+def print_alert(event: dict):
+    case_id = build_case_id(event)
+
+    source_service = event.get("source_service", "unknown")
+    source_namespace = event.get("source_namespace", "unknown")
+    source_deployment = event.get("source_deployment", "unknown")
+    source_topic = event.get("source_topic", "unknown")
+    consumer_group = event.get("consumer_group", "unknown")
+
+    error_type = event.get("error_type", "unknown")
+    error_message = event.get("error_message", "unknown")
+
+    image_ref = event.get("image_ref", "unknown")
+    config_version = event.get("config_version", "unknown")
+    dependency_profile = event.get("dependency_profile", "unknown")
+
+    original_payload = event.get("original_payload", {}) or {}
+
+    print("=" * 80)
+    print("[ALERT] DLQ failure event detected")
+    print(f"[ALERT] detected_at={utc_now_iso()}")
+    print(f"[ALERT] case_id={case_id}")
+    print(f"[ALERT] source_service={source_service}")
+    print(f"[ALERT] source_namespace={source_namespace}")
+    print(f"[ALERT] source_deployment={source_deployment}")
+    print(f"[ALERT] source_topic={source_topic}")
+    print(f"[ALERT] consumer_group={consumer_group}")
+    print(f"[ALERT] image_ref={image_ref}")
+    print(f"[ALERT] config_version={config_version}")
+    print(f"[ALERT] dependency_profile={dependency_profile}")
+    print(f"[ALERT] error_type={error_type}")
+    print(f"[ALERT] error_message={error_message}")
+    print(f"[ALERT] original_payload={json.dumps(original_payload, ensure_ascii=False)}")
+    print("[ALERT] next_action=manual_git_update_for_sandbox_enable")
+    print("=" * 80)
 
 
-def scale_deployment(apps_api: client.AppsV1Api, namespace: str, name: str, replicas: int):
-    body = {"spec": {"replicas": replicas}}
-    apps_api.patch_namespaced_deployment_scale(
-        name=name,
-        namespace=namespace,
-        body=body
+def main():
+    consumer = get_consumer()
+    print(
+        f"[INFO] DLQ handler started. dlq={DLQ_TOPIC}, "
+        f"group={GROUP_ID}, replay_enabled={ENABLE_REPLAY}"
     )
-    print(f"[SCALE] {namespace}/{name} -> replicas={replicas}")
 
+    for message in consumer:
+        event = message.value
 
-producer = get_producer()
-consumer = get_consumer()
-apps_api = get_apps_api()
-
-print(
-    f"[INFO] DLQ handler started. dlq={DLQ_TOPIC}, replay={REPLAY_TOPIC}, "
-    f"sandbox={SANDBOX_NAMESPACE}/{SANDBOX_DEPLOYMENT}, mongo={MONGO_DEPLOYMENT}"
-)
-
-for message in consumer:
-    failure_event = message.value
-    print(f"[DLQ DETECTED] {failure_event}")
-
-    original_payload = failure_event.get("original_payload", {})
-
-    if AUTO_SCALE_SANDBOX:
         try:
-            scale_deployment(apps_api, SANDBOX_NAMESPACE, MONGO_DEPLOYMENT, 1)
-            scale_deployment(apps_api, SANDBOX_NAMESPACE, SANDBOX_DEPLOYMENT, 1)
-        except Exception as e:
-            print(f"[ERROR] Failed to scale sandbox resources: {e}")
+            print_alert(event)
 
-    if AUTO_REPLAY:
-        try:
-            producer.send(REPLAY_TOPIC, original_payload)
-            producer.flush()
-            print(f"[REPLAY] sent to {REPLAY_TOPIC}: {original_payload}")
+            if ENABLE_REPLAY:
+                print("[WARN] ENABLE_REPLAY=true but replay logic is intentionally disabled in this POC stage.")
+                print("[WARN] Replay should be triggered only after sandbox is created via GitOps.")
         except Exception as e:
-            print(f"[ERROR] Failed to publish replay event: {e}")
+            print(f"[ERROR] Failed to process DLQ event: {e}")
+            print(f"[ERROR] raw_event={event}")
+
+
+if __name__ == "__main__":
+    main()

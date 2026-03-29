@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sandbox-case-current
+  namespace: forensic-sandbox
+data:
+  case_id: ""
+  requested_by: ""
+  source_service: ""
+  error_type: ""
+  error_message: ""
+  replay_topic: "orders-replay"
+  original_payload: ""
