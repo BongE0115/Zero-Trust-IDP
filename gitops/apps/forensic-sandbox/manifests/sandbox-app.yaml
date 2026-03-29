@@ -10,7 +10,12 @@ metadata:
     # 깃옵스 기반 온-디멘드 샌드박스 완전 구현을 위해 샌드박스 생성 및 istio 보안 규칙 순서 동기화 wave 추가
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
-
+spec:
+  template:
+    spec:
+      containers:
+        - image: 'ghcr.io/bonge0115/worker-consumer:'
+          env: []
 ---
 # 2. 전용 Service Account 생성 (신분증)
 apiVersion: v1
@@ -21,7 +26,12 @@ metadata:
   # 깃옵스 기반 온-디멘드 샌드박스 완전 구현을 위해 샌드박스 생성 및 istio 보안 규칙 순서 동기화 wave 추가
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
-
+spec:
+  template:
+    spec:
+      containers:
+        - image: 'ghcr.io/bonge0115/worker-consumer:'
+          env: []
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -47,59 +57,53 @@ spec:
         runAsGroup: 3000
         fsGroup: 2000
       containers:
-      - name: consumer-app
-        image: ghcr.io/bonge0115/worker-consumer:__SHA__ # 이미지 수정
-        imagePullPolicy: IfNotPresent
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop: ["ALL"]
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "256Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-        env:
-        - name: KAFKA_BOOTSTRAP
-          value: "kafka.kafka-poc.svc.cluster.local:9092"
-        - name: SOURCE_TOPIC
-          value: "orders-replay"
-        - name: DLQ_TOPIC
-          value: "orders-dlq"
-        - name: GROUP_ID
-          value: "orders-consumer-sandbox"
-
-        - name: SERVICE_NAME
-          value: "forensic-sandbox-app"
-        - name: NAMESPACE
-          value: "forensic-sandbox"
-        - name: DEPLOYMENT_NAME
-          value: "forensic-sandbox-app"
-
-        - name: IMAGE_REF
-          value: ghcr.io/bonge0115/worker-consumer:__SHA__ # 이미지 수정 
-        - name: CONFIG_VERSION
-          value: "sandbox-v1"
-        - name: DEPENDENCY_PROFILE
-          value: "sandbox"
-
-        - name: DB_MODE
-          value: "mongo"
-        - name: DB_HOST
-          value: "mongodb-temp.forensic-sandbox.svc.cluster.local"
-
-        - name: CACHE_MODE
-          value: "mock"
-        - name: CACHE_HOST
-          value: ""
-
-        - name: EXTERNAL_API_MODE
-          value: "mock"
-        - name: EXTERNAL_API_BASE_URL
-          value: ""
-
-        - name: FORCE_FAIL_FIELD
-          value: "should_fail"
+        - name: consumer-app
+          image: 'ghcr.io/bonge0115/worker-consumer:' # 이미지 수정
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: "kafka.kafka-poc.svc.cluster.local:9092"
+            - name: SOURCE_TOPIC
+              value: "orders-replay"
+            - name: DLQ_TOPIC
+              value: "orders-dlq"
+            - name: GROUP_ID
+              value: "orders-consumer-sandbox"
+            - name: SERVICE_NAME
+              value: "forensic-sandbox-app"
+            - name: NAMESPACE
+              value: "forensic-sandbox"
+            - name: DEPLOYMENT_NAME
+              value: "forensic-sandbox-app"
+            - name: IMAGE_REF
+              value: 'ghcr.io/bonge0115/worker-consumer:' # 이미지 수정 
+            - name: CONFIG_VERSION
+              value: "sandbox-v1"
+            - name: DEPENDENCY_PROFILE
+              value: "sandbox"
+            - name: DB_MODE
+              value: "mongo"
+            - name: DB_HOST
+              value: "mongodb-temp.forensic-sandbox.svc.cluster.local"
+            - name: CACHE_MODE
+              value: "mock"
+            - name: CACHE_HOST
+              value: ""
+            - name: EXTERNAL_API_MODE
+              value: "mock"
+            - name: EXTERNAL_API_BASE_URL
+              value: ""
+            - name: FORCE_FAIL_FIELD
+              value: "should_fail"
