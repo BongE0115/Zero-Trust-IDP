@@ -141,6 +141,13 @@ resource "aws_route_table_association" "private_b" {
   route_table_id = aws_route_table.private.id
 }
 
+resource "aws_route53_zone" "private_internal" {
+  name = "example.internal"
+  vpc {
+    vpc_id = aws_vpc.main.id
+  }
+}
+
 # ==================================================
 # --------------------------------------------------
 # 2. 보안 및 권한 (IAM,Security group)
