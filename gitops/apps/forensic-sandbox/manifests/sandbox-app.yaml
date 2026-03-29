@@ -23,17 +23,15 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"
 
 ---
-# 3. 샌드박스 앱 디플로이먼트
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: forensic-sandbox-app
   namespace: forensic-sandbox
-   # 깃옵스 기반 온-디멘드 샌드박스 완전 구현을 위해 샌드박스 생성 및 istio 보안 규칙 순서 동기화 wave 추가
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  replicas: 1 # (평소엔 0, 에러 발생 시 자동화 스크립트가 늘림)
+  replicas: 0
   selector:
     matchLabels:
       app: forensic-sandbox-app
@@ -42,30 +40,21 @@ spec:
       labels:
         app: forensic-sandbox-app
     spec:
-      # 앱에 전용 신분증 장착
-      serviceAccountName: sandbox-app-sa 
-      
-      # 파드 레벨 보안 설정 (root 실행 금지)
+      serviceAccountName: sandbox-app-sa
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 3000
         fsGroup: 2000
-
       containers:
       - name: consumer-app
-        image: alpine:latest # 가벼운 리눅스 이미지 -> 추후 진짜 컨슈머 앱으로 수정해야 됨. 
-        command: ["/bin/sh", "-c", "sleep infinity"] # alpine 파드가 즉시 종료되지 않도록 유지하는 명령어
-        
-        # 컨테이너 레벨 보안 설정 (권한 상승 불가, 읽기 전용 폴더)
+        image: ghcr.io/bonge0115/worker-consumer:latest
+        imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
           capabilities:
-            drop:
-            - ALL
-            
-        # 리소스 제한 (노드 다운 방지)
+            drop: ["ALL"]
         resources:
           requests:
             cpu: "100m"
@@ -73,9 +62,44 @@ spec:
           limits:
             cpu: "500m"
             memory: "512Mi"
-            
         env:
-        - name: KAFKA_TOPIC
-          value: "orders-dlq" 
+        - name: KAFKA_BOOTSTRAP
+          value: "kafka.kafka-poc.svc.cluster.local:9092"
+        - name: SOURCE_TOPIC
+          value: "orders-replay"
+        - name: DLQ_TOPIC
+          value: "orders-dlq"
+        - name: GROUP_ID
+          value: "orders-consumer-sandbox"
+
+        - name: SERVICE_NAME
+          value: "forensic-sandbox-app"
+        - name: NAMESPACE
+          value: "forensic-sandbox"
+        - name: DEPLOYMENT_NAME
+          value: "forensic-sandbox-app"
+
+        - name: IMAGE_REF
+          value: "ghcr.io/bonge0115/worker-consumer:latest"
+        - name: CONFIG_VERSION
+          value: "sandbox-v1"
+        - name: DEPENDENCY_PROFILE
+          value: "sandbox"
+
+        - name: DB_MODE
+          value: "mongo"
         - name: DB_HOST
           value: "mongodb-temp.forensic-sandbox.svc.cluster.local"
+
+        - name: CACHE_MODE
+          value: "mock"
+        - name: CACHE_HOST
+          value: ""
+
+        - name: EXTERNAL_API_MODE
+          value: "mock"
+        - name: EXTERNAL_API_BASE_URL
+          value: ""
+
+        - name: FORCE_FAIL_FIELD
+          value: "should_fail"

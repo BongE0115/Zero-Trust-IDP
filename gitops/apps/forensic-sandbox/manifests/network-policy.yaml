@@ -19,13 +19,13 @@ spec:
   - to:
     - namespaceSelector:
         matchLabels:
-          kubernetes.io/metadata.name: kafka
+          kubernetes.io/metadata.name: kafka-poc # 최종적으로 poc를 제거해야 됨
       podSelector:
         matchLabels:
-          strimzi.io/cluster: my-cluster
+          app: kafka
     ports:
-    - protocol: TCP  #
-      port: 9092  #
+    - protocol: TCP
+      port: 9092
       
   # 2. 내부 임시 MongoDB (샌드박스 DB 접근 허용)
   - to:

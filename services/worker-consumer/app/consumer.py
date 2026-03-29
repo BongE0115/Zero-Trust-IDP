@@ -1,4 +1,3 @@
-# trigger
 from kafka import KafkaConsumer, KafkaProducer
 import json
 import os
@@ -10,7 +9,7 @@ def getenv(name: str, default: str = "") -> str:
     return os.getenv(name, default)
 
 
-KAFKA_BOOTSTRAP = getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.kafka:9092") # 메시지 전송 확인 방법 1 (ssm에서 확인)로 확인하기 위해 local -> kafka로 변경함.
+KAFKA_BOOTSTRAP = getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092")
 SOURCE_TOPIC = getenv("SOURCE_TOPIC", "orders")
 DLQ_TOPIC = getenv("DLQ_TOPIC", "orders-dlq")
 GROUP_ID = getenv("GROUP_ID", "orders-consumer-prod")
@@ -31,6 +30,7 @@ EXTERNAL_API_MODE = getenv("EXTERNAL_API_MODE", "disabled")
 EXTERNAL_API_BASE_URL = getenv("EXTERNAL_API_BASE_URL", "")
 
 FORCE_FAIL_FIELD = getenv("FORCE_FAIL_FIELD", "should_fail")
+ENABLE_DLQ_PUBLISH = getenv("ENABLE_DLQ_PUBLISH", "true").lower() == "true"
 
 
 def utc_now_iso() -> str:
@@ -72,7 +72,7 @@ consumer = get_consumer()
 
 print(
     f"[INFO] Consumer started topic={SOURCE_TOPIC}, dlq={DLQ_TOPIC}, "
-    f"group={GROUP_ID}, image_ref={IMAGE_REF}"
+    f"group={GROUP_ID}, image_ref={IMAGE_REF}, enable_dlq_publish={ENABLE_DLQ_PUBLISH}"
 )
 
 for message in consumer:
@@ -81,7 +81,6 @@ for message in consumer:
     try:
         print(f"[INFO] Received: {payload}")
 
-        # POC용 의도적 실패 조건
         if payload.get(FORCE_FAIL_FIELD) is True:
             raise ValueError("intentional failure for POC")
 
@@ -109,6 +108,11 @@ for message in consumer:
             "original_payload": payload
         }
 
-        print(f"[DLQ] {failure_event}")
-        producer.send(DLQ_TOPIC, failure_event)
-        producer.flush()
+        print(f"[FAILURE] {failure_event}")
+
+        if ENABLE_DLQ_PUBLISH:
+            producer.send(DLQ_TOPIC, failure_event)
+            producer.flush()
+            print(f"[DLQ] published to {DLQ_TOPIC}")
+        else:
+            print("[SANDBOX] DLQ publish disabled, failure captured only")
