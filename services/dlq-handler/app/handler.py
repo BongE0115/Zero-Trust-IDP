@@ -1,4 +1,4 @@
-# 트리거 2
+# 트리거 3
 from kafka import KafkaConsumer
 import json
 import os

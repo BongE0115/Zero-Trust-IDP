@@ -114,12 +114,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          
-          git add \
-            gitops/apps/kafka-poc/manifests/11-producer.yaml \ 
-            gitops/apps/kafka-poc/manifests/21-consumer.yaml \
-            gitops/apps/kafka-poc/manifests/32-dlq-handler.yaml \
-            gitops/apps/forensic-sandbox/manifests/sandbox-app.yaml
+          git add gitops/apps/kafka-poc/manifests gitops/apps/forensic-sandbox/manifests
+          git status --short
 
           if git diff --cached --quiet; then
             echo "No manifest changes to commit."
@@ -128,5 +124,3 @@ jobs:
 
           git commit -m "chore(gitops): update images to ${SHORT_SHA}"
           git push origin jy
-
-# 파일 경로 수정
