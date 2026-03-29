@@ -631,31 +631,31 @@ resource "aws_lb_target_group_attachment" "k3s_agent_attachment" {
 
 
 # ==================================================
-# --------------------------------------------------
-# 4. 데이터 베이스 (RDS)
-# --------------------------------------------------
+# 4. 데이터 베이스 (RDS - MySQL)
 # ==================================================
 
 # ==========================================
-# RDS Security Group
+# 4.1 RDS Security Group (MySQL 3306)
 # ==========================================
 resource "aws_security_group" "rds_sg" {
   name        = "aiops-rds-sg"
-  description = "Security group for AIOps RDS PostgreSQL"
+  description = "Security group for AIOps RDS MySQL"
   vpc_id      = aws_vpc.main.id
 
+  # K3s Master로부터의 접속 허용
   ingress {
-    description     = "Allow PostgreSQL traffic from K3s master"
-    from_port       = 5432
-    to_port         = 5432
+    description     = "Allow MySQL traffic from K3s master"
+    from_port       = 3306
+    to_port         = 3306
     protocol        = "tcp"
     security_groups = [aws_security_group.k3s_server_sg.id]
   }
 
+  # K3s Worker로부터의 접속 허용
   ingress {
-    description     = "Allow PostgreSQL traffic from K3s worker"
-    from_port       = 5432
-    to_port         = 5432
+    description     = "Allow MySQL traffic from K3s worker"
+    from_port       = 3306
+    to_port         = 3306
     protocol        = "tcp"
     security_groups = [aws_security_group.k3s_agent_sg.id]
   }
@@ -673,7 +673,7 @@ resource "aws_security_group" "rds_sg" {
 }
 
 # ==========================================
-# RDS Subnet Group
+# 4.2 RDS Subnet Group
 # ==========================================
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name       = "aiops-rds-subnet-group"
@@ -685,13 +685,14 @@ resource "aws_db_subnet_group" "rds_subnet_group" {
 }
 
 # ==========================================
-# PostgreSQL RDS Instance
+# 4.3 MySQL RDS Instance
 # ==========================================
 resource "aws_db_instance" "aiops_rds" {
-  identifier = "aiops-postgres-db"
+  identifier = "aiops-mysql-db"
 
-  engine         = "postgres"
-  engine_version = "15"
+  engine         = "mysql"
+  engine_version = "8.0"      # MySQL 8.0 시리즈 사용
+  port           = 3306
 
   instance_class    = "db.t3.micro"
   allocated_storage = 20
@@ -708,26 +709,16 @@ resource "aws_db_instance" "aiops_rds" {
   skip_final_snapshot = true
 
   tags = {
-    Name      = "aiops-rds-postgres"
+    Name      = "aiops-rds-mysql"
     Project   = "AIOps"
     ManagedBy = "Terraform"
   }
 }
 
-resource "aws_route53_zone" "private_internal" {
-  name = var.private_dns_zone_name
-
-  vpc {
-    vpc_id = aws_vpc.main.id
-  }
-
-  comment = "Private hosted zone for AIOps internal service discovery"
-
-  tags = {
-    Name = "aiops-private-dns-zone"
-  }
-}
-
+# ==========================================
+# 4.4 Internal DNS Record (Route53)
+# ==========================================
+# 기존에 생성된 aws_route53_zone.private_internal이 있다면 중복 선언하지 않아도 됩니다.
 resource "aws_route53_record" "rds_cname" {
   zone_id = aws_route53_zone.private_internal.zone_id
   name    = "rds.${var.private_dns_zone_name}"
@@ -735,7 +726,6 @@ resource "aws_route53_record" "rds_cname" {
   ttl     = 60
   records = [aws_db_instance.aiops_rds.address]
 }
-
 
 # ==================================================
 # --------------------------------------------------
