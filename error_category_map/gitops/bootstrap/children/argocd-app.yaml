@@ -15,7 +15,7 @@ spec:
       helm:
         releaseName: argocd
         valueFiles:
-          - $values/gitops/bootstrap/argocd/values.yaml
+          - $values/error_category_map/gitops/bootstrap/argocd/values.yaml
 
     - repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
       targetRevision: hs
