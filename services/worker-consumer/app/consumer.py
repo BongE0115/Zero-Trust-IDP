@@ -18,7 +18,7 @@ SERVICE_NAME = getenv("SERVICE_NAME", "worker-consumer")
 NAMESPACE = getenv("NAMESPACE", "kafka-poc")
 DEPLOYMENT_NAME = getenv("DEPLOYMENT_NAME", "worker-consumer")
 
-IMAGE_REF = getenv("IMAGE_REF", "ghcr.io/bonge0115/worker-consumer:latest")
+IMAGE_REF = getenv("IMAGE_REF", "ghcr.io/bonge0115/worker-consumer:unset")
 CONFIG_VERSION = getenv("CONFIG_VERSION", "v1")
 DEPENDENCY_PROFILE = getenv("DEPENDENCY_PROFILE", "prod")
 

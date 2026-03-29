@@ -1,38 +1,41 @@
-name: Build and Push to GHCR
+name: Build Push and Update GitOps
 
 on:
   push:
     branches:
-      - jy  # main 브랜치에 코드가 푸시될 때만 실행
+      - jy
     paths:
-      - 'services/**'  # services 폴더 안의 파일이 변경될 때만 실행
+      - 'services/**'
 
 env:
   REGISTRY: ghcr.io
-  # 🚨 아주 중요한 주의사항: 도커 이미지는 무조건 '소문자'여야 합니다! (BongE0115 -> bonge0115)
   IMAGE_OWNER: bonge0115
 
 jobs:
-  build-and-push:
+  build-push-update:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write  # GHCR 진열장에 이미지를 올릴 수 있는 권한 부여
+      contents: write
+      packages: write
 
     steps:
-      # 1. 내 GitHub 저장소의 코드를 Actions 서버로 가져옴
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: jy
+          fetch-depth: 0
 
-      # 2. GHCR 로그인 (토큰 발급 필요 없음! 깃허브가 알아서 처리함)
-      - name: Log in to the Container registry
+      - name: Set short SHA
+        id: vars
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 3. producer-api 빌드 및 푸시
       - name: Build and push producer-api
         uses: docker/build-push-action@v5
         with:
@@ -40,9 +43,8 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:${{ env.SHORT_SHA }}
 
-      # 4. worker-consumer 빌드 및 푸시
       - name: Build and push worker-consumer
         uses: docker/build-push-action@v5
         with:
@@ -50,9 +52,8 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:${{ env.SHORT_SHA }}
 
-      # 5. dlq-handler 빌드 및 푸시
       - name: Build and push dlq-handler
         uses: docker/build-push-action@v5
         with:
@@ -60,4 +61,70 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:${{ env.SHORT_SHA }}
+
+      - name: Install yq
+        run: |
+          sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Update GitOps manifests with SHA tag
+        run: |
+          SHA_TAG="${SHORT_SHA}"
+
+          # producer-api
+          yq -i '
+            .spec.template.spec.containers[0].image =
+            "ghcr.io/bonge0115/producer-api:" + strenv(SHA_TAG)
+          ' gitops/apps/kafka-poc/11-producer.yaml
+
+          # worker-consumer image
+          yq -i '
+            .spec.template.spec.containers[0].image =
+            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+          ' gitops/apps/kafka-poc/21-consumer.yaml
+
+          # worker-consumer IMAGE_REF env
+          yq -i '
+            (.spec.template.spec.containers[0].env[] | select(.name == "IMAGE_REF") | .value) =
+            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+          ' gitops/apps/kafka-poc/21-consumer.yaml
+
+          # dlq-handler image
+          yq -i '
+            .spec.template.spec.containers[0].image =
+            "ghcr.io/bonge0115/dlq-handler:" + strenv(SHA_TAG)
+          ' gitops/apps/kafka-poc/32-dlq-handler.yaml
+
+          # forensic sandbox image
+          yq -i '
+            .spec.template.spec.containers[0].image =
+            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+          ' gitops/apps/forensic-sandbox/sandbox-app.yaml
+
+          # forensic sandbox IMAGE_REF env
+          yq -i '
+            (.spec.template.spec.containers[0].env[] | select(.name == "IMAGE_REF") | .value) =
+            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+          ' gitops/apps/forensic-sandbox/sandbox-app.yaml
+
+      - name: Commit and push updated GitOps manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            gitops/apps/kafka-poc/11-producer.yaml \
+            gitops/apps/kafka-poc/21-consumer.yaml \
+            gitops/apps/kafka-poc/32-dlq-handler.yaml \
+            gitops/apps/forensic-sandbox/sandbox-app.yaml
+
+          if git diff --cached --quiet; then
+            echo "No manifest changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(gitops): update images to ${SHORT_SHA}"
+          git push origin jy
+

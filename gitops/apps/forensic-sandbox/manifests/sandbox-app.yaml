@@ -48,8 +48,8 @@ spec:
         fsGroup: 2000
       containers:
       - name: consumer-app
-        image: ghcr.io/bonge0115/worker-consumer:latest
-        imagePullPolicy: Always
+        image: ghcr.io/bonge0115/worker-consumer:__SHA__ # 이미지 수정
+        imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -80,7 +80,7 @@ spec:
           value: "forensic-sandbox-app"
 
         - name: IMAGE_REF
-          value: "ghcr.io/bonge0115/worker-consumer:latest"
+          value: ghcr.io/bonge0115/worker-consumer:__SHA__ # 이미지 수정 
         - name: CONFIG_VERSION
           value: "sandbox-v1"
         - name: DEPENDENCY_PROFILE
