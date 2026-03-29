@@ -10,4 +10,3 @@ resources:
   - network-policy.yaml
   - peer-auth.yaml
   - waypoint.yaml
-  - dlq-handler-cross-ns-rbac.yaml
