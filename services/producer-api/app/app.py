@@ -1,4 +1,4 @@
-# 트리거 1 
+# 트리거 2
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
