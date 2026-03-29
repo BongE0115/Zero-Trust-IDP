@@ -18,7 +18,7 @@ spec:
       - name: ghcr-secret
       containers:
         - name: dlq-handler
-          image: ghcr.io/haseolc/dlq-handler:latest # GHCR 이미지 경로 수정 
+          image: ghcr.io/haseolc/dlq-handler:v3 # GHCR 이미지 경로 수정 
           imagePullPolicy: Always
           env:
             - name: KAFKA_BOOTSTRAP
