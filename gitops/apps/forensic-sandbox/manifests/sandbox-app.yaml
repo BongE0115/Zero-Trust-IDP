@@ -14,7 +14,7 @@ spec:
   template:
     spec:
       containers:
-        - image: 'ghcr.io/bonge0115/worker-consumer:'
+        - image: 'ghcr.io/bonge0115/worker-consumer:07149dd'
           env: []
 ---
 # 2. 전용 Service Account 생성 (신분증)
@@ -30,7 +30,7 @@ spec:
   template:
     spec:
       containers:
-        - image: 'ghcr.io/bonge0115/worker-consumer:'
+        - image: 'ghcr.io/bonge0115/worker-consumer:07149dd'
           env: []
 ---
 apiVersion: apps/v1
@@ -58,7 +58,7 @@ spec:
         fsGroup: 2000
       containers:
         - name: consumer-app
-          image: 'ghcr.io/bonge0115/worker-consumer:' # 이미지 수정
+          image: 'ghcr.io/bonge0115/worker-consumer:07149dd' # 이미지 수정
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -88,7 +88,7 @@ spec:
             - name: DEPLOYMENT_NAME
               value: "forensic-sandbox-app"
             - name: IMAGE_REF
-              value: 'ghcr.io/bonge0115/worker-consumer:' # 이미지 수정 
+              value: 'ghcr.io/bonge0115/worker-consumer:07149dd' # 이미지 수정 
             - name: CONFIG_VERSION
               value: "sandbox-v1"
             - name: DEPENDENCY_PROFILE
