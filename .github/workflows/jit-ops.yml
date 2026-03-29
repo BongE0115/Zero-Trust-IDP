@@ -1,0 +1,123 @@
+name: 🛡️ JIT Security Operations (Unified)
+
+on:
+  repository_dispatch:
+    # 두 가지 이벤트 타입을 모두 이 파일에서 처리합니다.
+    types: [trigger-jit-debug, cleanup_pod]
+
+jobs:
+  jit-process:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔐 K8s 클러스터 접속
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+
+      # 1. [공통] 기존 임시 권한 초기화 (혹시 남아있을지 모를 찌꺼기 제거)
+      - name: 🧹 Pre-Cleanup
+        run: |
+          kubectl delete authorizationpolicy sandbox-jit-access -n forensic-sandbox --ignore-not-found
+          kubectl delete authorizationpolicy allow-sandbox-to-kafka -n kafka-poc --ignore-not-found
+
+      # 2. [디버깅 모드 전용] 자물쇠 해제 및 임시 권한 발급
+      - name: 🔓 Unlock & Open Firewall
+        if: github.event.action == 'trigger-jit-debug'
+        run: |
+          echo "디버깅 모드: 자물쇠를 해제하고 임시 포트를 개방합니다."
+          # 자물쇠(DENY) 제거
+          kubectl delete authorizationpolicy block-everything-sandbox -n forensic-sandbox --ignore-not-found
+          # 열쇠(ALLOW) 삽입
+          cat <<EOF | kubectl apply -f -
+          apiVersion: security.istio.io/v1beta1
+          kind: AuthorizationPolicy
+          metadata:
+            name: sandbox-jit-access
+            namespace: forensic-sandbox
+          spec:
+            selector:
+              matchLabels:
+                app: forensic-sandbox-app
+            action: ALLOW
+            rules:
+            - to:
+              - operation:
+                  ports: ["8080", "27017", "53"]
+          ---
+          apiVersion: security.istio.io/v1beta1
+          kind: AuthorizationPolicy
+          metadata:
+            name: allow-sandbox-to-kafka
+            namespace: kafka-poc
+          spec:
+            action: ALLOW
+            rules:
+            - from:
+              - source:
+                  namespaces: ["forensic-sandbox"]
+              to:
+              - operation:
+                  ports: ["9092"]
+          EOF
+          sleep 5
+
+      # 3. [디버깅 모드 전용] 패킷 캡처 및 슬랙 전송
+      - name: 🛠️ Debugging & Packet Capture
+        if: github.event.action == 'trigger-jit-debug'
+        run: |
+          POD_NAME=${{ github.event.client_payload.pod_name }}
+          PORT=${{ github.event.client_payload.target_port }}
+          kubectl debug -n forensic-sandbox $POD_NAME --image=nicolaka/netshoot --container=debugger --target=consumer-app || true
+          sleep 5
+          kubectl exec -n forensic-sandbox $POD_NAME -c debugger -- timeout 30 tcpdump -i eth0 port $PORT -w /tmp/capture.pcap || true
+          kubectl cp forensic-sandbox/$POD_NAME:/tmp/capture.pcap ./capture.pcap -c debugger
+
+      - name: 📤 Upload to Slack
+        if: github.event.action == 'trigger-jit-debug'
+        uses: adrey/slack-file-upload-action@master
+        with:
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          path: ./capture.pcap
+          channel: "알림_채널"
+          initial_comment: "🚨 JIT 디버깅 결과물입니다."
+
+      # 4. [공통] 무조건 실행: 자물쇠 복구 및 파드 강제 교체
+      # 'if: always()' 덕분에 중간에 캡처가 실패해도 문은 무조건 잠깁니다.
+      - name: 🔒 Final Lockdown & Cleanup
+        if: always()
+        run: |
+          echo "보안 복구 모드: 모든 임시 권한을 삭제하고 자물쇠를 다시 채웁니다."
+          # 임시 ALLOW 정책 삭제
+          kubectl delete authorizationpolicy sandbox-jit-access -n forensic-sandbox --ignore-not-found
+          kubectl delete authorizationpolicy allow-sandbox-to-kafka -n kafka-poc --ignore-not-found
+          
+          # 자물쇠(DENY) 재생성
+          cat <<EOF | kubectl apply -f -
+          apiVersion: security.istio.io/v1beta1
+          kind: AuthorizationPolicy
+          metadata:
+            name: block-everything-sandbox
+            namespace: forensic-sandbox
+          spec:
+            selector:
+              matchLabels:
+                app: forensic-sandbox-app
+            action: DENY
+            rules:
+            - {}
+          EOF
+          
+          # 오염된 파드 폭파 (새 파드로 자동 교체)
+          kubectl delete pod ${{ github.event.client_payload.pod_name }} -n forensic-sandbox --ignore-not-found
+
+      - name: 📢 Slack Final Notify
+        if: always()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "🛡️ *[JIT 보안 알림]* 요청하신 작업(${{ github.event.action }})이 완료되었습니다. 샌드박스는 다시 완전 격리 상태로 복구되었습니다."
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
