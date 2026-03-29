@@ -9,8 +9,8 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
-    targetRevision: security # 브랜치에 따라 수정하면 됨.
-    path: k3s-manifests/forensic-sandbox # 파일 경로도 수정해야 됨. 
+    targetRevision: jy # 브랜치에 따라 수정하면 됨.
+    path: gitops/apps/forensic-sandbox #k3s-manifests/forensic-sandbox # 파일 경로도 수정해야 됨. 
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: forensic-sandbox
