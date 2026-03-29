@@ -71,7 +71,9 @@ jobs:
 
       - name: Update GitOps manifests with SHA tag
         run: |
-          SHA_TAG="${SHORT_SHA}"
+          export SHA_TAG="${SHORT_SHA}"
+          echo "SHORT_SHA=${SHORT_SHA}"
+          echo "SHA_TAG=${SHA_TAG}"
 
           # producer-api
           yq -i '
