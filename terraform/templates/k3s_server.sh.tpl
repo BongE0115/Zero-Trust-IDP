@@ -137,3 +137,20 @@ curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/lat
 sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
 rm -f argocd-linux-amd64
 echo "ArgoCD CLI installation complete."
+
+# ---------------------------------------------------------
+# 9. ArgoCD 서버 Insecure 모드 설정 (ALB 연동 필수)
+# ---------------------------------------------------------
+echo "ArgoCD 서버를 ALB용 Insecure 모드로 전환 중..."
+
+# ConfigMap에 insecure 설정 주입
+/usr/local/bin/kubectl patch cm argocd-cmd-params-cm -n argocd \
+  -p '{"data": {"server.insecure": "true"}}'
+
+# 설정을 적용하기 위해 서버를 재시작 (Rollout)
+# 이 과정이 없으면 ConfigMap만 바뀌고 실제 앱은 예전 설정을 사용함
+/usr/local/bin/kubectl rollout restart deployment argocd-server -n argocd
+
+# 서버가 다시 뜰 때까지 대기
+echo "ArgoCD 서버 재시작 대기 중..."
+/usr/local/bin/kubectl rollout status deployment argocd-server -n argocd --timeout=60s
