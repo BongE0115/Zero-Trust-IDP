@@ -1,7 +1,4 @@
 resources:
   - productcatalog.yaml
-  - cartservice.yaml
-  - currencyservice.yaml
-  - recommendationservice.yaml
-  - adservice.yaml
-  - emailservice.yaml
+  - cartservice.yaml            # (cartservice + redis-cart 합본)
+  - currencyservice.yaml         # (currency + recommend + ad + email 합본)
