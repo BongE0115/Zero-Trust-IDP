@@ -45,12 +45,12 @@ if [ -n "$TAILSCALE_AUTH_KEY" ]; then
 fi
 
 # ---------------------------------------------------------
-# 4. K3s Server 설치
+# 4. K3s Server 설치 (Master 라벨 추가)
 # ---------------------------------------------------------
 if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
   curl -sfL https://get.k3s.io | \
     INSTALL_K3S_VERSION="$K3S_VERSION" \
-    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik" \
+    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --node-label node-role.kubernetes.io/master=true --node-label kubernetes.io/role=master" \
     K3S_TOKEN="$K3S_TOKEN" sh -
 fi
 
