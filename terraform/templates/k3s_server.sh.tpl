@@ -50,7 +50,7 @@ fi
 if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
   curl -sfL https://get.k3s.io | \
     INSTALL_K3S_VERSION="$K3S_VERSION" \
-    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --node-label node-role.kubernetes.io/master=true --node-label kubernetes.io/role=master" \
+    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik" \
     K3S_TOKEN="$K3S_TOKEN" sh -
 fi
 
@@ -83,6 +83,17 @@ echo "기다리는 중... K3s API가 준비될 때까지"
 until /usr/local/bin/kubectl get nodes; do
   sleep 5
 done
+
+# ---------------------------------------------------------
+# 6. 마스터 노드 라벨 수동 추가 (보안 정책 회피)
+# ---------------------------------------------------------
+echo "마스터 노드 라벨링 중..."
+/usr/local/bin/kubectl label node $(hostname) node-role.kubernetes.io/master=true kubernetes.io/role=master --overwrite
+
+
+# ---------------------------------------------------------
+# 7. configmap 생성 (글로벌 환경변수 전달)
+# ---------------------------------------------------------
 
 echo "글로벌 환경변수 ConfigMap 생성 중..."
 /usr/local/bin/kubectl create configmap aws-global-env \
