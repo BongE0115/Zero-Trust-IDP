@@ -166,8 +166,8 @@ async def slack_interactive(request: Request):
     form_data = await request.form()
     payload_str = form_data.get("payload")
     
-    if not payload_str:
-        return JSONResponse(content={"error": "Payload not found"}, status_code=400)
+    if not payload_str or not isinstance(payload_str, str):
+        return JSONResponse(content={"error": "Invalid payload"}, status_code=400)
         
     try:
         slack_payload = json.loads(payload_str)
