@@ -1,10 +1,3 @@
-# 90초 동안 대기하는 리소스입니다.
-#resource "time_sleep" "wait_300_seconds" {
-#  depends_on = [aws_instance.k3s_server] # 마스터 노드 생성 후 시작
-#
-#  create_duration = "300s" # K3s가 설치되고 API가 뜰 때까지 넉넉히 대기
-#}
-
 # ==================================================
 # --------------------------------------------------
 # 1. 네트워크 인프라 (VPC,Subnet,IGW,RT)
@@ -21,7 +14,6 @@ terraform {
   }
 }
 
-
 provider "aws" {
   region = "ap-northeast-2"
 }
@@ -35,7 +27,6 @@ data "aws_ami" "ubuntu" {
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 }
-
 
 # ==========================================
 # 1. VPC
@@ -174,8 +165,7 @@ resource "aws_route53_zone" "private_internal" {
 # ==================================================
 
 # ==========================================
-# IAM Role for K3s nodes (master / worker)
-# - only managed-node permissions
+# IAM Roles
 # ==========================================
 resource "aws_iam_role" "ssm_node_role" {
   name = "aiops-ssm-node-role"
@@ -204,12 +194,6 @@ resource "aws_iam_instance_profile" "ssm_node_profile" {
   role = aws_iam_role.ssm_node_role.name
 }
 
-# ==========================================
-# IAM Role for Monitoring node
-# - managed-node permissions
-# - operator permissions for SSM Run Command
-#   only to instances tagged Role=K3s_Server
-# ==========================================
 resource "aws_iam_role" "ssm_monitoring_role" {
   name = "aiops-ssm-monitoring-role"
 
@@ -239,7 +223,6 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # AWS-RunShellScript 같은 SSM 문서를 사용할 수 있도록 허용
       {
         Sid    = "AllowRunCommandWithAwsDocuments"
         Effect = "Allow"
@@ -251,8 +234,6 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
           "arn:aws:ssm:*:*:document/AWS-*"
         ]
       },
-
-      # Role=K3s_Server 태그가 붙은 EC2 인스턴스에만 명령 허용
       {
         Sid    = "AllowRunCommandToTaggedMasterOnly"
         Effect = "Allow"
@@ -266,8 +247,6 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
           }
         }
       },
-
-      # 명령 결과 조회 및 대상 탐색
       {
         Sid    = "AllowCommandReadOps"
         Effect = "Allow"
@@ -288,7 +267,6 @@ resource "aws_iam_instance_profile" "ssm_monitoring_profile" {
   name = "aiops-ssm-monitoring-profile"
   role = aws_iam_role.ssm_monitoring_role.name
 }
-
 
 # ==========================================
 # 1. Monitoring Control SG
@@ -314,7 +292,6 @@ resource "aws_security_group" "monitoring_sg" {
     cidr_blocks = var.admin_cidr
   }
 
-
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -329,7 +306,7 @@ resource "aws_security_group" "monitoring_sg" {
 }
 
 # ==========================================
-# 2. ALB SG
+# 2. ALB SG (충돌 해결 완료)
 # ==========================================
 resource "aws_security_group" "alb_sg" {
   name        = "aiops-alb-sg"
@@ -340,6 +317,15 @@ resource "aws_security_group" "alb_sg" {
     description = "HTTP from Internet"
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # 맨 아래 있던 독립 규칙을 인라인으로 병합
+  ingress {
+    description = "Frontend 8080 from Internet"
+    from_port   = 8080
+    to_port     = 8080
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -365,12 +351,11 @@ resource "aws_security_group" "nat_sg" {
   description = "NAT instance SG for private subnet outbound"
   vpc_id      = aws_vpc.main.id
 
-  # 수정된 aiops-nat-sg 부분
   ingress {
     description = "Allow all from private subnets"
     from_port   = 0
     to_port     = 0
-    protocol    = "-1" # 모든 프로토콜 허용
+    protocol    = "-1"
     cidr_blocks = [aws_subnet.private_a.cidr_block, aws_subnet.private_b.cidr_block]
   }
 
@@ -388,19 +373,21 @@ resource "aws_security_group" "nat_sg" {
 }
 
 # ==========================================
-# 4. K3s Master SG
+# 4. K3s Master SG (모든 흩어진 규칙 병합 완료)
 # ==========================================
 resource "aws_security_group" "k3s_server_sg" {
   name        = "aiops-k3s-server-sg"
   description = "Security group for K3s master node"
   vpc_id      = aws_vpc.main.id
 
+  # 핵심 해결: VPC 전체 대역(10.10.0.0/16)을 열어주어 에이전트의 6443 접근을 허용합니다. (순환 참조 방지)
   ingress {
-    description     = "K3s API from monitoring node"
+    description     = "K3s API from monitoring node and internal VPC (Agent)"
     from_port       = 6443
     to_port         = 6443
     protocol        = "tcp"
     security_groups = [aws_security_group.monitoring_sg.id]
+    cidr_blocks     = [aws_vpc.main.cidr_block]
   }
 
   ingress {
@@ -419,12 +406,13 @@ resource "aws_security_group" "k3s_server_sg" {
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
+  # Flannel VXLAN 허용 (VPC 내부 통신)
   ingress {
-    description = "Flannel VXLAN self"
+    description = "Flannel VXLAN from internal VPC"
     from_port   = 8472
     to_port     = 8472
     protocol    = "udp"
-    self        = true
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   ingress {
@@ -435,13 +423,20 @@ resource "aws_security_group" "k3s_server_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
-
+  # 핵심 해결: 30080과 30081(Frontend) 포트 모두 오픈
+  ingress {
+    description     = "NodePort from ALB"
+    from_port       = 30080
+    to_port         = 30081
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
 
   ingress {
-    description = "ICMP from VPC for testing"
-    from_port   = -1
-    to_port     = -1
-    protocol    = "icmp"
+    description     = "ICMP from VPC for testing"
+    from_port       = -1
+    to_port         = -1
+    protocol        = "icmp"
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
@@ -459,7 +454,7 @@ resource "aws_security_group" "k3s_server_sg" {
 }
 
 # ==========================================
-# 5. K3s Worker SG
+# 5. K3s Worker SG (모든 흩어진 규칙 병합 완료)
 # ==========================================
 resource "aws_security_group" "k3s_agent_sg" {
   name        = "aiops-k3s-agent-sg"
@@ -482,12 +477,13 @@ resource "aws_security_group" "k3s_agent_sg" {
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
+  # Flannel VXLAN 허용 (VPC 내부 통신)
   ingress {
-    description = "Flannel VXLAN self"
+    description = "Flannel VXLAN from internal VPC"
     from_port   = 8472
     to_port     = 8472
     protocol    = "udp"
-    self        = true
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   ingress {
@@ -498,12 +494,20 @@ resource "aws_security_group" "k3s_agent_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
+  # 핵심 해결: 30080과 30081(Frontend) 포트 모두 오픈
+  ingress {
+    description     = "NodePort from ALB"
+    from_port       = 30080
+    to_port         = 30081
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
 
   ingress {
-    description = "ICMP from VPC for testing"
-    from_port   = -1
-    to_port     = -1
-    protocol    = "icmp"
+    description     = "ICMP from VPC for testing"
+    from_port       = -1
+    to_port         = -1
+    protocol        = "icmp"
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
@@ -520,68 +524,7 @@ resource "aws_security_group" "k3s_agent_sg" {
   }
 }
 
-
-# Master receives K3s API from workers
-resource "aws_security_group_rule" "k3s_server_api_from_agent" {
-  type                     = "ingress"
-  from_port                = 6443
-  to_port                  = 6443
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.k3s_server_sg.id
-  source_security_group_id = aws_security_group.k3s_agent_sg.id
-  description              = "K3s API from worker nodes"
-}
-
-# Master receives Flannel from workers
-resource "aws_security_group_rule" "k3s_server_flannel_from_agent" {
-  type                     = "ingress"
-  from_port                = 8472
-  to_port                  = 8472
-  protocol                 = "udp"
-  security_group_id        = aws_security_group.k3s_server_sg.id
-  source_security_group_id = aws_security_group.k3s_agent_sg.id
-  description              = "Flannel VXLAN from worker nodes"
-}
-
-# Worker receives Flannel from master
-resource "aws_security_group_rule" "k3s_agent_flannel_from_server" {
-  type                     = "ingress"
-  from_port                = 8472
-  to_port                  = 8472
-  protocol                 = "udp"
-  security_group_id        = aws_security_group.k3s_agent_sg.id
-  source_security_group_id = aws_security_group.k3s_server_sg.id
-  description              = "Flannel VXLAN from master"
-}
-
-# ALB에서 K3s 노드(Master/Worker)의 NodePort로 가는 트래픽 허용
-resource "aws_security_group_rule" "allow_alb_to_nodeport_master" {
-  type                     = "ingress"
-  from_port                = 30080
-  to_port                  = 30080
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.k3s_server_sg.id
-  source_security_group_id = aws_security_group.alb_sg.id
-}
-
-resource "aws_security_group_rule" "allow_alb_to_nodeport_worker" {
-  type                     = "ingress"
-  from_port                = 30080
-  to_port                  = 30080
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.k3s_agent_sg.id
-  source_security_group_id = aws_security_group.alb_sg.id
-}
-
-resource "aws_security_group_rule" "alb_allow_8080" {
-  type              = "ingress"
-  from_port         = 8080
-  to_port           = 8080
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.alb_sg.id
-}
-
+# (기존 맨 아래에 있던 aws_security_group_rule 블록들은 모두 삭제했습니다. 인라인으로 통합되어 더 안전하게 동작합니다.)
 
 # ==================================================
 # --------------------------------------------------
@@ -598,7 +541,7 @@ resource "aws_lb" "aiops_alb" {
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.alb_sg.id]
   subnets                    = [aws_subnet.public_a.id, aws_subnet.public_b.id]
-  enable_deletion_protection = false # terraform destroy 하기 위해 false로 설정
+  enable_deletion_protection = false
 
   tags = {
     Name      = "aiops-alb"
@@ -618,7 +561,7 @@ resource "aws_lb_target_group" "aiops_tg" {
 
   health_check {
     interval            = 30
-    path                = "/healthz" # ArgoCD 전용 건강 검진 경로
+    path                = "/healthz"
     port                = "30080"
     protocol            = "HTTP"
     timeout             = 5
@@ -681,16 +624,11 @@ resource "aws_lb_target_group_attachment" "k3s_agent_attachment" {
   port             = 30080
 }
 
-
-
 resource "aws_lb_target_group_attachment" "frontend_attachment" {
   target_group_arn = aws_lb_target_group.boutique_frontend_tg.arn
   target_id        = aws_instance.k3s_agent.id
   port             = 30081
 }
-
-
-
 
 
 # ==================================================
@@ -705,7 +643,6 @@ resource "aws_security_group" "rds_sg" {
   description = "Security group for AIOps RDS MySQL"
   vpc_id      = aws_vpc.main.id
 
-  # K3s Master로부터의 접속 허용
   ingress {
     description     = "Allow MySQL traffic from K3s master"
     from_port       = 3306
@@ -714,7 +651,6 @@ resource "aws_security_group" "rds_sg" {
     security_groups = [aws_security_group.k3s_server_sg.id]
   }
 
-  # K3s Worker로부터의 접속 허용
   ingress {
     description     = "Allow MySQL traffic from K3s worker"
     from_port       = 3306
@@ -754,7 +690,7 @@ resource "aws_db_instance" "aiops_rds" {
   identifier = "aiops-mysql-db"
 
   engine         = "mysql"
-  engine_version = "8.0"      # MySQL 8.0 시리즈 사용
+  engine_version = "8.0"      
   port           = 3306
 
   instance_class    = "db.t3.micro"
@@ -781,7 +717,6 @@ resource "aws_db_instance" "aiops_rds" {
 # ==========================================
 # 4.4 Internal DNS Record (Route53)
 # ==========================================
-# 기존에 생성된 aws_route53_zone.private_internal이 있다면 중복 선언하지 않아도 됩니다.
 resource "aws_route53_record" "rds_cname" {
   zone_id = aws_route53_zone.private_internal.zone_id
   name    = "rds.${var.private_dns_zone_name}"
@@ -796,7 +731,6 @@ resource "aws_route53_record" "rds_cname" {
 # --------------------------------------------------
 # ==================================================
 
-
 # ==========================================
 # NAT Instance
 # ==========================================
@@ -805,7 +739,7 @@ resource "aws_instance" "nat" {
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public_a.id
   vpc_security_group_ids      = [aws_security_group.nat_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
+  iam_instance_profile        = aws_iam_instance_profile.ssm_node_profile.name
   associate_public_ip_address = true
   source_dest_check           = false
 
@@ -860,10 +794,9 @@ resource "aws_instance" "monitoring_server" {
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public_a.id
   vpc_security_group_ids      = [aws_security_group.monitoring_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ssm_monitoring_profile.name
+  iam_instance_profile        = aws_iam_instance_profile.ssm_monitoring_profile.name
   associate_public_ip_address = true
 
-  # 위에서 만든 압축 monitoring_config를 가져와서 넣어준다. 
   user_data_base64 = data.cloudinit_config.monitoring_config.rendered
   user_data_replace_on_change = true
   
@@ -881,11 +814,11 @@ resource "aws_instance" "k3s_server" {
   instance_type          = "m7i-flex.large"
   subnet_id              = aws_subnet.private_a.id
   vpc_security_group_ids = [aws_security_group.k3s_server_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
 
   root_block_device {
-    volume_size = 30  # 기본 8GB에서 30GB로 증설
-    volume_type = "gp3" # 최신 고성능 범용 스토리지
+    volume_size           = 30 
+    volume_type           = "gp3"
     delete_on_termination = true
   }
 
@@ -893,7 +826,7 @@ resource "aws_instance" "k3s_server" {
     tailscale_auth_key = var.tailscale_auth_key
     k3s_token          = var.k3s_token
     local_tailscale_ip = var.local_tailscale_ip
-    frontend_addr      = "${aws_lb.aiops_alb.dns_name}:30081" # ALB 주소 전달
+    frontend_addr      = "${aws_lb.aiops_alb.dns_name}:30081" 
     project_name       = "Zero-Trust-IDP"
   })
 
@@ -911,14 +844,13 @@ resource "aws_instance" "k3s_agent" {
   instance_type          = "c7i-flex.large"
   subnet_id              = aws_subnet.private_b.id
   vpc_security_group_ids = [aws_security_group.k3s_agent_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
 
   root_block_device {
-    volume_size = 30  # 기본 8GB에서 30GB로 증설
-    volume_type = "gp3" # 최신 고성능 범용 스토리지
+    volume_size           = 30 
+    volume_type           = "gp3" 
     delete_on_termination = true
   }
-
 
   user_data = templatefile("${path.module}/templates/k3s_agent.sh.tpl", {
     tailscale_auth_key = var.tailscale_auth_key
@@ -931,22 +863,3 @@ resource "aws_instance" "k3s_agent" {
     Role = "K3s_Agent"
   }
 }
-
-#resource "kubernetes_config_map_v1" "aws_global_env" {
-  # 중요: 인스턴스가 아니라 '300초 대기'가 끝난 후에 실행하도록 설정
-#  depends_on = [time_sleep.wait_90_seconds] 
-#
-#  metadata {
-#    name      = "aws-global-env"
-#    namespace = "default"
-#  }
-#
-#  data = {
-#    AWS_REGION         = "ap-northeast-2"
-#    PROJECT_NAME       = "Zero-Trust-IDP"
-#    ENVIRONMENT        = "production"
-#    LOCAL_TAILSCALE_IP = var.local_tailscale_ip
-#    AWS_IP             = aws_instance.k3s_server.private_ip
-#    FRONTEND_ADDR      = "${aws_lb.aiops_alb.dns_name}:30081"
-#  }
-#}
