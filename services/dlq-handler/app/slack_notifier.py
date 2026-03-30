@@ -3,18 +3,21 @@ import json
 import os
 
 # --- [Slack 설정 (환경 변수에서 가져오기)] ---
-# ngrok을 켤 때나 시스템 환경 변수에 이 두 값을 꼭 넣어주세요!
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "xoxb-your-token-here")
 SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "#your-channel")
 
-def send_slack_alert(event: dict, score: float = 0.0):
+# 💡 [수정됨] 팀원분의 score와 우리의 category, action을 모두 받을 수 있도록 파라미터를 확장했습니다!
+def send_slack_alert(event: dict, score: float = 0.0, category: str = "UNKNOWN", action: str = "NONE"):
     """
     DLQ 에러(로직/데이터 결함) 발생 시 Slack으로 버튼이 포함된 카드를 발송합니다.
     """
-    # 1. 데이터 추출 (새로운 consumer.py의 메타데이터 구조 반영)
+    # 1. 데이터 추출 
     error_type = event.get("error_type", "Unknown Error")
     error_message = event.get("error_message", "No error message")
     source_service = event.get("source_service", "unknown-service")
+    
+    # 이벤트 딕셔너리 안에 category가 이미 들어있다면 그걸 우선적으로 씁니다.
+    event_category = event.get("category", category)
     
     # 원본 데이터 요약 (너무 길면 슬랙이 안 좋아하므로 50자로 자릅니다)
     payload_data = event.get("original_payload", {})
@@ -26,7 +29,7 @@ def send_slack_alert(event: dict, score: float = 0.0):
         "Content-Type": "application/json"
     }
 
-    # 2. Slack Block Kit 구성
+    # 2. Slack Block Kit 구성 (카테고리와 추천 행동 필드 추가!)
     payload = {
         "channel": SLACK_CHANNEL,
         "text": f"🚨 장애 발생 알림: {error_type}",
@@ -43,6 +46,9 @@ def send_slack_alert(event: dict, score: float = 0.0):
                 "fields": [
                     {"type": "mrkdwn", "text": f"*Error Type:*\n{error_type}"},
                     {"type": "mrkdwn", "text": f"*Service:*\n{source_service}"},
+                    # 💡 지능형 에러 분석 결과 추가
+                    {"type": "mrkdwn", "text": f"*Category:*\n`{event_category}`"},
+                    {"type": "mrkdwn", "text": f"*Recommended Action:*\n`{action}`"},
                     {"type": "mrkdwn", "text": f"*Error Message:*\n{error_message}"},
                     {"type": "mrkdwn", "text": f"*Action Score:*\n{score:.2f} (Logic Error)"}
                 ]
@@ -68,7 +74,6 @@ def send_slack_alert(event: dict, score: float = 0.0):
                             "emoji": True
                         },
                         "style": "primary",
-                        # 매우 중요: app.py의 API가 이 값을 보고 샌드박스를 켭니다!
                         "value": "sandbox_open", 
                         "action_id": "sandbox_button"
                     },

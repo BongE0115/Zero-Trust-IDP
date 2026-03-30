@@ -12,7 +12,7 @@ except ImportError:
     try:
         from slack_notifier import send_slack_alert
     except ImportError:
-        def send_slack_alert(event, category="UNKNOWN", action="NONE"):
+        def send_slack_alert(event, score=0.0, category="UNKNOWN", action="NONE"):
             print(f"[DUMMY SLACK] Alert: {category} | Action: {action}")
 
 def getenv(name: str, default: str = "") -> str:
@@ -108,9 +108,10 @@ for message in consumer:
         # [수정됨] K8s 직접 제어를 걷어내고, 오직 슬랙으로 명세서를 발송합니다.
         # 실제 샌드박스 기동은 엔지니어의 슬랙 버튼 클릭 -> producer-api -> GitHub Actions를 통해 이루어집니다.
         print(f"🚨 [ACTION: SANDBOX] '{category}' 감지. 관리자에게 Slack 알림을 발송합니다.")
-        failure_event["category"] = category
-        send_slack_alert(failure_event)
+        # 🌟 파라미터로 category와 action을 확실하게 전달!
+        send_slack_alert(failure_event, category=category, action=action)
 
     else:
         print(f"❓ [ACTION: MANUAL] 정의되지 않은 패턴. 카탈로그 업데이트가 필요합니다.")
-        send_slack_alert(failure_event, category="UNDEFINED")
+        # 🌟 여기도 마찬가지로 전달!
+        send_slack_alert(failure_event, category="UNDEFINED", action="MANUAL_CHECK")
