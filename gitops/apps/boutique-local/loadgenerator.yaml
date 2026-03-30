@@ -35,7 +35,6 @@ spec:
           RETRY_INTERVAL=10
 
           # 포트가 없을 경우를 대비해 기본값(80) 설정 (셸 파라미터 확장 문법)
-          PORT=${FRONTEND_PORT:-80}
           TARGET_URL="http://${FRONTEND_ADDR}:${PORT}"
 
           for i in $(seq 1 $MAX_RETRIES); do
@@ -59,11 +58,7 @@ spec:
             configMapKeyRef:
               name: aws-global-env
               key: FRONTEND_ADDR  # 예: 100.88.181.49
-        - name: FRONTEND_PORT
-          valueFrom:
-            configMapKeyRef:
-              name: aws-global-env
-              key: FRONTEND_PORT  # 예: 30081
+
           
       # 2. 본진 (실제 트래픽을 쏘는 녀석)
       containers:
