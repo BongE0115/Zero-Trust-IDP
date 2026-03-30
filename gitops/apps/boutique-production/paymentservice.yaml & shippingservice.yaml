@@ -28,16 +28,20 @@ spec:
       containers:
       - name: server
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/paymentservice:v0.10.5
-        # 🔥 추가됨: Kafka Consumer 1 & 에러 발생 시 명세서를 보낼 DLQ 설정
         env:
+        - name: PORT              # 🔥 필수 추가: 서버가 50051 포트를 사용하도록 명시
+          value: "50051"
+        - name: DISABLE_PROFILER   # 🔥 추가됨: 구글 클라우드 프로파일러 끄기
+          value: "1"
+        - name: DISABLE_TRACING    # 🔥 추가 권장: 에러 방지를 위해 트레이싱도 끕니다
+          value: "1"
+        # --- 기존 Kafka 설정 유지 ---
         - name: KAFKA_BROKER_URL
           value: "kafka.default.svc.cluster.local:9092"
         - name: KAFKA_TOPIC
           value: "orders"
         - name: DLQ_TOPIC
           value: "orders-dlq"
-        - name: DISABLE_PROFILER # 🔥 이 줄을 추가하세요!
-          value: "1"
 ---
 # shippingservice는 원본 그대로 사용 (AWS 내부에서 단독 동작)
 apiVersion: v1
@@ -70,3 +74,4 @@ spec:
       containers:
       - name: server
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/shippingservice:v0.10.5
+        # (shippingservice는 보통 추가 env 없이도 잘 작동합니다)
