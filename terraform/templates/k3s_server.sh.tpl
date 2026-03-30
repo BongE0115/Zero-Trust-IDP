@@ -106,3 +106,25 @@ echo "글로벌 환경변수 ConfigMap 생성 중..."
   -n default --dry-run=client -o yaml | /usr/local/bin/kubectl apply -f -
 
 echo "✅ ConfigMap 생성 완료!"
+
+# ---------------------------------------------------------
+# 8. 워커 노드 자동 라벨링 백그라운드 루프
+# ---------------------------------------------------------
+cat <<'EOF' > /usr/local/bin/auto-label-workers.sh
+#!/bin/bash
+while true; do
+  # 라벨이 없는 노드를 찾아서 worker=true 라벨을 붙임
+  NODES=$(/usr/local/bin/kubectl get nodes --no-headers | grep '<none>' | awk '{print $1}')
+  for NODE in $NODES; do
+    if [[ $NODE == ip-10-10-20-* ]]; then # 에이전트 IP 대역 확인 (예: 10.10.20.x)
+      /usr/local/bin/kubectl label node $NODE node-role.kubernetes.io/worker=true kubernetes.io/role=worker --overwrite
+      echo "✅ 노드 $NODE 에 워커 라벨을 자동으로 붙였습니다."
+    fi
+  done
+  sleep 30 # 30초마다 확인
+done
+EOF
+
+chmod +x /usr/local/bin/auto-label-workers.sh
+# 백그라운드에서 실행되도록 설정
+nohup /usr/local/bin/auto-label-workers.sh > /var/log/k3s-auto-label.log 2>&1 &
