@@ -37,17 +37,3 @@ variable "private_dns_zone_name" {
   type        = string
   default     = "internal.aiops"
 }
-<<<<<<< HEAD
-=======
-
-variable "github_dispatch_token" {
-  description = "GitHub PAT for workflow dispatch"
-  type        = string
-  sensitive   = true
-}
-
-variable "local_tailscale_ip" {
-  description = "로컬 워커 노드의 Tailscale IP 주소"
-  type        = string
-} 
->>>>>>> 23053f297f1cd07d15a9fc870c0bd38d516137bc
