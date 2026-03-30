@@ -128,3 +128,12 @@ EOF
 chmod +x /usr/local/bin/auto-label-workers.sh
 # 백그라운드에서 실행되도록 설정
 nohup /usr/local/bin/auto-label-workers.sh > /var/log/k3s-auto-label.log 2>&1 &
+
+# ==========================================
+# ArgoCD CLI 자동 설치
+# ==========================================
+echo "Installing ArgoCD CLI..."
+curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+rm -f argocd-linux-amd64
+echo "ArgoCD CLI installation complete."

@@ -310,7 +310,7 @@ resource "aws_security_group" "monitoring_sg" {
 # ==========================================
 resource "aws_security_group" "alb_sg" {
   name        = "aiops-alb-sg"
-  description = "Allow HTTP/HTTPS traffic from internet to ALB"
+  description = "Allow HTTP traffic from internet to ALB"
   vpc_id      = aws_vpc.main.id
 
   ingress {

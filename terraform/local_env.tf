@@ -11,13 +11,13 @@ resource "local_file" "local_node_setup_script" {
 set -e
 
 # 1. 실시간 Tailscale IP 추출 (변수 주입 대신 실시간 확인으로 정확도 UP)
-LOCAL_TS_IP=$$(tailscale ip -4 | head -n 1)
+LOCAL_TS_IP=$(tailscale ip -4 | head -n 1)
 
 # 2. K3s 설정파일 생성 (가장 중요한 SAN 작업)
 sudo mkdir -p /etc/rancher/k3s
 sudo tee /etc/rancher/k3s/config.yaml > /dev/null <<EOF
 tls-san:
-  - "$$LOCAL_TS_IP"
+  - "$LOCAL_TS_IP"
   - "127.0.0.1"
 write-kubeconfig-mode: "644"
 EOF
@@ -34,11 +34,11 @@ sleep 10
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 kubectl create namespace boutique-local --dry-run=client -o yaml | kubectl apply -f -
 
-# 하드코딩 없이 테라폼 변수($${var.xxx})를 통해 환경변수 주입
+# 하드코딩 없이 테라폼 변수(${var.xxx})를 통해 환경변수 주입
 kubectl create configmap aws-global-env -n boutique-local \
-  --from-literal=AWS_REGION="$${var.aws_region}" \
-  --from-literal=PROJECT_NAME="$${var.project_name}" \
-  --from-literal=LOCAL_TAILSCALE_IP="$$LOCAL_TS_IP" \
+  --from-literal=AWS_REGION="${var.aws_region}" \
+  --from-literal=PROJECT_NAME="${var.project_name}" \
+  --from-literal=LOCAL_TAILSCALE_IP="$LOCAL_TS_IP" \
   --from-literal=AWS_IP="${aws_instance.k3s_server.private_ip}" \
   --from-literal=FRONTEND_ADDR="${aws_lb.aiops_alb.dns_name}:8080" \
   --from-literal=PRODUCT_CATALOG_SERVICE_ADDR="productcatalogservice:3550" \
@@ -48,13 +48,13 @@ kubectl create configmap aws-global-env -n boutique-local \
 # 5. GitOps 배포 (경로 자동화)
 GITOPS_PATH="/home/ubuntu/Zero-Trust-IDP/gitops/apps/boutique-local"
 if [ -d "$$GITOPS_PATH" ]; then
-    kubectl apply -k "$$GITOPS_PATH" -n boutique-local
+    kubectl apply -k "$GITOPS_PATH" -n boutique-local
 fi
 
 echo "=================================================="
 echo "🚨 아래 Kubeconfig를 긁어서 ArgoCD에 등록하세요 🚨"
 # 형님이 올려주신 구조와 똑같이 만들되, IP만 현재 IP로 치환해서 출력
-sudo cat /etc/rancher/k3s/k3s.yaml | sed "s/127.0.0.1/$$LOCAL_TS_IP/g"
+sudo cat /etc/rancher/k3s/k3s.yaml | sed "s/127.0.0.1/$LOCAL_TS_IP/g"
 echo "=================================================="
 EOT
 }
