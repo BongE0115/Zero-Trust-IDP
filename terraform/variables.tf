@@ -37,3 +37,9 @@ variable "private_dns_zone_name" {
   type        = string
   default     = "internal.aiops"
 }
+
+variable "github_dispatch_token" {
+  description = "GitHub PAT for workflow dispatch"
+  type        = string
+  sensitive   = true
+}
