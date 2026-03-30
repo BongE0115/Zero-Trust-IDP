@@ -924,6 +924,7 @@ resource "aws_instance" "k3s_agent" {
 
 # AWS 운영 환경의 Kubernetes에 ConfigMap을 직접 생성
 resource "kubernetes_config_map" "aws_global_env" {
+  depends_on = [aws_instance.k3s_server, aws_instance.k3s_agent] # EC2 인스턴스가 먼저 생성된 후 ConfigMap이 생성되도록 의존성 설정
   metadata {
     name      = "aws-global-env"
     namespace = "default" # checkoutservice가 있는 네임스페이스
