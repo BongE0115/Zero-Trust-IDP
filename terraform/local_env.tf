@@ -26,15 +26,24 @@ resource "local_file" "local_node_setup_script" {
     echo "✅ Tailscale 연동 완료! (현재 IP: $LOCAL_TS_IP)"
 
     echo "[2/5] K3s 클러스터 설치 중..."
+    sudo mkdir -p /etc/rancher/k3s
+    sudo tee /etc/rancher/k3s/config.yaml > /dev/null <<EOF
+    tls-san:
+      - "$LOCAL_TS_IP"
+      - "127.0.0.1"
+    write-kubeconfig-mode: "644"
+    EOF
+
     if ! command -v k3s &> /dev/null; then
         curl -sfL https://get.k3s.io | sh -
+    else
+        sudo systemctl restart k3s
     fi
     echo "✅ K3s 설치 완료!"
 
     echo "[3/5] 네임스페이스 및 환경 설정 중..."
-    sudo chmod 644 /etc/rancher/k3s/k3s.yaml
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    sleep 5
+    sleep 10 
     kubectl create namespace boutique-local --dry-run=client -o yaml | kubectl apply -f -
 
     echo "[4/5] AWS 리소스 정보 주입 (ConfigMap)..."
@@ -52,12 +61,12 @@ resource "local_file" "local_node_setup_script" {
     echo "✅ 글로벌 환경변수 주입 완료!"
 
     echo "[5/5] 로컬 전용 마이크로서비스 배포..."
-    GITOPS_PATH="$HOME/Zero-Trust-IDP/gitops/apps/boutique-local"
+    GITOPS_PATH="/home/ubuntu/Zero-Trust-IDP/gitops/apps/boutique-local"
     if [ -d "$GITOPS_PATH" ]; then
         kubectl apply -k "$GITOPS_PATH" -n boutique-local
         echo "✅ 로컬 마이크로서비스 배포 완료!"
     else
-        echo "⚠️  GitOps 경로를 찾을 수 없어 배포를 건너뜁니다: $GITOPS_PATH"
+        echo "⚠️  GitOps 경로를 찾을 수 없어 배포를 건너뜁니다: $$GITOPS_PATH"
     fi
 
     echo "=================================================="
@@ -76,6 +85,6 @@ resource "null_resource" "auto_run_setup" {
   depends_on = [local_file.local_node_setup_script]
 
   provisioner "local-exec" {
-    command = "./setup_local_env.sh"
+    command = "sudo ./setup_local_env.sh"
   }
 }
