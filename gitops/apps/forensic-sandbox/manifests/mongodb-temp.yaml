@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-temp
+  namespace: forensic-sandbox
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: mongodb-temp
+  template:
+    metadata:
+      labels:
+        app: mongodb-temp
+    spec:
+      containers:
+        - name: mongodb-temp
+          image: mongo:7
+          ports:
+            - containerPort: 27017
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: mongo-data
+              mountPath: /data/db
+            - name: mongo-tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: mongo-data
+          emptyDir: {}
+        - name: mongo-tmp
+          emptyDir: {}
+
+---
+# MongoDB Service for Forensic Sandbox
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-temp
+  namespace: forensic-sandbox
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    app: mongodb-temp
+  ports:
+  - port: 27017
+    targetPort: 27017

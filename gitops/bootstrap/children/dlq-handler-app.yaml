@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dlq-handler-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
+    # [핵심] 현재 작업 중인 hs 브랜치를 바라보게 합니다.
+    targetRevision: hs
+    # [수정] 팀 표준 경로에 맞춰 error_category_map/ 를 제거했습니다.
+    path: gitops/apps/kafka-poc/manifests
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: kafka-poc
+  syncPolicy:
+    automated:
+      # Git에 변경사항이 생기면 자동으로 반영하고, 삭제된 리소스는 클러스터에서도 지웁니다.
+      prune: true
+      selfHeal: true

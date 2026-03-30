@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws-rds-host
+  namespace: forensic-sandbox
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  type: ExternalName
+  externalName: rds.internal.aiops

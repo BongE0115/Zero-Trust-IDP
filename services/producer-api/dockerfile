@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# 라이브러리 설치 (requests, kubernetes 등이 포함된 requirements.txt)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# app/ 폴더 내의 모든 코드(app.py 등) 복사
+COPY app/ /app/
+
+# [수정] 포트를 8000에서 8081로 변경하여 K3s 서비스 설정과 맞춤
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8081"]

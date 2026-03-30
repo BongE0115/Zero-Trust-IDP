@@ -1,0 +1,128 @@
+name: Build Push and Update GitOps
+
+on:
+  push:
+    branches:
+      - jy
+    paths:
+      - 'services/**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: bonge0115
+
+jobs:
+  build-push-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: jy
+          fetch-depth: 0
+
+      - name: Set short SHA
+        id: vars
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push producer-api
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/producer-api
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:${{ env.SHORT_SHA }}
+
+      - name: Build and push worker-consumer
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/worker-consumer
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:${{ env.SHORT_SHA }}
+
+      - name: Build and push dlq-handler
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/dlq-handler
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:${{ env.SHORT_SHA }}
+
+      - name: Install yq
+        run: |
+          sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Update GitOps manifests with SHA tag
+        run: |
+          export SHA_TAG="${SHORT_SHA}"
+          echo "SHORT_SHA=${SHORT_SHA}"
+          echo "SHA_TAG=${SHA_TAG}"
+
+          # producer-api
+          yq -i '
+            .spec.template.spec.containers[0].image =
+            "ghcr.io/bonge0115/producer-api:" + strenv(SHA_TAG)
+          ' gitops/apps/kafka-poc/manifests/11-producer.yaml
+
+          # worker-consumer image
+          yq -i '
+            .spec.template.spec.containers[0].image =
+            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+          ' gitops/apps/kafka-poc/manifests/21-consumer.yaml
+
+          # worker-consumer IMAGE_REF env
+          yq -i '
+            (.spec.template.spec.containers[0].env[] | select(.name == "IMAGE_REF") | .value) =
+            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+          ' gitops/apps/kafka-poc/manifests/21-consumer.yaml
+
+          # dlq-handler image
+          yq -i '
+            .spec.template.spec.containers[0].image =
+            "ghcr.io/bonge0115/dlq-handler:" + strenv(SHA_TAG)
+          ' gitops/apps/kafka-poc/manifests/32-dlq-handler.yaml
+
+          # forensic sandbox image
+          yq -i '
+            .spec.template.spec.containers[0].image =
+            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+          ' gitops/apps/forensic-sandbox/manifests/sandbox-app.yaml
+
+          # forensic sandbox IMAGE_REF env
+          yq -i '
+            (.spec.template.spec.containers[0].env[] | select(.name == "IMAGE_REF") | .value) =
+            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+          ' gitops/apps/forensic-sandbox/manifests/sandbox-app.yaml
+
+      - name: Commit and push updated GitOps manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add gitops/apps/kafka-poc/manifests gitops/apps/forensic-sandbox/manifests
+          git status --short
+
+          if git diff --cached --quiet; then
+            echo "No manifest changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(gitops): update images to ${SHORT_SHA}"
+          git push origin jy

@@ -1,0 +1,23 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: forensic-sandbox
+  name: sandbox-manager-role
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/scale"]
+  verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  namespace: forensic-sandbox
+  name: producer-api-sandbox-binding
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: kafka-poc
+roleRef:
+  kind: Role
+  name: sandbox-manager-role
+  apiGroup: rbac.authorization.k8s.io

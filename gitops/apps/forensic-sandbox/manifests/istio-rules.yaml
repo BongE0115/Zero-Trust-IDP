@@ -1,0 +1,17 @@
+
+---
+# 2. 샌드박스 앱이 AWS RDS로 나가는 것을 '무조건 거부(DENY)'하는 AuthorizationPolicy
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-aws-rds-egress
+  namespace: forensic-sandbox
+  annotations:
+    argocd.argoproj.io/sync-wave: "0" # Wave 0 유지
+spec:
+  action: DENY # ★ 차단!
+  rules:
+  - to:
+    - operation:
+        hosts: ["aws-rds-host.forensic-sandbox.svc.cluster.local"] # yaml 파일은 쉘 스크립트 같은 환경 변수 치환을 못함. 
+        ports: ["5432"] # ★ 차단할 포트 번호도 5432로 수정

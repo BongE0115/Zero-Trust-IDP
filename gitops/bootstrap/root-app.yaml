@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
+    # [핵심] 현재 우리가 고치고 있는 hs 브랜치를 추적하여 자식 앱들을 로드합니다.
+    targetRevision: hs
+    # [수정] 팀 표준 경로에 맞춰 error_category_map/ 를 제거했습니다.
+    path: gitops/bootstrap/children
+    directory:
+      # children 폴더 내의 모든 YAML 파일을 재귀적으로 읽어 앱으로 등록합니다.
+      recurse: true
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

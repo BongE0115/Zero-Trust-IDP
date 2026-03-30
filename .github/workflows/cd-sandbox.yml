@@ -1,0 +1,51 @@
+name: 🚀 Deploy Forensic Sandbox (GitOps)
+
+# 트리거: 외부(producer-api)에서 'deploy-sandbox'라는 이름의 API 호출이 올 때 작동
+on:
+  repository_dispatch:
+    types: [deploy-sandbox]
+
+jobs:
+  scale-up-sandbox:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Git에 커밋하고 푸시할 수 있는 권한 부여
+
+    steps:
+      - name: 📥 소스 코드 가져오기
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🔍 요청 정보 확인 (Logging)
+        run: |
+          echo "🚨 샌드박스 배포 요청 수신!"
+          echo "요청자: ${{ github.event.client_payload.triggered_by }}"
+          echo "Action: ${{ github.event.client_payload.action }}"
+
+      - name: 🛠️ GitOps 매니페스트 수정 (Scale Up 0 -> 1)
+        # yq(YAML 처리 도구)를 사용하여 replicas 값을 1로 수정합니다.
+        run: |
+          echo "샌드박스 및 MongoDB의 replicas를 1로 변경합니다."
+          
+          # 1. 샌드박스 앱 스케일 업
+          sed -i 's/replicas: 0/replicas: 1/g' gitops/apps/forensic-sandbox/manifests/sandbox-app.yaml
+          
+          # 2. 임시 MongoDB 스케일 업
+          sed -i 's/replicas: 0/replicas: 1/g' gitops/apps/forensic-sandbox/manifests/mongodb-temp.yaml
+
+      - name: 💾 Git 커밋 및 푸시
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 변경사항이 있는지 확인 후 커밋
+          if [[ -n $(git status -s) ]]; then
+            git add gitops/apps/forensic-sandbox/manifests/sandbox-app.yaml
+            git add gitops/apps/forensic-sandbox/manifests/mongodb-temp.yaml
+            git commit -m "Auto-scaling Forensic Sandbox to replicas: 1 (Requested by ${{ github.event.client_payload.triggered_by }})"
+            git push
+            echo "✅ Git Push 성공! 이제 ArgoCD가 샌드박스를 배포합니다."
+          else
+            echo "⚠️ 변경사항이 없습니다. 이미 샌드박스가 켜져 있을 수 있습니다."
+          fi

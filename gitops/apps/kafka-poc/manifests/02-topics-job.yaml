@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-create-topics
+  namespace: kafka-poc
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-topics
+          image: bitnamilegacy/kafka:3.7
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Waiting for Kafka..."
+              for i in {1..30}; do
+                /opt/bitnami/kafka/bin/kafka-topics.sh \
+                  --bootstrap-server kafka.kafka-poc.svc.cluster.local:9092 \
+                  --list && break
+                sleep 5
+              done
+
+              /opt/bitnami/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka.kafka-poc.svc.cluster.local:9092 \
+                --create --if-not-exists --topic orders --partitions 1 --replication-factor 1
+
+              /opt/bitnami/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka.kafka-poc.svc.cluster.local:9092 \
+                --create --if-not-exists --topic orders-dlq --partitions 1 --replication-factor 1
+
+              /opt/bitnami/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka.kafka-poc.svc.cluster.local:9092 \
+                --create --if-not-exists --topic orders-replay --partitions 1 --replication-factor 1
+
+              echo "Topics created."
