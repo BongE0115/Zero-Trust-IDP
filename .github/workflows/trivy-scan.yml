@@ -1,0 +1,35 @@
+# .github/workflows/trivy-scan.yml
+name: 🐳 Trivy Container Vulnerability Scan
+
+# 개발팀이 이미지를 빌드하거나 PR을 올릴 때 동작하도록 설정
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  scan-image:
+    name: Build and Scan Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # (가정) 개발팀이 만들어둔 Dockerfile로 이미지를 임시 빌드합니다.
+      # 실제로는 개발팀의 빌드 로직 뒤에 이 스캔 단계가 붙게 됩니다.
+      - name: Build an image from Dockerfile
+        run: |
+          docker build -t your-repo/sandbox-app:${{ github.sha }} -f src/consumer-app/Dockerfile . || echo "Dockerfile이 아직 없으므로 스킵"
+
+      # [핵심 보안 통제 로직] Trivy를 사용해 CRITICAL(치명적) 취약점 검사
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'your-repo/sandbox-app:${{ github.sha }}'
+          format: 'table'
+          # HIGH, CRITICAL 취약점만 골라냅니다.
+          severity: 'HIGH,CRITICAL'
+          # CRITICAL 취약점이 발견되면 파이프라인을 강제 실패(에러) 처리하여 배포를 차단합니다! (exit-code: 1)
+          exit-code: '1'
+          ignore-unfixed: true
