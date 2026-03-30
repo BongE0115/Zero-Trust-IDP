@@ -41,9 +41,9 @@ resource "local_file" "local_node_setup_script" {
 
     # 🔥 추가된 마법: 테라폼이 생성한 ALB 주소를 로컬 K3s ConfigMap으로 주입
     echo "[4/4] AWS ALB 주소를 로컬 환경변수(ConfigMap)로 주입합니다..."
-    kubectl create configmap global-env \
+    kubectl create configmap aws-global-env \
       --namespace boutique-local \
-      --from-literal=FRONTEND_ADDR="${aws_lb.aiops_alb.dns_name}:80" \
+      --from-literal=FRONTEND_ADDR="${aws_lb.aiops_alb.dns_name}:30081" \
       --from-literal=AWS_MASTER_IP="${aws_instance.k3s_server.private_ip}" \  # 🔥 이거 추가!
       --dry-run=client -o yaml | kubectl apply -f -
     echo "✅ 로컬 K3s에 AWS 프론트엔드 주소 주입 완료!"

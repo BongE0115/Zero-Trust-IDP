@@ -28,12 +28,15 @@ echo "✅ boutique-local 네임스페이스 생성 완료!"
 
 # 🔥 추가된 마법: 테라폼이 생성한 ALB 주소를 로컬 K3s ConfigMap으로 주입
 echo "[4/5] AWS ALB 주소를 로컬 환경변수(ConfigMap)로 주입합니다..."
-kubectl create configmap aws-global-env \
+kubectl create configmap aws-global-env -n boutique-local \
   --from-literal=AWS_REGION=ap-northeast-2 \
   --from-literal=PROJECT_NAME=Zero-Trust-IDP \
-  --from-literal=LOCAL_TAILSCALE_IP=100.88.181.49 \
-  --from-literal=ENVIRONMENT=production \
-  --from-literal=SHOPPING_ASSISTANT_SERVICE_ADDR=shoppingassistantservice:80 \
+  --from-literal=LOCAL_TAILSCALE_IP=100.127.40.114 \
+  --from-literal=AWS_IP=100.88.181.49 \
+  --from-literal=FRONTEND_ADDR=100.88.181.49:30081 \
+  --from-literal=PRODUCT_CATALOG_SERVICE_ADDR=productcatalogservice:3550 \
+  --from-literal=DISABLE_PROFILER=1 \
+  --from-literal=DISABLE_TRACING=1 \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "✅ 로컬 K3s에 AWS 프론트엔드 주소 주입 완료!"
 
