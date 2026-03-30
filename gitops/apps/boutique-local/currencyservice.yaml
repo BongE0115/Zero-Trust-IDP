@@ -4,12 +4,33 @@ kind: Service
 metadata:
   name: currencyservice
 spec:
+  type: NodePort
+  selector:
+    app: currencyservice
   ports:
   - name: grpc
     port: 7000
     targetPort: 7000
+    nodePort: 30001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: currencyservice
+spec:
   selector:
-    app: currencyservice
+    matchLabels:
+      app: currencyservice
+  template:
+    metadata:
+      labels:
+        app: currencyservice
+    spec:
+      containers:
+      - name: server
+        image: us-central1-docker.pkg.dev/google-samples/microservices-demo/currencyservice:v0.10.5
+        ports:
+        - containerPort: 7000
 ---
 # recommendationservice.yaml
 apiVersion: v1
@@ -17,12 +38,33 @@ kind: Service
 metadata:
   name: recommendationservice
 spec:
+  type: NodePort
+  selector:
+    app: recommendationservice
   ports:
   - name: grpc
     port: 8080
     targetPort: 8080
+    nodePort: 30003
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommendationservice
+spec:
   selector:
-    app: recommendationservice
+    matchLabels:
+      app: recommendationservice
+  template:
+    metadata:
+      labels:
+        app: recommendationservice
+    spec:
+      containers:
+      - name: server
+        image: us-central1-docker.pkg.dev/google-samples/microservices-demo/recommendationservice:v0.10.5
+        ports:
+        - containerPort: 8080
 ---
 # adservice.yaml
 apiVersion: v1
@@ -30,12 +72,33 @@ kind: Service
 metadata:
   name: adservice
 spec:
+  type: NodePort
+  selector:
+    app: adservice
   ports:
   - name: grpc
     port: 9555
     targetPort: 9555
+    nodePort: 30005
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adservice
+spec:
   selector:
-    app: adservice
+    matchLabels:
+      app: adservice
+  template:
+    metadata:
+      labels:
+        app: adservice
+    spec:
+      containers:
+      - name: server
+        image: us-central1-docker.pkg.dev/google-samples/microservices-demo/adservice:v0.10.5
+        ports:
+        - containerPort: 9555
 ---
 # emailservice.yaml
 apiVersion: v1
@@ -43,9 +106,44 @@ kind: Service
 metadata:
   name: emailservice
 spec:
+  type: NodePort
+  selector:
+    app: emailservice
   ports:
   - name: grpc
     port: 5000
     targetPort: 8080
+    nodePort: 35000 
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: emailservice
+spec:
   selector:
-    app: emailservice
+    matchLabels:
+      app: emailservice
+  template:
+    metadata:
+      labels:
+        app: emailservice
+    spec:
+      containers:
+      - name: server
+        image: us-central1-docker.pkg.dev/google-samples/microservices-demo/emailservice:v0.10.5
+        ports:
+        - containerPort: 8080
+        env:
+        # 🔥 마법 적용: ConfigMap에서 AWS 마스터 IP를 꺼내옵니다. (반드시 제일 위에 선언해야 아래에서 쓸 수 있음)
+        - name: AWS_MASTER_IP
+          valueFrom:
+            configMapKeyRef:
+              name: global-env
+              key: AWS_MASTER_IP
+        - name: PORT
+          value: "8080"
+        # 🔥 $(변수명) 문법으로 IP와 포트 번호를 자동 조립!
+        - name: KAFKA_BROKER_URL
+          value: "$(AWS_MASTER_IP):32092" 
+        - name: KAFKA_TOPIC
+          value: "orders"

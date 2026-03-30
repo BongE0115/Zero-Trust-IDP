@@ -1,3 +1,4 @@
+# checkoutservice.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -29,6 +30,8 @@ spec:
       labels:
         app: checkoutservice
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/worker: "true"
       serviceAccountName: checkoutservice
       containers:
         - name: server
@@ -36,17 +39,29 @@ spec:
           ports:
           - containerPort: 5050
           env:
+          # 🔥 마법 적용: ConfigMap에서 로컬 노드의 Tailscale IP를 꺼내옵니다.
+          - name: LOCAL_IP
+            valueFrom:
+              configMapKeyRef:
+                name: aws-global-env
+                key: LOCAL_TAILSCALE_IP
           - name: PORT
             value: "5050"
+          - name: KAFKA_BROKER_URL
+            value: "kafka.default.svc.cluster.local:9092"
+          - name: KAFKA_TOPIC
+            value: "orders"
+          # 🔥 $(변수명) 문법으로 로컬 서비스 주소 자동 조립!
           - name: PRODUCT_CATALOG_SERVICE_ADDR
-            value: "productcatalogservice.local:3550"
+            value: "$(LOCAL_IP):30550"
+          - name: EMAIL_SERVICE_ADDR
+            value: "$(LOCAL_IP):35000"
+          - name: CURRENCY_SERVICE_ADDR
+            value: "$(LOCAL_IP):30001"
+          - name: CART_SERVICE_ADDR
+            value: "$(LOCAL_IP):30002"
+          # 🟢 AWS 내부 통신은 이름 그대로 유지
           - name: SHIPPING_SERVICE_ADDR
             value: "shippingservice:50051"
           - name: PAYMENT_SERVICE_ADDR
             value: "paymentservice:50051"
-          - name: EMAIL_SERVICE_ADDR
-            value: "emailservice.local:5000"
-          - name: CURRENCY_SERVICE_ADDR
-            value: "currencyservice.local:7000"
-          - name: CART_SERVICE_ADDR
-            value: "cartservice.local:7070"

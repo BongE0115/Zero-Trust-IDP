@@ -1,3 +1,4 @@
+# frontend.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -21,13 +22,14 @@ kind: Service
 metadata:
   name: frontend-external
 spec:
-  type: LoadBalancer
+  type: NodePort 
   selector:
     app: frontend
   ports:
   - name: http
     port: 80
     targetPort: 8080
+    nodePort: 30080 
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -42,26 +44,33 @@ spec:
       labels:
         app: frontend
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/worker: "true"
       serviceAccountName: frontend
       containers:
         - name: server
           image: us-central1-docker.pkg.dev/google-samples/microservices-demo/frontend:v0.10.5
-          ports:
-          - containerPort: 8080
           env:
+          # 🔥 마법 적용
+          - name: LOCAL_IP
+            valueFrom:
+              configMapKeyRef:
+                name: aws-global-env
+                key: LOCAL_TAILSCALE_IP
           - name: PORT
             value: "8080"
+          # 🔥 $(변수명) 치환
           - name: PRODUCT_CATALOG_SERVICE_ADDR
-            value: "productcatalogservice.local:3550"
+            value: "$(LOCAL_IP):30550" 
           - name: CURRENCY_SERVICE_ADDR
-            value: "currencyservice.local:7000"
+            value: "$(LOCAL_IP):30001"
           - name: CART_SERVICE_ADDR
-            value: "cartservice.local:7070"
+            value: "$(LOCAL_IP):30002"
           - name: RECOMMENDATION_SERVICE_ADDR
-            value: "recommendationservice.local:8080"
+            value: "$(LOCAL_IP):30003"
+          - name: AD_SERVICE_ADDR
+            value: "$(LOCAL_IP):30005"
           - name: SHIPPING_SERVICE_ADDR
             value: "shippingservice:50051"
           - name: CHECKOUT_SERVICE_ADDR
             value: "checkoutservice:5050"
-          - name: AD_SERVICE_ADDR
-            value: "adservice.local:9555"

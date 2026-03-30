@@ -18,17 +18,12 @@ spec:
     metadata:
       labels:
         app: loadgenerator
-      annotations:
-        sidecar.istio.io/rewriteAppHTTPProbers: "true"
     spec:
       serviceAccountName: loadgenerator
       terminationGracePeriodSeconds: 5
       restartPolicy: Always
-      securityContext:
-        fsGroup: 1000
-        runAsGroup: 1000
-        runAsNonRoot: true
-        runAsUser: 1000
+      
+      # 1. 프론트엔드가 떴는지 먼저 확인하는 정찰병
       initContainers:
       - command:
         - /bin/sh
@@ -49,30 +44,26 @@ spec:
           echo "Failed to reach frontend after $MAX_RETRIES attempts."
           exit 1
         name: frontend-check
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-              - ALL
-          privileged: false
-          readOnlyRootFilesystem: true
         image: busybox:latest
         env:
+        # 🔥 수정됨: 수동 입력 대신 ConfigMap에서 자동 호출
         - name: FRONTEND_ADDR
-          value: "frontend:80"
+          valueFrom:
+            configMapKeyRef:
+              name: global-env
+              key: FRONTEND_ADDR
+          
+      # 2. 본진 (실제 트래픽을 쏘는 녀석)
       containers:
       - name: main
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-              - ALL
-          privileged: false
-          readOnlyRootFilesystem: true
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/loadgenerator:v0.10.5
         env:
+        # 🔥 수정됨: 수동 입력 대신 ConfigMap에서 자동 호출
         - name: FRONTEND_ADDR
-          value: "frontend:80"
+          valueFrom:
+            configMapKeyRef:
+              name: global-env
+              key: FRONTEND_ADDR
         - name: USERS
           value: "10"
         - name: RATE

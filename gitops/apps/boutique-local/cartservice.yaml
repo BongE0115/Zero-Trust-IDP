@@ -3,13 +3,14 @@ kind: Service
 metadata:
   name: cartservice
 spec:
-  type: ClusterIP
+  type: NodePort # 🔥 외부(AWS) 호출을 위해 NodePort로 변경
   selector:
     app: cartservice
   ports:
   - name: grpc
     port: 7070
     targetPort: 7070
+    nodePort: 30002 # 🔥 프론트엔드 환경변수와 일치시킴
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -31,6 +32,7 @@ spec:
         - name: REDIS_ADDR
           value: "redis-cart:6379"
 ---
+# (redis-cart는 로컬 cartservice만 호출하므로 ClusterIP 유지)
 apiVersion: v1
 kind: Service
 metadata:
@@ -52,6 +54,9 @@ spec:
     matchLabels:
       app: redis-cart
   template:
+    metadata:
+      labels:
+        app: redis-cart
     spec:
       containers:
       - name: redis
