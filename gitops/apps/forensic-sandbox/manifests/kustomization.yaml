@@ -12,3 +12,4 @@ resources:
   - waypoint.yaml
   - istio-rules.yaml
   - currentcase.yaml
+  - sandbox-developer-rbac.yaml
