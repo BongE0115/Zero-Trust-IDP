@@ -35,7 +35,7 @@ spec:
           RETRY_INTERVAL=10
 
           # 포트가 없을 경우를 대비해 기본값(80) 설정 (셸 파라미터 확장 문법)
-          TARGET_URL="http://${FRONTEND_ADDR}
+          TARGET_URL="http://${FRONTEND_ADDR}"
 
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i: Pinging frontend: ${TARGET_URL}..."

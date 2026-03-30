@@ -306,11 +306,11 @@ resource "aws_security_group" "monitoring_sg" {
 }
 
 # ==========================================
-# 2. ALB SG (충돌 해결 완료)
+# 2. ALB SG 
 # ==========================================
 resource "aws_security_group" "alb_sg" {
   name        = "aiops-alb-sg"
-  description = "Allow HTTP traffic from internet to ALB"
+  description = "Allow HTTP/HTTPS traffic from internet to ALB"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -321,7 +321,15 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # 맨 아래 있던 독립 규칙을 인라인으로 병합
+  # [추가] ArgoCD CLI 및 보안 접속을 위한 HTTPS 개방
+  ingress {
+    description = "HTTPS (ArgoCD) from Internet"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   ingress {
     description = "Frontend 8080 from Internet"
     from_port   = 8080
@@ -373,7 +381,7 @@ resource "aws_security_group" "nat_sg" {
 }
 
 # ==========================================
-# 4. K3s Master SG (모든 흩어진 규칙 병합 완료)
+# 4. K3s Master SG 
 # ==========================================
 resource "aws_security_group" "k3s_server_sg" {
   name        = "aiops-k3s-server-sg"
@@ -454,7 +462,7 @@ resource "aws_security_group" "k3s_server_sg" {
 }
 
 # ==========================================
-# 5. K3s Worker SG (모든 흩어진 규칙 병합 완료)
+# 5. K3s Worker SG 
 # ==========================================
 resource "aws_security_group" "k3s_agent_sg" {
   name        = "aiops-k3s-agent-sg"
@@ -523,8 +531,6 @@ resource "aws_security_group" "k3s_agent_sg" {
     Name = "aiops-k3s-agent-sg"
   }
 }
-
-# (기존 맨 아래에 있던 aws_security_group_rule 블록들은 모두 삭제했습니다. 인라인으로 통합되어 더 안전하게 동작합니다.)
 
 # ==================================================
 # --------------------------------------------------
