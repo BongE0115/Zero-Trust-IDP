@@ -1,8 +1,8 @@
 # 90초 동안 대기하는 리소스입니다.
-resource "time_sleep" "wait_90_seconds" {
+resource "time_sleep" "wait_300_seconds" {
   depends_on = [aws_instance.k3s_server] # 마스터 노드 생성 후 시작
 
-  create_duration = "90s" # K3s가 설치되고 API가 뜰 때까지 넉넉히 대기
+  create_duration = "300s" # K3s가 설치되고 API가 뜰 때까지 넉넉히 대기
 }
 
 # ==================================================
@@ -930,7 +930,7 @@ resource "aws_instance" "k3s_agent" {
 }
 
 resource "kubernetes_config_map_v1" "aws_global_env" {
-  # 중요: 인스턴스가 아니라 '90초 대기'가 끝난 후에 실행하도록 설정
+  # 중요: 인스턴스가 아니라 '300초 대기'가 끝난 후에 실행하도록 설정
   depends_on = [time_sleep.wait_90_seconds] 
 
   metadata {
