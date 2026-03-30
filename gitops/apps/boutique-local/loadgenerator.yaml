@@ -25,16 +25,20 @@ spec:
       
       # 1. 프론트엔드가 떴는지 먼저 확인하는 정찰병
       initContainers:
-      - command:
+      - name: frontend-check
+        image: busybox:latest
+        command:
         - /bin/sh
         - -exc
         - |
           MAX_RETRIES=12
           RETRY_INTERVAL=10
+          # FRONTEND_ADDR는 아래 env 설정에서 ConfigMap으로부터 주입받습니다.
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i: Pinging frontend: ${FRONTEND_ADDR}..."
+            # 포트 번호 없이 IP만 올 경우를 대비해 http://${FRONTEND_ADDR} 구조 유지
             STATUSCODE=$(wget --server-response http://${FRONTEND_ADDR} 2>&1 | awk '/^  HTTP/{print $2}')
-            if [ $STATUSCODE -eq 200 ]; then
+            if [ "$STATUSCODE" = "200" ]; then
                 echo "Frontend is reachable."
                 exit 0
             fi
@@ -43,14 +47,11 @@ spec:
           done
           echo "Failed to reach frontend after $MAX_RETRIES attempts."
           exit 1
-        name: frontend-check
-        image: busybox:latest
         env:
-        # 🔥 수정됨: 수동 입력 대신 ConfigMap에서 자동 호출
         - name: FRONTEND_ADDR
           valueFrom:
             configMapKeyRef:
-              name: global-env
+              name: aws-global-env  # 🔥 'global-env'에서 'aws-global-env'로 통일
               key: FRONTEND_ADDR
           
       # 2. 본진 (실제 트래픽을 쏘는 녀석)
@@ -58,11 +59,10 @@ spec:
       - name: main
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/loadgenerator:v0.10.5
         env:
-        # 🔥 수정됨: 수동 입력 대신 ConfigMap에서 자동 호출
         - name: FRONTEND_ADDR
           valueFrom:
             configMapKeyRef:
-              name: global-env
+              name: aws-global-env  # 🔥 동일하게 수정
               key: FRONTEND_ADDR
         - name: USERS
           value: "10"
