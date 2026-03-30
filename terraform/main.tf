@@ -1,3 +1,10 @@
+# 90초 동안 대기하는 리소스입니다.
+resource "time_sleep" "wait_90_seconds" {
+  depends_on = [aws_instance.k3s_server] # 마스터 노드 생성 후 시작
+
+  create_duration = "90s" # K3s가 설치되고 API가 뜰 때까지 넉넉히 대기
+}
+
 # ==================================================
 # --------------------------------------------------
 # 1. 네트워크 인프라 (VPC,Subnet,IGW,RT)
@@ -922,20 +929,21 @@ resource "aws_instance" "k3s_agent" {
   }
 }
 
-# AWS 운영 환경의 Kubernetes에 ConfigMap을 직접 생성
-resource "kubernetes_config_map" "aws_global_env" {
-  depends_on = [aws_instance.k3s_server, aws_instance.k3s_agent] # EC2 인스턴스가 먼저 생성된 후 ConfigMap이 생성되도록 의존성 설정
+resource "kubernetes_config_map_v1" "aws_global_env" {
+  # 중요: 인스턴스가 아니라 '90초 대기'가 끝난 후에 실행하도록 설정
+  depends_on = [time_sleep.wait_90_seconds] 
+
   metadata {
     name      = "aws-global-env"
-    namespace = "default" # checkoutservice가 있는 네임스페이스
+    namespace = "default"
   }
 
   data = {
     AWS_REGION         = "ap-northeast-2"
     PROJECT_NAME       = "Zero-Trust-IDP"
     ENVIRONMENT        = "production"
-    # tfvars에 정의한 그 IP가 여기로 자동 주입됩니다!
     LOCAL_TAILSCALE_IP = var.local_tailscale_ip
-    SHOPPING_ASSISTANT_SERVICE_ADDR = "shoppingassistantservice:80"
+    AWS_IP             = aws_instance.k3s_server.private_ip
+    FRONTEND_ADDR      = "${aws_lb.aiops_alb.dns_name}:30081"
   }
 }
