@@ -45,7 +45,7 @@ if [ -n "$TAILSCALE_AUTH_KEY" ]; then
 fi
 
 # ---------------------------------------------------------
-# 4. K3s Server 설치 (Master 라벨 추가)
+# 4. K3s Server 설치 및 readiness 대기
 # ---------------------------------------------------------
 if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
   curl -sfL https://get.k3s.io | \
