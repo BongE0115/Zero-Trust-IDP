@@ -64,7 +64,7 @@ if [ ! -f /etc/rancher/k3s/k3s.yaml ] && [ ! -f /etc/systemd/system/k3s-agent.se
   curl -sfL https://get.k3s.io | \
     INSTALL_K3S_VERSION="$K3S_VERSION" \
     K3S_URL="https://$K3S_SERVER_IP:6443" \
-    K3S_TOKEN="$K3S_TOKEN" sh - \
+    K3S_TOKEN="$K3S_TOKEN" \
     sh -s - agent 
 fi
 
