@@ -78,3 +78,20 @@ done
 kubectl get nodes || true
 
 echo "[INFO] k3s server bootstrap completed."
+
+echo "기다리는 중... K3s API가 준비될 때까지"
+until /usr/local/bin/kubectl get nodes; do
+  sleep 5
+done
+
+echo "글로벌 환경변수 ConfigMap 생성 중..."
+/usr/local/bin/kubectl create configmap aws-global-env \
+  --from-literal=AWS_REGION="ap-northeast-2" \
+  --from-literal=PROJECT_NAME="${project_name}" \
+  --from-literal=ENVIRONMENT="production" \
+  --from-literal=LOCAL_TAILSCALE_IP="${local_tailscale_ip}" \
+  --from-literal=AWS_IP=$(hostname -I | awk '{print $1}') \
+  --from-literal=FRONTEND_ADDR="${frontend_addr}" \
+  -n default --dry-run=client -o yaml | /usr/local/bin/kubectl apply -f -
+
+echo "✅ ConfigMap 생성 완료!"

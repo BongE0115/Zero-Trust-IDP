@@ -1,9 +1,9 @@
 # 90초 동안 대기하는 리소스입니다.
-resource "time_sleep" "wait_300_seconds" {
-  depends_on = [aws_instance.k3s_server] # 마스터 노드 생성 후 시작
-
-  create_duration = "300s" # K3s가 설치되고 API가 뜰 때까지 넉넉히 대기
-}
+#resource "time_sleep" "wait_300_seconds" {
+#  depends_on = [aws_instance.k3s_server] # 마스터 노드 생성 후 시작
+#
+#  create_duration = "300s" # K3s가 설치되고 API가 뜰 때까지 넉넉히 대기
+#}
 
 # ==================================================
 # --------------------------------------------------
@@ -892,6 +892,9 @@ resource "aws_instance" "k3s_server" {
   user_data = templatefile("${path.module}/templates/k3s_server.sh.tpl", {
     tailscale_auth_key = var.tailscale_auth_key
     k3s_token          = var.k3s_token
+    local_tailscale_ip = var.local_tailscale_ip
+    frontend_addr      = "${aws_lb.aiops_alb.dns_name}:30081" # ALB 주소 전달
+    project_name       = "Zero-Trust-IDP"
   })
 
   tags = {
@@ -929,21 +932,21 @@ resource "aws_instance" "k3s_agent" {
   }
 }
 
-resource "kubernetes_config_map_v1" "aws_global_env" {
+#resource "kubernetes_config_map_v1" "aws_global_env" {
   # 중요: 인스턴스가 아니라 '300초 대기'가 끝난 후에 실행하도록 설정
-  depends_on = [time_sleep.wait_90_seconds] 
-
-  metadata {
-    name      = "aws-global-env"
-    namespace = "default"
-  }
-
-  data = {
-    AWS_REGION         = "ap-northeast-2"
-    PROJECT_NAME       = "Zero-Trust-IDP"
-    ENVIRONMENT        = "production"
-    LOCAL_TAILSCALE_IP = var.local_tailscale_ip
-    AWS_IP             = aws_instance.k3s_server.private_ip
-    FRONTEND_ADDR      = "${aws_lb.aiops_alb.dns_name}:30081"
-  }
-}
+#  depends_on = [time_sleep.wait_90_seconds] 
+#
+#  metadata {
+#    name      = "aws-global-env"
+#    namespace = "default"
+#  }
+#
+#  data = {
+#    AWS_REGION         = "ap-northeast-2"
+#    PROJECT_NAME       = "Zero-Trust-IDP"
+#    ENVIRONMENT        = "production"
+#    LOCAL_TAILSCALE_IP = var.local_tailscale_ip
+#    AWS_IP             = aws_instance.k3s_server.private_ip
+#    FRONTEND_ADDR      = "${aws_lb.aiops_alb.dns_name}:30081"
+#  }
+#}
