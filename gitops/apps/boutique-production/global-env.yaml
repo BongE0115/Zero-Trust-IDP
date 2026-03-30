@@ -2,8 +2,10 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: aws-global-env
-  namespace: default # 파드가 떠 있는 네임스페이스와 맞춰야 합니다!
+  namespace: default
 data:
   AWS_REGION: "ap-northeast-2"
   PROJECT_NAME: "Zero-Trust-IDP"
   ENVIRONMENT: "production"
+  LOCAL_TAILSCALE_IP: "100.88.181.49"
+  SHOPPING_ASSISTANT_SERVICE_ADDR: "shoppingassistantservice:80"
