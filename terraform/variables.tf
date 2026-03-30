@@ -38,13 +38,8 @@ variable "private_dns_zone_name" {
   default     = "internal.aiops"
 }
 
-variable "github_dispatch_token" {
-  description = "GitHub PAT for workflow dispatch"
-  type        = string
-  sensitive   = true
-}
-
 variable "local_tailscale_ip" {
-  description = "로컬 워커 노드의 Tailscale IP 주소"
+  description = "Tailscale IP address for the local environment"
   type        = string
-} 
+  default     = "" # destroy 목적이므로 빈 문자열이나 임의의 더미(dummy) 값을 넣어도 무방합니다.
+}
