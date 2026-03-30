@@ -22,7 +22,7 @@ resource "local_file" "local_node_setup_script" {
     sudo tailscale up --authkey=${var.tailscale_auth_key} --hostname=aiops-local-worker --accept-routes
 
     # 스크립트 실행 시점의 실제 Tailscale IP 추출 (Kubeconfig 출력용)
-    LOCAL_TS_IP=$$(tailscale ip -4 | head -n 1)
+    LOCAL_TS_IP=$(tailscale ip -4 | head -n 1)
     echo "✅ Tailscale 연동 완료! (현재 IP: $LOCAL_TS_IP)"
 
     echo "[2/5] K3s 클러스터 설치 중..."
