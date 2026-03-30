@@ -588,6 +588,16 @@ resource "aws_lb_target_group" "boutique_frontend_tg" {
   port     = 30081
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
+
+  # 🚨 헬스 체크를 명시해야 ALB가 노드를 Healthy로 인식합니다.
+  health_check {
+    path                = "/" # 프론트엔드 메인 페이지 혹은 /healthz
+    port                = "30081"
+    protocol            = "HTTP"
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    matcher             = "200-399"
+  }
 }
 
 # ==========================================
@@ -832,7 +842,7 @@ resource "aws_instance" "k3s_server" {
     tailscale_auth_key = var.tailscale_auth_key
     k3s_token          = var.k3s_token
     local_tailscale_ip = var.local_tailscale_ip
-    frontend_addr      = "${aws_lb.aiops_alb.dns_name}:30081" 
+    frontend_addr      = "${aws_lb.aiops_alb.dns_name}:8080" 
     project_name       = "Zero-Trust-IDP"
   })
 
