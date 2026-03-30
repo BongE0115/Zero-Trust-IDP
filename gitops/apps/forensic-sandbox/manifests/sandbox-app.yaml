@@ -1,4 +1,4 @@
-# 1. 앰비언트 메시 라벨이 적용된 네임스페이스
+# 1. 앰비언트 메시 라벨이 적용된 네임스페이스 (★ 누락됐던 핵심 부분 복구!)
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -10,6 +10,12 @@ metadata:
     # 깃옵스 기반 온-디멘드 샌드박스 완전 구현을 위해 샌드박스 생성 및 istio 보안 규칙 순서 동기화 wave 추가
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
+spec:
+  template:
+    spec:
+      containers:
+        - image: 'ghcr.io/bonge0115/worker-consumer:07149dd'
+          env: []
 ---
 # 2. 전용 Service Account 생성 (신분증)
 apiVersion: v1
@@ -20,8 +26,13 @@ metadata:
   # 깃옵스 기반 온-디멘드 샌드박스 완전 구현을 위해 샌드박스 생성 및 istio 보안 규칙 순서 동기화 wave 추가
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
+spec:
+  template:
+    spec:
+      containers:
+        - image: 'ghcr.io/bonge0115/worker-consumer:07149dd'
+          env: []
 ---
-# 3. 샌드박스 앱 디플로이먼트
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,7 +41,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  replicas: 0 # 평소에는 0으로 유지
+  replicas: 0
   selector:
     matchLabels:
       app: forensic-sandbox-app
@@ -47,7 +58,7 @@ spec:
         fsGroup: 2000
       containers:
         - name: consumer-app
-          image: 'ghcr.io/bonge0115/worker-consumer:07149dd' # 실제 컨슈머 앱 이미지
+          image: 'ghcr.io/bonge0115/worker-consumer:07149dd' # 이미지 수정
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -77,7 +88,7 @@ spec:
             - name: DEPLOYMENT_NAME
               value: "forensic-sandbox-app"
             - name: IMAGE_REF
-              value: 'ghcr.io/bonge0115/worker-consumer:07149dd'
+              value: 'ghcr.io/bonge0115/worker-consumer:07149dd' # 이미지 수정 
             - name: CONFIG_VERSION
               value: "sandbox-v1"
             - name: DEPENDENCY_PROFILE
