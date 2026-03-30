@@ -33,11 +33,17 @@ spec:
         - |
           MAX_RETRIES=12
           RETRY_INTERVAL=10
-          # FRONTEND_ADDR는 아래 env 설정에서 ConfigMap으로부터 주입받습니다.
+
+          # 포트가 없을 경우를 대비해 기본값(80) 설정 (셸 파라미터 확장 문법)
+          PORT=${FRONTEND_PORT:-80}
+          TARGET_URL="http://${FRONTEND_ADDR}:${PORT}"
+
           for i in $(seq 1 $MAX_RETRIES); do
-            echo "Attempt $i: Pinging frontend: ${FRONTEND_ADDR}..."
-            # 포트 번호 없이 IP만 올 경우를 대비해 http://${FRONTEND_ADDR} 구조 유지
-            STATUSCODE=$(wget --server-response http://${FRONTEND_ADDR} 2>&1 | awk '/^  HTTP/{print $2}')
+            echo "Attempt $i: Pinging frontend: ${TARGET_URL}..."
+            
+            # wget으로 상태 코드만 추출
+            STATUSCODE=$(wget --server-response ${TARGET_URL} 2>&1 | awk '/^  HTTP/{print $2}')
+            
             if [ "$STATUSCODE" = "200" ]; then
                 echo "Frontend is reachable."
                 exit 0
@@ -51,8 +57,13 @@ spec:
         - name: FRONTEND_ADDR
           valueFrom:
             configMapKeyRef:
-              name: aws-global-env  # 🔥 'global-env'에서 'aws-global-env'로 통일
-              key: FRONTEND_ADDR
+              name: aws-global-env
+              key: FRONTEND_ADDR  # 예: 100.88.181.49
+        - name: FRONTEND_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: aws-global-env
+              key: FRONTEND_PORT  # 예: 30081
           
       # 2. 본진 (실제 트래픽을 쏘는 녀석)
       containers:

@@ -43,3 +43,8 @@ variable "github_dispatch_token" {
   type        = string
   sensitive   = true
 }
+
+variable "local_tailscale_ip" {
+  description = "로컬 워커 노드의 Tailscale IP 주소"
+  type        = string
+} 

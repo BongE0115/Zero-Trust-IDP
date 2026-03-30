@@ -566,6 +566,15 @@ resource "aws_security_group_rule" "allow_alb_to_nodeport_worker" {
   source_security_group_id = aws_security_group.alb_sg.id
 }
 
+resource "aws_security_group_rule" "alb_allow_8080" {
+  type              = "ingress"
+  from_port         = 8080
+  to_port           = 8080
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.alb_sg.id
+}
+
 
 # ==================================================
 # --------------------------------------------------
@@ -618,6 +627,13 @@ resource "aws_lb_target_group" "aiops_tg" {
   }
 }
 
+resource "aws_lb_target_group" "boutique_frontend_tg" {
+  name     = "boutique-frontend-tg"
+  port     = 30081
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+}
+
 # ==========================================
 # HTTP Listener
 # ==========================================
@@ -629,6 +645,17 @@ resource "aws_lb_listener" "http" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.aiops_tg.arn
+  }
+}
+
+resource "aws_lb_listener" "frontend_8080" {
+  load_balancer_arn = aws_lb.aiops_alb.arn
+  port              = "8080"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.boutique_frontend_tg.arn
   }
 }
 
@@ -646,6 +673,16 @@ resource "aws_lb_target_group_attachment" "k3s_agent_attachment" {
   target_id        = aws_instance.k3s_agent.id
   port             = 30080
 }
+
+
+
+resource "aws_lb_target_group_attachment" "frontend_attachment" {
+  target_group_arn = aws_lb_target_group.boutique_frontend_tg.arn
+  target_id        = aws_instance.k3s_agent.id
+  port             = 30081
+}
+
+
 
 
 
@@ -885,3 +922,19 @@ resource "aws_instance" "k3s_agent" {
   }
 }
 
+# AWS 운영 환경의 Kubernetes에 ConfigMap을 직접 생성
+resource "kubernetes_config_map" "aws_global_env" {
+  metadata {
+    name      = "aws-global-env"
+    namespace = "default" # checkoutservice가 있는 네임스페이스
+  }
+
+  data = {
+    AWS_REGION         = "ap-northeast-2"
+    PROJECT_NAME       = "Zero-Trust-IDP"
+    ENVIRONMENT        = "production"
+    # tfvars에 정의한 그 IP가 여기로 자동 주입됩니다!
+    LOCAL_TAILSCALE_IP = var.local_tailscale_ip
+    SHOPPING_ASSISTANT_SERVICE_ADDR = "shoppingassistantservice:80"
+  }
+}
