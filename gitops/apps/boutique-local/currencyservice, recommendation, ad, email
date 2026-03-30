@@ -1,0 +1,51 @@
+# currencyservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: currencyservice
+spec:
+  ports:
+  - name: grpc
+    port: 7000
+    targetPort: 7000
+  selector:
+    app: currencyservice
+---
+# recommendationservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommendationservice
+spec:
+  ports:
+  - name: grpc
+    port: 8080
+    targetPort: 8080
+  selector:
+    app: recommendationservice
+---
+# adservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: adservice
+spec:
+  ports:
+  - name: grpc
+    port: 9555
+    targetPort: 9555
+  selector:
+    app: adservice
+---
+# emailservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: emailservice
+spec:
+  ports:
+  - name: grpc
+    port: 5000
+    targetPort: 8080
+  selector:
+    app: emailservice
