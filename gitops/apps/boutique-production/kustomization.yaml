@@ -4,5 +4,4 @@ kind: Kustomization
 resources:
   - frontend.yaml
   - checkoutservice.yaml
-  - paymentservice.yaml
-  - shippingservice.yaml
+  - paymentservice.yaml & shippingservice.yaml
