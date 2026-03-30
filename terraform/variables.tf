@@ -37,3 +37,9 @@ variable "private_dns_zone_name" {
   type        = string
   default     = "internal.aiops"
 }
+
+variable "local_tailscale_ip" {
+  description = "Tailscale IP address for the local environment"
+  type        = string
+  default     = "" # destroy 목적이므로 빈 문자열이나 임의의 더미(dummy) 값을 넣어도 무방합니다.
+}
