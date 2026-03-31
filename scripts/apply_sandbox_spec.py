@@ -57,6 +57,13 @@ def find_deployment(docs: List[Dict[str, Any]], deployment_name: str) -> Dict[st
     raise ValueError(f"Deployment '{deployment_name}' not found")
 
 
+def find_job(docs: List[Dict[str, Any]], job_name: str) -> Dict[str, Any]:
+    for doc in docs:
+        if doc.get("kind") == "Job" and doc.get("metadata", {}).get("name") == job_name:
+            return doc
+    raise ValueError(f"Job '{job_name}' not found")
+
+
 def find_container_by_name(containers: List[Dict[str, Any]], name: str) -> Dict[str, Any]:
     for c in containers:
         if c.get("name") == name:
@@ -93,6 +100,27 @@ def patch_init_container_for_artifacts(
     init_containers = deployment["spec"]["template"]["spec"].get("initContainers", [])
     if not init_containers:
         raise ValueError("initContainers not found in sandbox deployment")
+
+    init_container = find_init_container_by_name(init_containers, "artifact-init")
+    script = f"""mkdir -p /artifacts
+cat > /artifacts/failure.json <<'EOF'
+{json.dumps(failure_artifact, ensure_ascii=False, indent=2)}
+EOF
+cat > /artifacts/normal.json <<'EOF'
+{json.dumps(normal_artifact, ensure_ascii=False, indent=2)}
+EOF
+"""
+    init_container["command"] = ["/bin/sh", "-c", script]
+
+
+def patch_job_artifact_init_for_artifacts(
+    job: Dict[str, Any],
+    failure_artifact: Dict[str, Any],
+    normal_artifact: Dict[str, Any],
+) -> None:
+    init_containers = job["spec"]["template"]["spec"].get("initContainers", [])
+    if not init_containers:
+        raise ValueError("initContainers not found in launcher job")
 
     init_container = find_init_container_by_name(init_containers, "artifact-init")
     script = f"""mkdir -p /artifacts
@@ -183,8 +211,12 @@ def build_case_manifest_docs(
     template_deployment = find_deployment(template_docs, sandbox["deployment_name"])
     deployment = copy.deepcopy(template_deployment)
 
+    template_job = find_job(template_docs, "forensic-launcher-job")
+    job = copy.deepcopy(template_job)
+
     case_suffix = make_case_suffix(metadata["case_id"])
     case_deployment_name = f"{sandbox['deployment_name']}-{case_suffix}"
+    case_job_name = f"forensic-launcher-job-{case_suffix}"
     case_app_label = case_deployment_name
     case_configmap_name = f"forensic-sandbox-case-{case_suffix}"
 
@@ -209,7 +241,27 @@ def build_case_manifest_docs(
 
     topic_init_container = find_init_container_by_name(init_containers, "topic-init")
     consumer_container = find_container_by_name(containers, "consumer-app")
-    launcher_container = find_container_by_name(containers, "forensic-launcher")
+
+    job["metadata"]["namespace"] = sandbox["namespace"]
+    job["metadata"]["name"] = case_job_name
+    job["metadata"].setdefault("labels", {})
+    job["metadata"]["labels"]["forensic-case-id"] = metadata["case_id"]
+
+    job_template_meta = job["spec"]["template"].setdefault("metadata", {})
+    job_template_meta.setdefault("labels", {})
+    job_template_meta["labels"]["app"] = case_job_name
+    job_template_meta["labels"]["forensic-case-id"] = metadata["case_id"]
+
+    job_pod_spec = job["spec"]["template"]["spec"]
+    job_containers = job_pod_spec.get("containers", [])
+    if not job_containers:
+        raise ValueError("Launcher Job has no containers")
+
+    job_init_containers = job_pod_spec.get("initContainers", [])
+    if not job_init_containers:
+        raise ValueError("Launcher Job has no initContainers")
+
+    launcher_container = find_container_by_name(job_containers, "forensic-launcher")
 
     consumer_container["image"] = sandbox["consumer_image_ref"]
     launcher_container["image"] = launcher_image_ref
@@ -246,6 +298,7 @@ def build_case_manifest_docs(
     )
 
     patch_init_container_for_artifacts(deployment, failure_artifact, normal_artifact)
+    patch_job_artifact_init_for_artifacts(job, failure_artifact, normal_artifact)
 
     case_configmap = build_case_configmap(
         spec=spec,
@@ -255,7 +308,7 @@ def build_case_manifest_docs(
         case_configmap_name=case_configmap_name,
     )
 
-    return [deployment, case_configmap]
+    return [deployment, job, case_configmap]
 
 
 def main():
@@ -294,6 +347,7 @@ def main():
     print(f"[OK] output_yaml={output_yaml_path}")
     print(f"[OK] replay_topic={spec['sandbox']['replay_topic']}")
     print(f"[OK] result_topic={spec['sandbox']['result_topic']}")
-    
+
+
 if __name__ == "__main__":
     main()
