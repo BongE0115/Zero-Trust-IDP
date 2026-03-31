@@ -37,7 +37,4 @@ spec:
   ports:
     - port: 8081
       targetPort: 8081
-  template:
-    spec:
-      containers:
-        - image: ghcr.io/bonge0115/producer-api:45e394d
+
