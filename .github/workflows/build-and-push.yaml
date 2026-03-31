@@ -6,13 +6,47 @@ on:
       - jy
     paths:
       - 'services/**'
+      - 'forensic-launcher/**'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: bonge0115
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      producer_api: ${{ steps.filter.outputs.producer_api }}
+      worker_consumer: ${{ steps.filter.outputs.worker_consumer }}
+      dlq_handler: ${{ steps.filter.outputs.dlq_handler }}
+      forensic_launcher: ${{ steps.filter.outputs.forensic_launcher }}
+      anything_changed: ${{ steps.filter.outputs.anything_changed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            producer_api:
+              - 'services/producer-api/**'
+            worker_consumer:
+              - 'services/worker-consumer/**'
+            dlq_handler:
+              - 'services/dlq-handler/**'
+            forensic_launcher:
+              - 'forensic-launcher/**'
+            anything_changed:
+              - 'services/**'
+              - 'forensic-launcher/**'
+
   build-push-update:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.anything_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -26,7 +60,6 @@ jobs:
           fetch-depth: 0
 
       - name: Set short SHA
-        id: vars
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
       - name: Log in to GHCR
@@ -37,6 +70,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push producer-api
+        if: needs.detect-changes.outputs.producer_api == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./services/producer-api
@@ -46,6 +80,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:${{ env.SHORT_SHA }}
 
       - name: Build and push worker-consumer
+        if: needs.detect-changes.outputs.worker_consumer == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./services/worker-consumer
@@ -55,6 +90,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:${{ env.SHORT_SHA }}
 
       - name: Build and push dlq-handler
+        if: needs.detect-changes.outputs.dlq_handler == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./services/dlq-handler
@@ -62,6 +98,16 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:${{ env.SHORT_SHA }}
+
+      - name: Build and push forensic-launcher
+        if: needs.detect-changes.outputs.forensic_launcher == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./forensic-launcher
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/forensic-launcher:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/forensic-launcher:${{ env.SHORT_SHA }}
 
       - name: Install yq
         run: |
@@ -75,48 +121,51 @@ jobs:
           echo "SHORT_SHA=${SHORT_SHA}"
           echo "SHA_TAG=${SHA_TAG}"
 
-          # producer-api
-          yq -i '
-            .spec.template.spec.containers[0].image =
-            "ghcr.io/bonge0115/producer-api:" + strenv(SHA_TAG)
-          ' gitops/apps/kafka-poc/manifests/11-producer.yaml
+          # producer-api changed -> 운영 producer만 갱신
+          if [ "${{ needs.detect-changes.outputs.producer_api }}" = "true" ]; then
+            yq -i '
+              .spec.template.spec.containers[0].image =
+              "ghcr.io/bonge0115/producer-api:" + strenv(SHA_TAG)
+            ' gitops/apps/kafka-poc/manifests/11-producer.yaml
+          fi
 
-          # worker-consumer image
-          yq -i '
-            .spec.template.spec.containers[0].image =
-            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
-          ' gitops/apps/kafka-poc/manifests/21-consumer.yaml
+          # worker-consumer changed -> 운영 consumer만 갱신
+          # sandbox consumer-app은 여기서 건드리지 않음
+          if [ "${{ needs.detect-changes.outputs.worker_consumer }}" = "true" ]; then
+            yq -i '
+              .spec.template.spec.containers[0].image =
+              "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+            ' gitops/apps/kafka-poc/manifests/21-consumer.yaml
 
-          # worker-consumer IMAGE_REF env
-          yq -i '
-            (.spec.template.spec.containers[0].env[] | select(.name == "IMAGE_REF") | .value) =
-            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
-          ' gitops/apps/kafka-poc/manifests/21-consumer.yaml
+            yq -i '
+              (.spec.template.spec.containers[0].env[] | select(.name == "IMAGE_REF") | .value) =
+              "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+            ' gitops/apps/kafka-poc/manifests/21-consumer.yaml
+          fi
 
-          # dlq-handler image
-          yq -i '
-            .spec.template.spec.containers[0].image =
-            "ghcr.io/bonge0115/dlq-handler:" + strenv(SHA_TAG)
-          ' gitops/apps/kafka-poc/manifests/32-dlq-handler.yaml
+          # dlq-handler changed -> 운영 dlq-handler만 갱신
+          if [ "${{ needs.detect-changes.outputs.dlq_handler }}" = "true" ]; then
+            yq -i '
+              .spec.template.spec.containers[0].image =
+              "ghcr.io/bonge0115/dlq-handler:" + strenv(SHA_TAG)
+            ' gitops/apps/kafka-poc/manifests/32-dlq-handler.yaml
+          fi
 
-          # forensic sandbox image
-          yq -i '
-            .spec.template.spec.containers[0].image =
-            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
-          ' gitops/apps/forensic-sandbox/manifests/sandbox-app.yaml
-
-          # forensic sandbox IMAGE_REF env
-          yq -i '
-            (.spec.template.spec.containers[0].env[] | select(.name == "IMAGE_REF") | .value) =
-            "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
-          ' gitops/apps/forensic-sandbox/manifests/sandbox-app.yaml
+          # forensic-launcher changed -> sandbox launcher만 갱신
+          # sandbox consumer-app은 case activation workflow가 failure image_ref로 patch해야 함
+          if [ "${{ needs.detect-changes.outputs.forensic_launcher }}" = "true" ]; then
+            yq -i '
+              (.spec.template.spec.containers[] | select(.name == "forensic-launcher") | .image) =
+              "ghcr.io/bonge0115/forensic-launcher:" + strenv(SHA_TAG)
+            ' gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
+          fi
 
       - name: Commit and push updated GitOps manifests
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add gitops/apps/kafka-poc/manifests gitops/apps/forensic-sandbox/manifests
+          git add gitops/apps/kafka-poc/manifests gitops/apps/forensic-sandbox/templates
           git status --short
 
           if git diff --cached --quiet; then
@@ -124,5 +173,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore(gitops): update images to ${SHORT_SHA}"
+          git commit -m "chore(gitops): update changed images to ${SHORT_SHA}"
           git push origin jy

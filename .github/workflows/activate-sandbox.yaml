@@ -1,0 +1,183 @@
+name: Activate Forensic Sandbox
+
+on:
+  workflow_dispatch:
+    inputs:
+      spec_json:
+        description: "Forensic sandbox spec JSON"
+        required: true
+        type: string
+      failure_artifact_json:
+        description: "Failure replay artifact JSON"
+        required: true
+        type: string
+      normal_artifact_json:
+        description: "Normal validation artifact JSON"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  activate-sandbox:
+    runs-on: ubuntu-latest
+
+    env:
+      WORK_DIR: /tmp/sandbox-spec
+      SPEC_PATH: /tmp/sandbox-spec/spec.json
+      FAILURE_ARTIFACT_PATH: /tmp/sandbox-spec/failure-artifact.json
+      NORMAL_ARTIFACT_PATH: /tmp/sandbox-spec/normal-artifact.json
+      TEMPLATE_YAML_PATH: gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
+      LAUNCHER_IMAGE_REF: ghcr.io/bonge0115/forensic-launcher:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Write spec and artifacts
+        shell: bash
+        run: |
+          mkdir -p "${WORK_DIR}"
+
+          cat > "${SPEC_PATH}" <<'EOF'
+          ${{ inputs.spec_json }}
+          EOF
+
+          cat > "${FAILURE_ARTIFACT_PATH}" <<'EOF'
+          ${{ inputs.failure_artifact_json }}
+          EOF
+
+          cat > "${NORMAL_ARTIFACT_PATH}" <<'EOF'
+          ${{ inputs.normal_artifact_json }}
+          EOF
+
+          echo "[OK] spec and artifacts written"
+          ls -lah "${WORK_DIR}"
+
+      - name: Validate input JSON shape
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          spec = json.loads(Path("/tmp/sandbox-spec/spec.json").read_text(encoding="utf-8"))
+          failure = json.loads(Path("/tmp/sandbox-spec/failure-artifact.json").read_text(encoding="utf-8"))
+          normal = json.loads(Path("/tmp/sandbox-spec/normal-artifact.json").read_text(encoding="utf-8"))
+
+          required_spec_top = ["metadata", "sandbox", "failure"]
+          for key in required_spec_top:
+              if key not in spec:
+                  raise ValueError(f"spec missing key: {key}")
+
+          case_id = spec["metadata"]["case_id"]
+          if failure.get("case_id") != case_id:
+              raise ValueError(
+                  f"failure artifact case_id mismatch: expected={case_id}, actual={failure.get('case_id')}"
+              )
+          if normal.get("case_id") != case_id:
+              raise ValueError(
+                  f"normal artifact case_id mismatch: expected={case_id}, actual={normal.get('case_id')}"
+              )
+
+          if failure.get("artifact_type") != "failure_replay":
+              raise ValueError(
+                  f"failure artifact_type mismatch: {failure.get('artifact_type')}"
+              )
+          if normal.get("artifact_type") != "normal_validation":
+              raise ValueError(
+                  f"normal artifact_type mismatch: {normal.get('artifact_type')}"
+              )
+
+          print("[OK] input JSON validation passed")
+          print(f"[OK] case_id={case_id}")
+          PY
+
+      - name: Derive case manifest path
+        id: case_path
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          spec = json.loads(Path("/tmp/sandbox-spec/spec.json").read_text(encoding="utf-8"))
+          case_id = spec["metadata"]["case_id"]
+
+          safe = "".join(c.lower() if c.isalnum() else "-" for c in case_id)
+          while "--" in safe:
+              safe = safe.replace("--", "-")
+          safe = safe.strip("-")[:48].rstrip("-")
+          if not safe:
+              safe = "case"
+
+          output_yaml = f"gitops/apps/forensic-sandbox/cases/sandbox-case-{safe}.yaml"
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"case_id={case_id}\n")
+              f.write(f"safe_case_id={safe}\n")
+              f.write(f"output_yaml={output_yaml}\n")
+
+          print(f"[OK] case_id={case_id}")
+          print(f"[OK] safe_case_id={safe}")
+          print(f"[OK] output_yaml={output_yaml}")
+          PY
+
+      - name: Generate case-specific sandbox manifest
+        shell: bash
+        run: |
+          python scripts/apply_sandbox_spec.py \
+            --spec "${SPEC_PATH}" \
+            --failure-artifact "${FAILURE_ARTIFACT_PATH}" \
+            --normal-artifact "${NORMAL_ARTIFACT_PATH}" \
+            --launcher-image-ref "${LAUNCHER_IMAGE_REF}" \
+            --template-yaml "${TEMPLATE_YAML_PATH}" \
+            --output-yaml "${{ steps.case_path.outputs.output_yaml }}"
+
+      - name: Show generated manifest
+        shell: bash
+        run: |
+          echo "===== GENERATED CASE MANIFEST ====="
+          cat "${{ steps.case_path.outputs.output_yaml }}"
+          echo "===== END GENERATED CASE MANIFEST ====="
+
+      - name: Show git diff
+        shell: bash
+        run: |
+          git diff -- "${{ steps.case_path.outputs.output_yaml }}" || true
+
+      - name: Commit generated case manifest
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+
+          git add "${{ steps.case_path.outputs.output_yaml }}"
+
+          git commit -m "forensic sandbox case: ${{ steps.case_path.outputs.case_id }}" || echo "No changes to commit"
+
+      - name: Push manifest changes
+        shell: bash
+        run: |
+          git push origin HEAD
+
+      - name: Summary
+        shell: bash
+        run: |
+          echo "case_id=${{ steps.case_path.outputs.case_id }}"
+          echo "safe_case_id=${{ steps.case_path.outputs.safe_case_id }}"
+          echo "manifest=${{ steps.case_path.outputs.output_yaml }}"
