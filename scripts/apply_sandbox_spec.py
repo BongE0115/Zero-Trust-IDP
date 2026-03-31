@@ -64,6 +64,13 @@ def find_job(docs: List[Dict[str, Any]], job_name: str) -> Dict[str, Any]:
     raise ValueError(f"Job '{job_name}' not found")
 
 
+def find_service(docs: List[Dict[str, Any]], service_name: str) -> Dict[str, Any]:
+    for doc in docs:
+        if doc.get("kind") == "Service" and doc.get("metadata", {}).get("name") == service_name:
+            return doc
+    raise ValueError(f"Service '{service_name}' not found")
+
+
 def find_container_by_name(containers: List[Dict[str, Any]], name: str) -> Dict[str, Any]:
     for c in containers:
         if c.get("name") == name:
@@ -140,6 +147,7 @@ def build_case_configmap(
     normal_artifact: Dict[str, Any],
     deployment_name: str,
     case_configmap_name: str,
+    mongo_host: str,
 ) -> Dict[str, Any]:
     metadata = spec["metadata"]
     failure = spec["failure"]
@@ -191,6 +199,7 @@ def build_case_configmap(
             "allowed_replay_topic": sandbox_isolation.get("allowed_replay_topic", ""),
             "allowed_result_topic": sandbox_isolation.get("allowed_result_topic", ""),
             "verdict_file_path": launcher_env.get("VERDICT_FILE_PATH", "/artifacts/verdict.json"),
+            "mongo_host": mongo_host,
         },
     }
 
@@ -214,11 +223,19 @@ def build_case_manifest_docs(
     template_job = find_job(template_docs, "forensic-launcher-job")
     job = copy.deepcopy(template_job)
 
+    template_mongo_deployment = find_deployment(template_docs, "mongodb-temp")
+    mongo_deployment = copy.deepcopy(template_mongo_deployment)
+
+    template_mongo_service = find_service(template_docs, "mongodb-temp")
+    mongo_service = copy.deepcopy(template_mongo_service)
+
     case_suffix = make_case_suffix(metadata["case_id"])
     case_deployment_name = f"{sandbox['deployment_name']}-{case_suffix}"
     case_job_name = f"forensic-launcher-job-{case_suffix}"
+    case_mongo_name = f"mongodb-temp-{case_suffix}"
     case_app_label = case_deployment_name
     case_configmap_name = f"forensic-sandbox-case-{case_suffix}"
+    case_mongo_host = f"{case_mongo_name}.{sandbox['namespace']}.svc.cluster.local"
 
     deployment["metadata"]["namespace"] = sandbox["namespace"]
     deployment["metadata"]["name"] = case_deployment_name
@@ -263,6 +280,21 @@ def build_case_manifest_docs(
 
     launcher_container = find_container_by_name(job_containers, "forensic-launcher")
 
+    mongo_deployment["metadata"]["namespace"] = sandbox["namespace"]
+    mongo_deployment["metadata"]["name"] = case_mongo_name
+    mongo_deployment["metadata"].setdefault("labels", {})
+    mongo_deployment["metadata"]["labels"]["forensic-case-id"] = metadata["case_id"]
+
+    mongo_deployment["spec"]["selector"]["matchLabels"]["app"] = case_mongo_name
+    mongo_deployment["spec"]["template"]["metadata"]["labels"]["app"] = case_mongo_name
+    mongo_deployment["spec"]["template"]["metadata"]["labels"]["forensic-case-id"] = metadata["case_id"]
+
+    mongo_service["metadata"]["namespace"] = sandbox["namespace"]
+    mongo_service["metadata"]["name"] = case_mongo_name
+    mongo_service["metadata"].setdefault("labels", {})
+    mongo_service["metadata"]["labels"]["forensic-case-id"] = metadata["case_id"]
+    mongo_service["spec"]["selector"]["app"] = case_mongo_name
+
     consumer_container["image"] = sandbox["consumer_image_ref"]
     launcher_container["image"] = launcher_image_ref
 
@@ -278,6 +310,7 @@ def build_case_manifest_docs(
     for k, v in sandbox["consumer_env"].items():
         upsert_env(consumer_container, k, v)
 
+    upsert_env(consumer_container, "DB_HOST", case_mongo_host)
     upsert_env(consumer_container, "SERVICE_NAME", case_deployment_name)
     upsert_env(consumer_container, "DEPLOYMENT_NAME", case_deployment_name)
     upsert_env(consumer_container, "FAILURE_ERROR_TYPE", failure["error_type"])
@@ -306,9 +339,10 @@ def build_case_manifest_docs(
         normal_artifact=normal_artifact,
         deployment_name=case_deployment_name,
         case_configmap_name=case_configmap_name,
+        mongo_host=case_mongo_host,
     )
 
-    return [deployment, job, case_configmap]
+    return [mongo_service, mongo_deployment, deployment, job, case_configmap]
 
 
 def main():

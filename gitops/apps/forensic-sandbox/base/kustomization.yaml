@@ -5,7 +5,6 @@ namespace: forensic-sandbox
 
 resources:
   - aws-rds-host.yaml
-  - mongodb-temp.yaml
   - network-policy.yaml
   - peer-auth.yaml
   - waypoint.yaml

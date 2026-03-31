@@ -264,3 +264,67 @@ spec:
               value: ""
             - name: ALLOWED_RESULT_TOPIC
               value: ""
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-temp
+  namespace: forensic-sandbox
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb-temp
+  template:
+    metadata:
+      labels:
+        app: mongodb-temp
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: mongodb-temp
+          image: mongo:7
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 27017
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: mongo-data
+              mountPath: /data/db
+            - name: mongo-tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: mongo-data
+          emptyDir: {}
+        - name: mongo-tmp
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-temp
+  namespace: forensic-sandbox
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    app: mongodb-temp
+  ports:
+    - port: 27017
+      targetPort: 27017
