@@ -11,3 +11,4 @@ resources:
   - waypoint.yaml
   - istio-rules.yaml
   - current-case.yaml
+  - sandbox-app-sa.yaml
