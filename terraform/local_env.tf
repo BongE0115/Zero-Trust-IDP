@@ -37,6 +37,22 @@ resource "local_file" "local_node_setup_script" {
     else
         sudo systemctl restart k3s
     fi
+
+    # =====================================================================
+    # 🚨 [핵심 해결] K3s가 API를 띄우고 yaml 파일을 생성할 때까지 대기합니다.
+    # =====================================================================
+    echo "⏳ K3s API 서버 시작 및 Kubeconfig 파일 생성 대기 중..."
+    for i in {1..30}; do
+        if [ -f /etc/rancher/k3s/k3s.yaml ]; then
+            echo "✅ Kubeconfig 파일 생성 확인!"
+            break
+        fi
+        sleep 2
+    done
+    
+    # 파일은 생겼어도 API가 완전히 응답할 때까지 약간의 여유 시간을 줍니다.
+    sleep 5
+    
     echo "✅ K3s 설치 완료!"
 
     echo "[3/6] 네임스페이스 및 환경 설정 중..."
