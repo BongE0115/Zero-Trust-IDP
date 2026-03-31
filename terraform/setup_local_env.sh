@@ -46,8 +46,8 @@ sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create configmap aws-global-en
   --from-literal=AWS_REGION="ap-northeast-2" \
   --from-literal=PROJECT_NAME="Zero-Trust-IDP" \
   --from-literal=LOCAL_TAILSCALE_IP="" \
-  --from-literal=AWS_IP="10.10.10.230" \
-  --from-literal=FRONTEND_ADDR="aiops-alb-1444381571.ap-northeast-2.elb.amazonaws.com:8080" \
+  --from-literal=AWS_IP="10.10.10.55" \
+  --from-literal=FRONTEND_ADDR="aiops-alb-819259145.ap-northeast-2.elb.amazonaws.com:8080" \
   --from-literal=PRODUCT_CATALOG_SERVICE_ADDR="productcatalogservice:3550" \
   --from-literal=DISABLE_PROFILER="1" \
   --from-literal=DISABLE_TRACING="1" \
@@ -67,7 +67,7 @@ echo "[6/6] 🤖 AWS SSM을 통해 마스터 노드의 ArgoCD 자동 연동을 �
     
 # Kubeconfig 읽을 때 sudo 사용
 LOCAL_KUBECONFIG_B64=$(sudo cat /etc/rancher/k3s/k3s.yaml | sed "s/127.0.0.1/$LOCAL_TS_IP/g" | base64 -w 0)
-MASTER_INSTANCE_ID="i-05f791539540f052b"
+MASTER_INSTANCE_ID="i-0006971ef88a4f006"
 AWS_REGION="ap-northeast-2"
 
 # aws ssm 명령어는 sudo 없이 현재 사용자 권한으로 실행 (인증 유지)
