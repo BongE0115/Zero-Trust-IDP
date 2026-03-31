@@ -294,3 +294,6 @@ def main():
     print(f"[OK] output_yaml={output_yaml_path}")
     print(f"[OK] replay_topic={spec['sandbox']['replay_topic']}")
     print(f"[OK] result_topic={spec['sandbox']['result_topic']}")
+    
+if __name__ == "__main__":
+    main()
