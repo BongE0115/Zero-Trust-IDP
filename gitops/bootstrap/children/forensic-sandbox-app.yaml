@@ -11,8 +11,6 @@ spec:
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
     targetRevision: jy
     path: gitops/apps/forensic-sandbox/base
-    directory:
-      recurse: true
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: forensic-sandbox
