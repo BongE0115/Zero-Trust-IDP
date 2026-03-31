@@ -35,6 +35,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          ref: jy
           fetch-depth: 0
 
       - name: Set up Python
@@ -46,6 +47,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyyaml
+
+      - name: Ensure cases directory exists
+        shell: bash
+        run: |
+          mkdir -p gitops/apps/forensic-sandbox/cases
 
       - name: Write spec and artifacts
         shell: bash
@@ -148,6 +154,14 @@ jobs:
             --template-yaml "${TEMPLATE_YAML_PATH}" \
             --output-yaml "${{ steps.case_path.outputs.output_yaml }}"
 
+      - name: Verify generated case manifest exists
+        shell: bash
+        run: |
+          echo "expected path: ${{ steps.case_path.outputs.output_yaml }}"
+          ls -lah gitops/apps/forensic-sandbox || true
+          ls -lah gitops/apps/forensic-sandbox/cases || true
+          test -f "${{ steps.case_path.outputs.output_yaml }}"
+
       - name: Show generated manifest
         shell: bash
         run: |
@@ -173,7 +187,7 @@ jobs:
       - name: Push manifest changes
         shell: bash
         run: |
-          git push origin HEAD
+          git push origin HEAD:jy
 
       - name: Summary
         shell: bash
