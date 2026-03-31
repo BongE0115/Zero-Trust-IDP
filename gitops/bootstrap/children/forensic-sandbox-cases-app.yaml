@@ -1,16 +1,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: forensic-sandbox-app
+  name: forensic-sandbox-cases-app
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-wave: "4"
 spec:
   project: default
   source:
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
     targetRevision: jy
-    path: gitops/apps/forensic-sandbox/base
+    path: gitops/apps/forensic-sandbox/cases
     directory:
       recurse: true
   destination:

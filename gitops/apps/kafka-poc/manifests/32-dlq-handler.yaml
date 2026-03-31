@@ -16,7 +16,7 @@ spec:
       serviceAccountName: dlq-handler-sa
       containers:
         - name: dlq-handler
-          image: 'ghcr.io/bonge0115/dlq-handler:07149dd' # 이미지 수정 
+          image: 'ghcr.io/bonge0115/dlq-handler:' # 이미지 수정 
           imagePullPolicy: IfNotPresent
           env:
             - name: KAFKA_BOOTSTRAP
@@ -27,3 +27,18 @@ spec:
               value: orders-dlq-handler
             - name: ENABLE_REPLAY
               value: "false"
+            - name: ENABLE_GITHUB_DISPATCH
+              value: "true"
+            - name: GITHUB_OWNER
+              value: "BongE0115"
+            - name: GITHUB_REPO
+              value: "Zero-Trust-IDP"
+            - name: GITHUB_WORKFLOW_FILE
+              value: "activate-sandbox.yaml"
+            - name: GITHUB_REF
+              value: "jy"
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-dispatch-secret
+                  key: token

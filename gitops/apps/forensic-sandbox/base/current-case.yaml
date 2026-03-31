@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: forensic-sandbox-current-case
+  namespace: forensic-sandbox
+data:
+  case_id: ""
+  requested_at: ""
+  source_service: ""
+  source_namespace: ""
+  source_deployment: ""
+  error_type: ""
+  error_message: ""
+  deployment_name: ""
+  replay_topic: ""
+  result_topic: ""
+  verdict_file_path: "/artifacts/verdict.json"

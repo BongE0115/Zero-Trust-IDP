@@ -18,6 +18,10 @@ provider "aws" {
   region = "ap-northeast-2"
 }
 
+data "aws_caller_identity" "current" {}
+
+data "aws_region" "current" {}
+
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"]
@@ -27,6 +31,7 @@ data "aws_ami" "ubuntu" {
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 }
+
 
 # ==========================================
 # 1. VPC
@@ -165,7 +170,8 @@ resource "aws_route53_zone" "private_internal" {
 # ==================================================
 
 # ==========================================
-# IAM Roles
+# IAM Role for K3s nodes (master / worker)
+# - only managed-node permissions
 # ==========================================
 resource "aws_iam_role" "ssm_node_role" {
   name = "aiops-ssm-node-role"
@@ -194,6 +200,12 @@ resource "aws_iam_instance_profile" "ssm_node_profile" {
   role = aws_iam_role.ssm_node_role.name
 }
 
+# ==========================================
+# IAM Role for Monitoring node
+# - managed-node permissions
+# - operator permissions for SSM Run Command
+#   only to instances tagged Role=K3s_Server
+# ==========================================
 resource "aws_iam_role" "ssm_monitoring_role" {
   name = "aiops-ssm-monitoring-role"
 
@@ -216,6 +228,36 @@ resource "aws_iam_role_policy_attachment" "ssm_monitoring_attach" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# --------
+# dlq git dispatch token ssm 방식으로 추가 iam 
+# --------
+resource "aws_iam_role_policy" "ssm_node_github_dispatch_ssm_policy" {
+  name = "aiops-ssm-node-github-dispatch-ssm-policy"
+  role = aws_iam_role.ssm_node_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadGithubDispatchTokenFromSSM"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = "arn:aws:ssm:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:parameter/zero-trust-idp/github-dispatch-token"
+      },
+      {
+        Sid    = "DecryptGithubDispatchTokenWithAwsManagedKms"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt"
+        ]
+        Resource = "arn:aws:kms:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:alias/aws/ssm"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
   name = "aiops-monitoring-ssm-operator-policy"
   role = aws_iam_role.ssm_monitoring_role.id
@@ -223,6 +265,7 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      # AWS-RunShellScript 같은 SSM 문서를 사용할 수 있도록 허용
       {
         Sid    = "AllowRunCommandWithAwsDocuments"
         Effect = "Allow"
@@ -234,6 +277,8 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
           "arn:aws:ssm:*:*:document/AWS-*"
         ]
       },
+
+      # Role=K3s_Server 태그가 붙은 EC2 인스턴스에만 명령 허용
       {
         Sid    = "AllowRunCommandToTaggedMasterOnly"
         Effect = "Allow"
@@ -247,6 +292,8 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
           }
         }
       },
+
+      # 명령 결과 조회 및 대상 탐색
       {
         Sid    = "AllowCommandReadOps"
         Effect = "Allow"
@@ -267,6 +314,9 @@ resource "aws_iam_instance_profile" "ssm_monitoring_profile" {
   name = "aiops-ssm-monitoring-profile"
   role = aws_iam_role.ssm_monitoring_role.name
 }
+
+
+
 
 # ==========================================
 # 1. Monitoring Control SG
@@ -292,6 +342,7 @@ resource "aws_security_group" "monitoring_sg" {
     cidr_blocks = var.admin_cidr
   }
 
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -306,7 +357,7 @@ resource "aws_security_group" "monitoring_sg" {
 }
 
 # ==========================================
-# 2. ALB SG 
+# 2. ALB SG
 # ==========================================
 resource "aws_security_group" "alb_sg" {
   name        = "aiops-alb-sg"
@@ -359,11 +410,12 @@ resource "aws_security_group" "nat_sg" {
   description = "NAT instance SG for private subnet outbound"
   vpc_id      = aws_vpc.main.id
 
+  # 수정된 aiops-nat-sg 부분
   ingress {
     description = "Allow all from private subnets"
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"
+    protocol    = "-1" # 모든 프로토콜 허용
     cidr_blocks = [aws_subnet.private_a.cidr_block, aws_subnet.private_b.cidr_block]
   }
 
@@ -381,21 +433,19 @@ resource "aws_security_group" "nat_sg" {
 }
 
 # ==========================================
-# 4. K3s Master SG 
+# 4. K3s Master SG
 # ==========================================
 resource "aws_security_group" "k3s_server_sg" {
   name        = "aiops-k3s-server-sg"
   description = "Security group for K3s master node"
   vpc_id      = aws_vpc.main.id
 
-  # 핵심 해결: VPC 전체 대역(10.10.0.0/16)을 열어주어 에이전트의 6443 접근을 허용합니다. (순환 참조 방지)
   ingress {
-    description     = "K3s API from monitoring node and internal VPC (Agent)"
+    description     = "K3s API from monitoring node"
     from_port       = 6443
     to_port         = 6443
     protocol        = "tcp"
     security_groups = [aws_security_group.monitoring_sg.id]
-    cidr_blocks     = [aws_vpc.main.cidr_block]
   }
 
   ingress {
@@ -414,13 +464,12 @@ resource "aws_security_group" "k3s_server_sg" {
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
-  # Flannel VXLAN 허용 (VPC 내부 통신)
   ingress {
-    description = "Flannel VXLAN from internal VPC"
+    description = "Flannel VXLAN self"
     from_port   = 8472
     to_port     = 8472
     protocol    = "udp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    self        = true
   }
 
   ingress {
@@ -441,10 +490,10 @@ resource "aws_security_group" "k3s_server_sg" {
   }
 
   ingress {
-    description     = "ICMP from VPC for testing"
-    from_port       = -1
-    to_port         = -1
-    protocol        = "icmp"
+    description = "ICMP from VPC for testing"
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
@@ -462,7 +511,7 @@ resource "aws_security_group" "k3s_server_sg" {
 }
 
 # ==========================================
-# 5. K3s Worker SG 
+# 5. K3s Worker SG
 # ==========================================
 resource "aws_security_group" "k3s_agent_sg" {
   name        = "aiops-k3s-agent-sg"
@@ -485,13 +534,12 @@ resource "aws_security_group" "k3s_agent_sg" {
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
-  # Flannel VXLAN 허용 (VPC 내부 통신)
   ingress {
-    description = "Flannel VXLAN from internal VPC"
+    description = "Flannel VXLAN self"
     from_port   = 8472
     to_port     = 8472
     protocol    = "udp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    self        = true
   }
 
   ingress {
@@ -512,10 +560,10 @@ resource "aws_security_group" "k3s_agent_sg" {
   }
 
   ingress {
-    description     = "ICMP from VPC for testing"
-    from_port       = -1
-    to_port         = -1
-    protocol        = "icmp"
+    description = "ICMP from VPC for testing"
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
@@ -532,6 +580,9 @@ resource "aws_security_group" "k3s_agent_sg" {
   }
 }
 
+
+
+
 # ==================================================
 # --------------------------------------------------
 # 3. 로드 밸런스 (ALB)
@@ -547,7 +598,7 @@ resource "aws_lb" "aiops_alb" {
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.alb_sg.id]
   subnets                    = [aws_subnet.public_a.id, aws_subnet.public_b.id]
-  enable_deletion_protection = false
+  enable_deletion_protection = false # terraform destroy 하기 위해 false로 설정
 
   tags = {
     Name      = "aiops-alb"
@@ -567,7 +618,7 @@ resource "aws_lb_target_group" "aiops_tg" {
 
   health_check {
     interval            = 30
-    path                = "/healthz"
+    path                = "/healthz" # ArgoCD 전용 건강 검진 경로
     port                = "30080"
     protocol            = "HTTP"
     timeout             = 5
@@ -646,7 +697,6 @@ resource "aws_lb_target_group_attachment" "frontend_attachment" {
   port             = 30081
 }
 
-
 # ==================================================
 # 4. 데이터 베이스 (RDS - MySQL)
 # ==================================================
@@ -659,6 +709,7 @@ resource "aws_security_group" "rds_sg" {
   description = "Security group for AIOps RDS MySQL"
   vpc_id      = aws_vpc.main.id
 
+  # K3s Master로부터의 접속 허용
   ingress {
     description     = "Allow MySQL traffic from K3s master"
     from_port       = 3306
@@ -667,6 +718,7 @@ resource "aws_security_group" "rds_sg" {
     security_groups = [aws_security_group.k3s_server_sg.id]
   }
 
+  # K3s Worker로부터의 접속 허용
   ingress {
     description     = "Allow MySQL traffic from K3s worker"
     from_port       = 3306
@@ -706,7 +758,7 @@ resource "aws_db_instance" "aiops_rds" {
   identifier = "aiops-mysql-db"
 
   engine         = "mysql"
-  engine_version = "8.0"      
+  engine_version = "8.0"      # MySQL 8.0 시리즈 사용
   port           = 3306
 
   instance_class    = "db.t3.micro"
@@ -733,6 +785,7 @@ resource "aws_db_instance" "aiops_rds" {
 # ==========================================
 # 4.4 Internal DNS Record (Route53)
 # ==========================================
+# 기존에 생성된 aws_route53_zone.private_internal이 있다면 중복 선언하지 않아도 됩니다.
 resource "aws_route53_record" "rds_cname" {
   zone_id = aws_route53_zone.private_internal.zone_id
   name    = "rds.${var.private_dns_zone_name}"
@@ -747,6 +800,7 @@ resource "aws_route53_record" "rds_cname" {
 # --------------------------------------------------
 # ==================================================
 
+
 # ==========================================
 # NAT Instance
 # ==========================================
@@ -755,7 +809,7 @@ resource "aws_instance" "nat" {
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public_a.id
   vpc_security_group_ids      = [aws_security_group.nat_sg.id]
-  iam_instance_profile        = aws_iam_instance_profile.ssm_node_profile.name
+  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
   associate_public_ip_address = true
   source_dest_check           = false
 
@@ -810,9 +864,10 @@ resource "aws_instance" "monitoring_server" {
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public_a.id
   vpc_security_group_ids      = [aws_security_group.monitoring_sg.id]
-  iam_instance_profile        = aws_iam_instance_profile.ssm_monitoring_profile.name
+  iam_instance_profile = aws_iam_instance_profile.ssm_monitoring_profile.name
   associate_public_ip_address = true
 
+  # 위에서 만든 압축 monitoring_config를 가져와서 넣어준다. 
   user_data_base64 = data.cloudinit_config.monitoring_config.rendered
   user_data_replace_on_change = true
   
@@ -830,11 +885,11 @@ resource "aws_instance" "k3s_server" {
   instance_type          = "m7i-flex.large"
   subnet_id              = aws_subnet.private_a.id
   vpc_security_group_ids = [aws_security_group.k3s_server_sg.id]
-  iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
+  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
 
   root_block_device {
-    volume_size           = 30 
-    volume_type           = "gp3"
+    volume_size = 30  # 기본 8GB에서 30GB로 증설
+    volume_type = "gp3" # 최신 고성능 범용 스토리지
     delete_on_termination = true
   }
 
@@ -860,13 +915,14 @@ resource "aws_instance" "k3s_agent" {
   instance_type          = "c7i-flex.large"
   subnet_id              = aws_subnet.private_b.id
   vpc_security_group_ids = [aws_security_group.k3s_agent_sg.id]
-  iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
+  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
 
   root_block_device {
-    volume_size           = 30 
-    volume_type           = "gp3" 
+    volume_size = 30  # 기본 8GB에서 30GB로 증설
+    volume_type = "gp3" # 최신 고성능 범용 스토리지
     delete_on_termination = true
   }
+
 
   user_data = templatefile("${path.module}/templates/k3s_agent.sh.tpl", {
     tailscale_auth_key = var.tailscale_auth_key
@@ -879,3 +935,4 @@ resource "aws_instance" "k3s_agent" {
     Role = "K3s_Agent"
   }
 }
+

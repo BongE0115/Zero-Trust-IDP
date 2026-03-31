@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: worker-consumer
-          image: 'ghcr.io/bonge0115/worker-consumer:07149dd' # 이미지 수정
+          image: 'ghcr.io/bonge0115/worker-consumer:' # 이미지 수정
           imagePullPolicy: IfNotPresent
           env:
             - name: KAFKA_BOOTSTRAP
@@ -33,7 +33,7 @@ spec:
             - name: DEPLOYMENT_NAME
               value: worker-consumer
             - name: IMAGE_REF
-              value: 'ghcr.io/bonge0115/worker-consumer:07149dd' # 이미지 수정 
+              value: 'ghcr.io/bonge0115/worker-consumer:' # 이미지 수정 
             - name: CONFIG_VERSION
               value: v1
             - name: DEPENDENCY_PROFILE
@@ -41,7 +41,7 @@ spec:
             - name: DB_MODE
               value: mongo
             - name: DB_HOST
-              value: mongodb-temp.forensic-sandbox.svc.cluster.local
+              value: mongodb-temp.forensic-sandbox.svc.cluster.local # DB host main.tf의 몽고 db로 수정해야 됨.
             - name: CACHE_MODE
               value: prod
             - name: CACHE_HOST

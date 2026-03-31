@@ -26,19 +26,6 @@ spec:
       labels:
         app: kafka
     spec:
-      # [추가] Master 노드로 배포 위치 고정
-      nodeSelector:
-        node-role.kubernetes.io/master: "true"
-      
-      # [추가] Master 노드의 Taint(접근 제한) 허용
-      tolerations:
-        - key: "node-role.kubernetes.io/master"
-          operator: "Exists"
-          effect: "NoSchedule"
-        - key: "node-role.kubernetes.io/control-plane"
-          operator: "Exists"
-          effect: "NoSchedule"
-
       containers:
         - name: kafka
           image: bitnamilegacy/kafka:3.7

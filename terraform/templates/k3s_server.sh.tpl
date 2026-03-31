@@ -23,7 +23,7 @@ fi
 
 apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-  curl nfs-common ca-certificates apt-transport-https jq
+  curl nfs-common ca-certificates apt-transport-https jq awscli
 
 # ---------------------------------------------------------
 # 2. SSM Agent 보장
@@ -163,3 +163,33 @@ echo "ArgoCD 서버를 ALB용 Insecure 모드로 전환 중..."
 # 서버가 다시 뜰 때까지 대기
 echo "ArgoCD 서버 재시작 대기 중..."
 /usr/local/bin/kubectl rollout status deployment argocd-server -n argocd --timeout=60s
+
+# ---------------------------------------------------------
+# 10. GitHub dispatch token secret bootstrap
+# ---------------------------------------------------------
+echo "[INFO] ensuring kafka-poc namespace exists"
+kubectl get namespace kafka-poc >/dev/null 2>&1 || kubectl create namespace kafka-poc
+
+echo "[INFO] reading GitHub dispatch token from SSM"
+GITHUB_DISPATCH_TOKEN="$(aws ssm get-parameter \
+  --name "/zero-trust-idp/github-dispatch-token" \
+  --with-decryption \
+  --query "Parameter.Value" \
+  --output text \
+  --region ap-northeast-2)"
+
+if [ -z "$${GITHUB_DISPATCH_TOKEN}" ] || [ "$${GITHUB_DISPATCH_TOKEN}" = "None" ]; then
+  echo "[ERROR] failed to read github dispatch token from SSM"
+  exit 1
+fi
+
+echo "[INFO] applying github-dispatch-secret"
+kubectl -n kafka-poc create secret generic github-dispatch-secret \
+  --from-literal=token="$${GITHUB_DISPATCH_TOKEN}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "[INFO] github-dispatch-secret applied successfully"
+
+
+
+echo "[INFO] k3s server bootstrap completed."
