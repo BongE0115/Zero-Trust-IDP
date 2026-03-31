@@ -1,37 +1,14 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: forensic-sandbox-egress-restricted
-  namespace: forensic-sandbox
+  name: sandbox-defense-in-depth
+  namespace: forensic-sandbox  
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  podSelector: {}
+  podSelector:
+    matchLabels:
+      app: forensic-sandbox-app
   policyTypes:
-    - Egress
+  - Egress
   egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
-
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kafka-poc
-      ports:
-        - protocol: TCP
-          port: 9092
-
-    - to:
-        - podSelector:
-            matchLabels:
-              app: mongodb-temp
-      ports:
-        - protocol: TCP
-          port: 27017

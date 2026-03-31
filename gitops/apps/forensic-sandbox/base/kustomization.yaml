@@ -4,10 +4,10 @@ kind: Kustomization
 namespace: forensic-sandbox
 
 resources:
-  - aws-rds-host.yaml
   - network-policy.yaml
   - peer-auth.yaml
   - waypoint.yaml
   - istio-rules.yaml
   - current-case.yaml
   - sandbox-app-sa.yaml
+ 
