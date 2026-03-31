@@ -69,16 +69,73 @@ resource "local_file" "local_node_setup_script" {
         echo "⚠️  GitOps 경로를 찾을 수 없어 배포를 건너뜁니다: $$GITOPS_PATH"
     fi
 
+    # =====================================================================
+    # 🚀 [추가된 자동화 구간] 6/6: ArgoCD CLI 설치 및 로컬 클러스터 자동 등록
+    # =====================================================================
+    echo "[6/6] 🤖 ArgoCD 로컬 클러스터 자동 등록 (GitOps 자동화)"
+
+    # 1. ArgoCD CLI 설치 (로컬 PC에 없는 경우)
+    if ! command -v argocd &> /dev/null; then
+        echo "⬇️ ArgoCD CLI 다운로드 중..."
+        curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+        rm -f argocd-linux-amd64
+    fi
+
+    # 2. 로컬 Kubeconfig 파일 생성 (Tailscale IP 적용)
+    LOCAL_KUBECONFIG="$HOME/k3s-tailscale.yaml"
+    sudo cat /etc/rancher/k3s/k3s.yaml | sed "s/127.0.0.1/$LOCAL_TS_IP/g" > $LOCAL_KUBECONFIG
+    sudo chmod 644 $LOCAL_KUBECONFIG
+
+    # 3. 마스터 노드에서 ArgoCD 비밀번호 안전하게 추출 (AWS SSM 활용)
+    echo "🔐 마스터 노드에서 ArgoCD 비밀번호를 추출합니다..."
+    MASTER_INSTANCE_ID="${aws_instance.k3s_server.id}"
+    AWS_REGION="ap-northeast-2"
+
+    ARGOCD_PW=""
+    for i in {1..40}; do
+        # SSM을 통해 마스터 노드 내부의 ArgoCD 초기 비밀번호 해독 명령어 전송
+        CMD_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$MASTER_INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters commands='["sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath=\"{.data.password}\" | base64 -d"]' \
+            --query 'Command.CommandId' --output text 2>/dev/null || true)
+        
+        if [ -n "$CMD_ID" ] && [ "$CMD_ID" != "None" ]; then
+            sleep 10
+            ARGOCD_PW=$(aws ssm get-command-invocation \
+                --region "$AWS_REGION" \
+                --command-id "$CMD_ID" \
+                --instance-id "$MASTER_INSTANCE_ID" \
+                --query 'StandardOutputContent' --output text 2>/dev/null || true)
+            
+            if [ -n "$ARGOCD_PW" ] && [ "$ARGOCD_PW" != "None" ] && [ "$ARGOCD_PW" != "" ]; then
+                echo "✅ 비밀번호 추출 완료!"
+                break
+            fi
+        fi
+        echo "⏳ ArgoCD 서버가 준비될 때까지 대기 중... ($i/40)"
+        sleep 15
+    done
+
+    # 4. ArgoCD 자동 로그인 및 클러스터 등록
+    ALB_DNS="${aws_lb.aiops_alb.dns_name}"
+    
+    echo "🌐 ArgoCD 서버에 로그인 중..."
+    # 이전에 터미널이 뻗었던 현상을 방지하기 위해 --grpc-web 옵션 적용
+    argocd login $ALB_DNS:80 --username admin --password "$ARGOCD_PW" --plaintext --grpc-web
+
+    echo "🔗 로컬 클러스터(boutique-local-cluster)를 연동합니다..."
+    argocd cluster add default --name boutique-local-cluster --kubeconfig $LOCAL_KUBECONFIG --yes
+
     echo "=================================================="
-    echo "🎉 로컬 환경 세팅 완료!"
+    echo "🎉 로컬 환경 세팅 및 ArgoCD 자동 연동 완벽 종료!"
     echo "=================================================="
-    echo "🚨 [ArgoCD 등록용 Kubeconfig] 🚨"
-    echo "--------------------------------------------------"
-    # 127.0.0.1을 실제 접속 가능한 Tailscale IP로 치환하여 출력
     sudo cat /etc/rancher/k3s/k3s.yaml | sed "s/127.0.0.1/$LOCAL_TS_IP/g"
-    echo "--------------------------------------------------"
   EOT
 }
+
 
 # [자동화 옵션] 스크립트 파일이 생성되자마자 바로 실행합니다.
 resource "null_resource" "auto_run_setup" {
