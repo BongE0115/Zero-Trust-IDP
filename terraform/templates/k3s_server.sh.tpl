@@ -45,12 +45,21 @@ if [ -n "$TAILSCALE_AUTH_KEY" ]; then
 fi
 
 # ---------------------------------------------------------
-# 4. K3s Server 설치 및 readiness 대기
+# 4. K3s Server 설치 (방화벽 및 TLS SAN 자동 등록)
 # ---------------------------------------------------------
+# Worker 노드와 통신할 수 있도록 내부 방화벽 개방
+ufw allow 6443/tcp || true
+ufw allow in on tailscale0 || true
+
+# 현재 마스터 노드의 Private IP와 Tailscale IP 추출
+PRIVATE_IP=$(hostname -I | awk '{print $1}')
+TS_IP=$(tailscale ip -4 || true)
+
+# 추출한 IP를 --tls-san 옵션으로 넣어서 K3s 설치 (인증서 에러 방지)
 if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
   curl -sfL https://get.k3s.io | \
     INSTALL_K3S_VERSION="$K3S_VERSION" \
-    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik" \
+    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --tls-san $PRIVATE_IP --tls-san $TS_IP" \
     K3S_TOKEN="$K3S_TOKEN" sh -
 fi
 
