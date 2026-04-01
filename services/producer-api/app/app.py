@@ -19,7 +19,7 @@ TOPIC = os.getenv("KAFKA_TOPIC", "orders")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_OWNER = os.getenv("GITHUB_OWNER", "BongE0115")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "Zero-Trust-IDP")
-GITHUB_REF = os.getenv("GITHUB_REF", "jy")
+GITHUB_REF = os.getenv("GITHUB_REF", "test/chatops") # 얘를 나중에 진짜 branch 명에 맞게 바꿔야 함.
 ACTIVATE_SANDBOX_WORKFLOW_FILE = os.getenv("ACTIVATE_SANDBOX_WORKFLOW_FILE", "activate-sandbox.yaml")
 CREATE_CASE_BRANCH_WORKFLOW_FILE = os.getenv("CREATE_CASE_BRANCH_WORKFLOW_FILE", "create-case-branch.yaml")
 
