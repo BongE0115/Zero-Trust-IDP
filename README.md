@@ -18,8 +18,6 @@ docker-compose up -d`
 
 - **동작 원리:** Kafka라는 거대한 메시지 큐 시스템이 `9092` 포트를 열고 대기합니다. 앞으로 모든 터미널(서버)들은 서로 직접 통신하지 않고, 오직 이 Kafka에 메시지를 던지고(Produce) 가져가는(Consume) 방식으로만 소통합니다.
     
-    ![1.png](attachment:327b5e5b-ee07-4e40-a218-8795fedcb501:1.png)
-    
 
 ---
 
@@ -39,8 +37,6 @@ python app/consumer.py`
     1. 켜지자마자 Kafka의 `orders`라는 우체통(토픽)을 계속 쳐다보고 있습니다.
     2. 주문이 들어오면 처리를 시도하다가, `should_fail=True`라는 값을 보면 고의로 **`ValueError`*를 발생시킵니다.
     3. 에러가 난 주문 데이터를 버리지 않고, Kafka의 **`orders-dlq` (Dead Letter Queue, 에러 보관함)** 이라는 격리된 우체통으로 던져버립니다.
-        
-        ![2.png](attachment:fe377e69-e1c3-49b8-8fde-a40808e7f0ab:2.png)
         
 
 ---
@@ -66,11 +62,8 @@ python app/handler.py`
     - 에러 데이터가 들어오면, 에러 종류와 내용을 분석해서 예쁜 Slack Block Kit (UI 카드) 형태로 조립합니다.
     - 이때 훗날 샌드박스를 만들 때 필요한 설계도(Payload)를 압축(zlib)하고 문자(Base64)로 변환해서 **[Create Sandbox]** 버튼 속에 몰래 숨겨 넣습니다.
     - 조립이 완료되면 슬랙 API를 호출해 사용자님의 채널로 카드를 쏩니다.
-
-![5.png](attachment:e7dd50e6-2f96-448e-9347-0ffb9c7acc18:5.png)
-
-![6.png](attachment:d9caa405-27fb-4f75-a212-f7ca90d613dd:6.png)
-
+ 
+  
 ---
 
 ### **🖥️ 터미널 4: Producer API (지휘 통제실 웹 서버 / GitHub 격발기)**
@@ -92,11 +85,6 @@ uvicorn app.app:app --host 0.0.0.0 --port 8081`
     - `http://localhost:8081` 로 접속하면 POC UI 화면(HTML)을 띄워줍니다.
     - 화면에서 **[실패 요청 보내기]**를 누르면, 그 데이터를 Kafka의 `orders` 토픽으로 던집니다. (이게 터미널 2번으로 흘러가는 시작점입니다.)
     - `POST /slack/interactive` 라는 특별한 뒷문을 열어두고 대기합니다. 이 뒷문은 슬랙 버튼 신호가 들어오면 압축된 데이터를 풀고 깃허브로 `workflow_dispatch` API를 쏘는 역할을 합니다.
-        
-        ![7.png](attachment:ee3de775-9fa5-4ae3-8f1a-e816d06c46f5:7.png)
-        
-        ![8.png](attachment:813b0458-85fb-4291-bc8f-99c25b43b9f9:8.png)
-        
 
 ---
 
@@ -110,8 +98,6 @@ Bash
 ngrok http 8081`
 
 - **동작 원리:** `https://어쩌구저쩌구.ngrok-free.dev` 라는 공인 URL을 하나 만들어줍니다. 이 주소를 슬랙 설정(Interactivity Request URL)에 등록해 두었기 때문에, 슬랙에서 버튼을 누르면 이 주소를 타고 내 노트북의 `localhost:8081/slack/interactive` 로 정확히 배달됩니다.
-    
-    ![4.png](attachment:1833924f-0813-4138-ba35-ba637201415a:4.png)
     
 
 ---
