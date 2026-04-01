@@ -1,10 +1,9 @@
-# 트리거 2
-from kafka import KafkaConsumer, KafkaProducer
+from kafka import KafkaProducer, KafkaConsumer
+from datetime import datetime, timezone
+import hashlib
 import json
 import os
 import time
-import hashlib
-from datetime import datetime, timezone
 from typing import Any, Dict
 
 
@@ -15,30 +14,26 @@ def getenv(name: str, default: str = "") -> str:
 KAFKA_BOOTSTRAP = getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092")
 SOURCE_TOPIC = getenv("SOURCE_TOPIC", "orders")
 DLQ_TOPIC = getenv("DLQ_TOPIC", "orders-dlq")
-GROUP_ID = getenv("GROUP_ID", "orders-consumer-prod")
-
+GROUP_ID = getenv("GROUP_ID", "worker-consumer")
 SERVICE_NAME = getenv("SERVICE_NAME", "worker-consumer")
 NAMESPACE = getenv("NAMESPACE", "kafka-poc")
 DEPLOYMENT_NAME = getenv("DEPLOYMENT_NAME", "worker-consumer")
-
-IMAGE_REF = getenv("IMAGE_REF", "ghcr.io/bonge0115/worker-consumer:unset")
+IMAGE_REF = getenv("IMAGE_REF", "unset")
 CONFIG_VERSION = getenv("CONFIG_VERSION", "v1")
-DEPENDENCY_PROFILE = getenv("DEPENDENCY_PROFILE", "prod")
+DEPENDENCY_PROFILE = getenv("DEPENDENCY_PROFILE", "default")
+FORCE_FAIL_FIELD = getenv("FORCE_FAIL_FIELD", "should_fail")
 
-DB_MODE = getenv("DB_MODE", "mongo")
+ENABLE_DLQ_PUBLISH = getenv("ENABLE_DLQ_PUBLISH", "true").lower() == "true"
+NORMAL_FIXTURE_PATH = getenv("NORMAL_FIXTURE_PATH", "")
+DB_MODE = getenv("DB_MODE", "mysql")
 DB_HOST = getenv("DB_HOST", "")
 CACHE_MODE = getenv("CACHE_MODE", "disabled")
 CACHE_HOST = getenv("CACHE_HOST", "")
 EXTERNAL_API_MODE = getenv("EXTERNAL_API_MODE", "disabled")
 EXTERNAL_API_BASE_URL = getenv("EXTERNAL_API_BASE_URL", "")
 
-FORCE_FAIL_FIELD = getenv("FORCE_FAIL_FIELD", "should_fail")
-ENABLE_DLQ_PUBLISH = getenv("ENABLE_DLQ_PUBLISH", "true").lower() == "true"
-
-NORMAL_FIXTURE_PATH = getenv("NORMAL_FIXTURE_PATH", "")
-
+RUN_MODE = getenv("RUN_MODE", "production")
 CASE_ID = getenv("CASE_ID", "")
-RUN_MODE = getenv("RUN_MODE", "prod")
 RESULT_TOPIC = getenv("RESULT_TOPIC", "")
 EMIT_RESULT_EVENT = getenv("EMIT_RESULT_EVENT", "false").lower() == "true"
 REPLAY_PAYLOAD_HASH = getenv("REPLAY_PAYLOAD_HASH", "")
@@ -47,6 +42,18 @@ READY_FILE_PATH = getenv("READY_FILE_PATH", "")
 ISOLATION_MODE = getenv("ISOLATION_MODE", "disabled")
 ALLOWED_REPLAY_TOPIC = getenv("ALLOWED_REPLAY_TOPIC", "")
 ALLOWED_RESULT_TOPIC = getenv("ALLOWED_RESULT_TOPIC", "")
+
+VALIDATION_MODE = getenv("VALIDATION_MODE", "reproduce")
+VALIDATION_RUN_ID = getenv("VALIDATION_RUN_ID", "")
+REVALIDATION_GENERATION = int(getenv("REVALIDATION_GENERATION", "0"))
+EXPECTED_FAILURE_STATUS = getenv(
+    "EXPECTED_FAILURE_STATUS",
+    "failed" if VALIDATION_MODE == "reproduce" else "success",
+)
+EXPECTED_NORMAL_STATUS = getenv("EXPECTED_NORMAL_STATUS", "success")
+FAILURE_ERROR_TYPE = getenv("FAILURE_ERROR_TYPE", "")
+FAILURE_ERROR_MESSAGE = getenv("FAILURE_ERROR_MESSAGE", "")
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -202,6 +209,11 @@ def build_result_event(
         "deployment": DEPLOYMENT_NAME,
         "image_ref": IMAGE_REF,
         "processed_at": utc_now_iso(),
+        "validation_mode": VALIDATION_MODE,
+        "validation_run_id": VALIDATION_RUN_ID,
+        "revalidation_generation": REVALIDATION_GENERATION,
+        "expected_failure_status": EXPECTED_FAILURE_STATUS,
+        "expected_normal_status": EXPECTED_NORMAL_STATUS,
     }
 
     if error is None:
@@ -230,8 +242,7 @@ def write_ready_file():
     if RUN_MODE != "sandbox":
         return
     if not READY_FILE_PATH:
-        print("[WARN] RUN_MODE=sandbox but READY_FILE_PATH is empty")
-        return
+        raise ValueError("RUN_MODE=sandbox requires READY_FILE_PATH")
 
     ready_data = {
         "case_id": CASE_ID,
@@ -242,6 +253,9 @@ def write_ready_file():
         "deployment": DEPLOYMENT_NAME,
         "image_ref": IMAGE_REF,
         "ready_at": utc_now_iso(),
+        "validation_mode": VALIDATION_MODE,
+        "validation_run_id": VALIDATION_RUN_ID,
+        "revalidation_generation": REVALIDATION_GENERATION,
     }
 
     os.makedirs(os.path.dirname(READY_FILE_PATH), exist_ok=True)
@@ -250,13 +264,13 @@ def write_ready_file():
 
     print(f"[READY] ready file written path={READY_FILE_PATH} data={json.dumps(ready_data, ensure_ascii=False)}")
 
+
 def validate_sandbox_isolation():
     if RUN_MODE != "sandbox":
         return
 
     if ISOLATION_MODE != "sandbox_strict":
-        print(f"[WARN] sandbox run_mode but isolation mode is not strict: {ISOLATION_MODE}")
-        return
+        raise ValueError(f"sandbox requires sandbox_strict isolation but got: {ISOLATION_MODE}")
 
     if not CASE_ID:
         raise ValueError("sandbox isolation requires CASE_ID")
@@ -285,6 +299,7 @@ def validate_sandbox_isolation():
         f"case_id={CASE_ID} replay_topic={ALLOWED_REPLAY_TOPIC} result_topic={ALLOWED_RESULT_TOPIC}"
     )
 
+
 producer = get_producer()
 consumer = get_consumer()
 validate_sandbox_isolation()
@@ -295,7 +310,9 @@ print(
     f"group={GROUP_ID}, image_ref={IMAGE_REF}, enable_dlq_publish={ENABLE_DLQ_PUBLISH}, "
     f"run_mode={RUN_MODE}, emit_result_event={EMIT_RESULT_EVENT}, result_topic={RESULT_TOPIC}, "
     f"ready_file_path={READY_FILE_PATH}, isolation_mode={ISOLATION_MODE}, "
-    f"allowed_replay_topic={ALLOWED_REPLAY_TOPIC}, allowed_result_topic={ALLOWED_RESULT_TOPIC}"
+    f"allowed_replay_topic={ALLOWED_REPLAY_TOPIC}, allowed_result_topic={ALLOWED_RESULT_TOPIC}, "
+    f"validation_mode={VALIDATION_MODE}, validation_run_id={VALIDATION_RUN_ID}, "
+    f"revalidation_generation={REVALIDATION_GENERATION}"
 )
 
 for message in consumer:

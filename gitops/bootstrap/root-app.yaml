@@ -7,10 +7,11 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
-    targetRevision: jy # 브랜치에 맞춰 수정해야 됨. 
+    targetRevision: jy
     path: gitops/bootstrap/children
     directory:
       recurse: true
+      include: "*.yaml"
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: argocd

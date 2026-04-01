@@ -1,0 +1,143 @@
+name: cleanup-case-sandbox
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Unique case identifier"
+        required: true
+        type: string
+      note:
+        description: "Optional note"
+        required: false
+        default: "cleanup completed by workflow"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup-case-sandbox:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          CASE_ID="${{ inputs.case_id }}"
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+      - name: Checkout case branch
+        uses: actions/checkout@v4
+        with:
+          ref: case/${{ inputs.case_id }}
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Validate cleanup eligibility and capture paths
+        id: record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          case_id = "${{ inputs.case_id }}"
+          record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          if not record_path.exists():
+              raise SystemExit(f"Case record not found: {record_path}")
+
+          data = json.loads(record_path.read_text(encoding="utf-8"))
+          flags = data.get("flags", {})
+          metadata = data.get("metadata", {})
+
+          promoted = flags.get("promoted") is True
+          redriven = flags.get("redriven") is True
+          closed_without_redrive = metadata.get("closed_without_redrive") is True
+          cleanup_completed = flags.get("cleanup_completed") is True
+
+          if cleanup_completed:
+              raise SystemExit("cleanup already completed for this case")
+
+          if not promoted:
+              raise SystemExit("cleanup denied: promoted flag is not true")
+
+          if not (redriven or closed_without_redrive):
+              raise SystemExit(
+                  "cleanup denied: require redriven=true or metadata.closed_without_redrive=true"
+              )
+
+          sandbox_manifest_path = data.get("sandbox_manifest_path") or ""
+          revalidation_manifest_path = (
+              metadata.get("revalidation_job_manifest_path")
+              or f"gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-{case_id}.yaml"
+          )
+
+          out = Path("${GITHUB_OUTPUT}")
+          with out.open("a", encoding="utf-8") as f:
+              f.write(f"sandbox_manifest_path={sandbox_manifest_path}\n")
+              f.write(f"revalidation_manifest_path={revalidation_manifest_path}\n")
+          PY
+
+      - name: Remove case manifests if present
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SANDBOX="${{ steps.record.outputs.sandbox_manifest_path }}"
+          REVAL="${{ steps.record.outputs.revalidation_manifest_path }}"
+
+          if [[ -n "$SANDBOX" && -f "$SANDBOX" ]]; then
+            git rm -f "$SANDBOX"
+          else
+            echo "Sandbox manifest already absent or not set"
+          fi
+
+          if [[ -n "$REVAL" && -f "$REVAL" ]]; then
+            git rm -f "$REVAL"
+          else
+            echo "Revalidation manifest already absent or not set"
+          fi
+
+      - name: Update case record as cleanup completed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python scripts/update_case_record.py update \
+            --case-id "${{ inputs.case_id }}" \
+            --status "cleanup_completed" \
+            --flags-json '{"cleanup_completed": true, "resolved": true}' \
+            --metadata-json '{"cleanup_manifest_deleted": true}' \
+            --note "${{ inputs.note }}"
+
+      - name: Commit cleanup changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No cleanup changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): cleanup sandbox for ${{ inputs.case_id }}"
+
+      - name: Push case branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:case/${{ inputs.case_id }}"

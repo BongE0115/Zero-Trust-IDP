@@ -1,6 +1,7 @@
 from kafka import KafkaProducer, KafkaConsumer
 import json
 import os
+import sys
 import time
 from typing import Any, Dict
 
@@ -29,6 +30,21 @@ EXPECTED_FAILURE_ERROR_TYPE = getenv("EXPECTED_FAILURE_ERROR_TYPE", "")
 ISOLATION_MODE = getenv("ISOLATION_MODE", "disabled")
 ALLOWED_REPLAY_TOPIC = getenv("ALLOWED_REPLAY_TOPIC", "")
 ALLOWED_RESULT_TOPIC = getenv("ALLOWED_RESULT_TOPIC", "")
+
+VALIDATION_MODE = getenv("VALIDATION_MODE", "reproduce")
+VALIDATION_RUN_ID = getenv("VALIDATION_RUN_ID", "")
+REVALIDATION_GENERATION = int(getenv("REVALIDATION_GENERATION", "0"))
+LAUNCHER_IMAGE_REF = getenv("IMAGE_REF", "")
+
+EXPECTED_FAILURE_STATUS = getenv(
+    "EXPECTED_FAILURE_STATUS",
+    "failed" if VALIDATION_MODE == "reproduce" else "success",
+)
+EXPECTED_NORMAL_STATUS = getenv("EXPECTED_NORMAL_STATUS", "success")
+
+# verdict 수집용 시간창 확보
+POST_VERDICT_SLEEP_SECONDS = int(getenv("POST_VERDICT_SLEEP_SECONDS", "0"))
+
 
 def load_json_file(path: str) -> Dict[str, Any]:
     if not os.path.exists(path):
@@ -126,16 +142,18 @@ def wait_for_phase_result(result_consumer: KafkaConsumer, phase: str) -> Dict[st
                 continue
             if event.get("phase") != phase:
                 continue
+            if VALIDATION_RUN_ID and event.get("validation_run_id") != VALIDATION_RUN_ID:
+                continue
             return event
 
         time.sleep(1)
 
     raise TimeoutError(f"result timeout phase={phase} wait_seconds={RESULT_WAIT_SECONDS}")
 
+
 def validate_launcher_isolation():
     if ISOLATION_MODE != "sandbox_strict":
-        print(f"[WARN] launcher isolation mode is not strict: {ISOLATION_MODE}")
-        return
+        raise ValueError(f"launcher requires sandbox_strict isolation but got: {ISOLATION_MODE}")
 
     if not CASE_ID:
         raise ValueError("launcher isolation requires CASE_ID")
@@ -209,11 +227,16 @@ def wait_for_consumer_ready():
     )
 
 
-def validate_failure_result(event: Dict[str, Any]):
-    if event.get("status") != "failed":
-        raise ValueError(f"failure replay expected failed but got {event.get('status')}")
+def validate_status(event: Dict[str, Any], expected_status: str, label: str):
+    actual = event.get("status")
+    if actual != expected_status:
+        raise ValueError(f"{label} expected status={expected_status} but got {actual}")
 
-    if EXPECTED_FAILURE_ERROR_TYPE:
+
+def validate_failure_result(event: Dict[str, Any]):
+    validate_status(event, EXPECTED_FAILURE_STATUS, "failure_replay")
+
+    if VALIDATION_MODE == "reproduce" and EXPECTED_FAILURE_ERROR_TYPE:
         actual = event.get("observed_error_type", "")
         if actual != EXPECTED_FAILURE_ERROR_TYPE:
             raise ValueError(
@@ -222,8 +245,29 @@ def validate_failure_result(event: Dict[str, Any]):
 
 
 def validate_normal_result(event: Dict[str, Any]):
-    if event.get("status") != "success":
-        raise ValueError(f"normal validation expected success but got {event.get('status')}")
+    validate_status(event, EXPECTED_NORMAL_STATUS, "normal_validation")
+
+
+def build_verdict_base() -> Dict[str, Any]:
+    return {
+        "case_id": CASE_ID,
+        "validation_mode": VALIDATION_MODE,
+        "validation_run_id": VALIDATION_RUN_ID,
+        "revalidation_generation": REVALIDATION_GENERATION,
+        "launcher_image_ref": LAUNCHER_IMAGE_REF,
+        "failure_replay": {"passed": False, "result": None},
+        "normal_validation": {"enabled": ENABLE_NORMAL_VALIDATION, "passed": False, "result": None},
+        "overall_passed": False,
+    }
+
+
+def post_verdict_sleep():
+    if POST_VERDICT_SLEEP_SECONDS > 0:
+        print(
+            f"[LAUNCHER] sleeping after verdict for collection "
+            f"seconds={POST_VERDICT_SLEEP_SECONDS}"
+        )
+        time.sleep(POST_VERDICT_SLEEP_SECONDS)
 
 
 def main():
@@ -233,10 +277,14 @@ def main():
         f"normal_artifact={NORMAL_ARTIFACT_PATH}, enable_normal_validation={ENABLE_NORMAL_VALIDATION}, "
         f"ready_file_path={READY_FILE_PATH}, ready_wait_seconds={READY_WAIT_SECONDS}, "
         f"isolation_mode={ISOLATION_MODE}, allowed_replay_topic={ALLOWED_REPLAY_TOPIC}, "
-        f"allowed_result_topic={ALLOWED_RESULT_TOPIC}"
+        f"allowed_result_topic={ALLOWED_RESULT_TOPIC}, validation_mode={VALIDATION_MODE}, "
+        f"validation_run_id={VALIDATION_RUN_ID}, revalidation_generation={REVALIDATION_GENERATION}, "
+        f"expected_failure_status={EXPECTED_FAILURE_STATUS}, expected_normal_status={EXPECTED_NORMAL_STATUS}, "
+        f"post_verdict_sleep_seconds={POST_VERDICT_SLEEP_SECONDS}"
     )
+
     validate_launcher_isolation()
-    
+
     print(
         f"[LAUNCHER] waiting for consumer readiness "
         f"path={READY_FILE_PATH} wait_seconds={READY_WAIT_SECONDS}"
@@ -252,67 +300,65 @@ def main():
     producer = get_producer()
     result_consumer = get_result_consumer()
 
-    verdict = {
-        "case_id": CASE_ID,
-        "failure_replay": {"passed": False, "result": None},
-        "normal_validation": {"passed": False, "result": None},
-        "final_status": "running",
-    }
+    verdict = build_verdict_base()
 
-    failure_topic = failure_artifact["target_topic"]
-    failure_payload = failure_artifact.get("payload", {}) or {}
-    if not failure_payload:
-        raise ValueError("failure replay payload is empty")
+    try:
+        publish_payload(
+            producer,
+            failure_artifact["target_topic"],
+            failure_artifact["payload"],
+            label="failure_replay",
+        )
 
-    publish_payload(producer, failure_topic, failure_payload, "failure_replay")
-    failure_result = wait_for_phase_result(result_consumer, "failure_replay")
-    validate_failure_result(failure_result)
-    verdict["failure_replay"] = {"passed": True, "result": failure_result}
+        failure_result = wait_for_phase_result(result_consumer, "failure_replay")
+        validate_failure_result(failure_result)
 
-    if not ENABLE_NORMAL_VALIDATION:
-        verdict["final_status"] = "passed"
+        verdict["failure_replay"]["passed"] = True
+        verdict["failure_replay"]["result"] = failure_result
+
+        if ENABLE_NORMAL_VALIDATION:
+            if BETWEEN_FAILURE_AND_NORMAL_SECONDS > 0:
+                print(f"[LAUNCHER] sleeping before normal validation seconds={BETWEEN_FAILURE_AND_NORMAL_SECONDS}")
+                time.sleep(BETWEEN_FAILURE_AND_NORMAL_SECONDS)
+
+            normal_artifact = load_json_file(NORMAL_ARTIFACT_PATH)
+            validate_artifact_common(normal_artifact, "normal_validation")
+
+            publish_payload(
+                producer,
+                normal_artifact["target_topic"],
+                normal_artifact["payload"],
+                label="normal_validation",
+            )
+
+            normal_result = wait_for_phase_result(result_consumer, "normal_validation")
+            validate_normal_result(normal_result)
+
+            verdict["normal_validation"]["passed"] = True
+            verdict["normal_validation"]["result"] = normal_result
+        else:
+            verdict["normal_validation"]["passed"] = True
+            verdict["normal_validation"]["result"] = {"skipped": True, "reason": "ENABLE_NORMAL_VALIDATION=false"}
+
+        verdict["overall_passed"] = True
         write_verdict(verdict)
-        producer.close()
-        result_consumer.close()
-        print("[LAUNCHER] normal validation disabled, exiting after verified failure replay")
-        return
+        post_verdict_sleep()
+        print(f"[LAUNCHER] validation complete overall_passed=true case_id={CASE_ID}")
 
-    normal_artifact = load_json_file(NORMAL_ARTIFACT_PATH)
-    validate_artifact_common(normal_artifact, "normal_validation")
-
-    if not normal_artifact.get("enabled", False):
-        verdict["final_status"] = "passed"
+    except Exception as e:
+        verdict["overall_passed"] = False
+        verdict["error"] = {
+            "type": e.__class__.__name__,
+            "message": str(e),
+        }
         write_verdict(verdict)
-        producer.close()
-        result_consumer.close()
-        print("[LAUNCHER] normal validation artifact present but disabled, exiting")
-        return
-
-    normal_topic = normal_artifact["target_topic"]
-    normal_payload = normal_artifact.get("payload", {}) or {}
-    if not normal_payload:
-        verdict["final_status"] = "passed"
-        write_verdict(verdict)
-        producer.close()
-        result_consumer.close()
-        print("[LAUNCHER] normal validation enabled but payload empty, skipping")
-        return
-
-    print(f"[LAUNCHER] waiting {BETWEEN_FAILURE_AND_NORMAL_SECONDS}s before normal validation publish")
-    time.sleep(BETWEEN_FAILURE_AND_NORMAL_SECONDS)
-
-    publish_payload(producer, normal_topic, normal_payload, "normal_validation")
-    normal_result = wait_for_phase_result(result_consumer, "normal_validation")
-    validate_normal_result(normal_result)
-    verdict["normal_validation"] = {"passed": True, "result": normal_result}
-
-    verdict["final_status"] = "passed"
-    write_verdict(verdict)
-
-    producer.close()
-    result_consumer.close()
-    print("[LAUNCHER] completed replay orchestration with verdict=passed")
+        post_verdict_sleep()
+        print(f"[LAUNCHER][ERROR] validation failed: {e}")
+        raise
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        sys.exit(1)

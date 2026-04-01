@@ -1,12 +1,12 @@
-name: Build Push and Update GitOps
+name: Build Push and Update GitOps (Production Only)
 
 on:
   push:
     branches:
       - jy
     paths:
-      - 'services/**'
-      - 'forensic-launcher/**'
+      - "services/**"
+      - "forensic-launcher/**"
 
 env:
   REGISTRY: ghcr.io
@@ -115,7 +115,7 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
           yq --version
 
-      - name: Update GitOps manifests with SHA tag
+      - name: Update production GitOps manifests with SHA tag
         run: |
           export SHA_TAG="${SHORT_SHA}"
           echo "SHORT_SHA=${SHORT_SHA}"
@@ -130,7 +130,7 @@ jobs:
           fi
 
           # worker-consumer changed -> 운영 consumer만 갱신
-          # sandbox consumer-app은 여기서 건드리지 않음
+          # case/** 브랜치 candidate 빌드 및 sandbox patch는 build-case-candidate.yaml이 담당
           if [ "${{ needs.detect-changes.outputs.worker_consumer }}" = "true" ]; then
             yq -i '
               .spec.template.spec.containers[0].image =
@@ -151,8 +151,8 @@ jobs:
             ' gitops/apps/kafka-poc/manifests/32-dlq-handler.yaml
           fi
 
-          # forensic-launcher changed -> sandbox launcher만 갱신
-          # sandbox consumer-app은 case activation workflow가 failure image_ref로 patch해야 함
+          # forensic-launcher changed -> sandbox template 기본값만 갱신
+          # 이미 생성된 case-specific manifest는 절대 수정하지 않음
           if [ "${{ needs.detect-changes.outputs.forensic_launcher }}" = "true" ]; then
             yq -i '
               (.spec.template.spec.containers[] | select(.name == "forensic-launcher") | .image) =
@@ -160,7 +160,18 @@ jobs:
             ' gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
           fi
 
-      - name: Commit and push updated GitOps manifests
+      - name: Guardrail - do not touch case manifests or case records
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git diff --name-only | grep -E '^gitops/apps/forensic-sandbox/cases/' >/dev/null 2>&1; then
+            echo "ERROR: production build workflow must not modify case manifests or records"
+            git diff --name-only
+            exit 1
+          fi
+
+      - name: Commit and push updated production GitOps manifests
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -173,5 +184,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore(gitops): update changed images to ${SHORT_SHA}"
+          git commit -m "chore(gitops): update production images to ${SHORT_SHA}"
           git push origin jy

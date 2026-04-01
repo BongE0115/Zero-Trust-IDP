@@ -1,0 +1,189 @@
+name: promote-case-image
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Unique case identifier"
+        required: true
+        type: string
+      production_branch:
+        description: "Production branch to update"
+        required: false
+        default: "jy"
+        type: string
+      deployment_name:
+        description: "Target production deployment name"
+        required: false
+        default: "worker-consumer"
+        type: string
+      container_name:
+        description: "Target production container name"
+        required: false
+        default: "worker-consumer"
+        type: string
+      namespace:
+        description: "Target production namespace"
+        required: false
+        default: "kafka-poc"
+        type: string
+      note:
+        description: "Optional note"
+        required: false
+        default: "verified image promoted by workflow"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  read-case-record:
+    runs-on: ubuntu-latest
+    outputs:
+      verified_image_ref: ${{ steps.record.outputs.verified_image_ref }}
+      branch_name: ${{ steps.record.outputs.branch_name }}
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          CASE_ID="${{ inputs.case_id }}"
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+      - name: Checkout case branch
+        uses: actions/checkout@v4
+        with:
+          ref: case/${{ inputs.case_id }}
+          fetch-depth: 0
+
+      - name: Read verified image from case record
+        id: record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          case_id = "${{ inputs.case_id }}"
+          path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          if not path.exists():
+              raise SystemExit(f"Case record not found: {path}")
+
+          data = json.loads(path.read_text(encoding="utf-8"))
+          flags = data.get("flags", {})
+          verified = data.get("verified_image_ref")
+          branch_name = data.get("branch_name") or f"case/{case_id}"
+
+          if flags.get("revalidation_passed") is not True:
+              raise SystemExit("Case record does not indicate revalidation_passed=true")
+          if not verified:
+              raise SystemExit("verified_image_ref is empty in case record")
+
+          out = Path("${GITHUB_OUTPUT}")
+          with out.open("a", encoding="utf-8") as f:
+              f.write(f"verified_image_ref={verified}\n")
+              f.write(f"branch_name={branch_name}\n")
+          PY
+
+  promote-production-manifest:
+    needs: read-case-record
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout production branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.production_branch }}
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Promote verified image into production manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python scripts/promote_verified_image.py \
+            --verified-image-ref "${{ needs.read-case-record.outputs.verified_image_ref }}" \
+            --manifest-path "gitops/apps/kafka-poc/manifests/21-consumer.yaml" \
+            --deployment-name "${{ inputs.deployment_name }}" \
+            --container-name "${{ inputs.container_name }}" \
+            --namespace "${{ inputs.namespace }}"
+
+      - name: Commit production manifest update
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/kafka-poc/manifests/21-consumer.yaml"
+
+          if git diff --cached --quiet; then
+            echo "No production manifest changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(prod): promote verified image for ${{ inputs.case_id }}"
+
+      - name: Push production branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:${{ inputs.production_branch }}"
+
+  update-case-record:
+    needs:
+      - read-case-record
+      - promote-production-manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout case branch
+        uses: actions/checkout@v4
+        with:
+          ref: case/${{ inputs.case_id }}
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Update case record as promoted
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python scripts/update_case_record.py update \
+            --case-id "${{ inputs.case_id }}" \
+            --status "promoted" \
+            --promoted-image-ref "${{ needs.read-case-record.outputs.verified_image_ref }}" \
+            --flags-json '{"promoted": true}' \
+            --note "${{ inputs.note }}"
+
+      - name: Commit case record update
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No case record changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): mark promoted for ${{ inputs.case_id }}"
+
+      - name: Push case branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:case/${{ inputs.case_id }}"

@@ -1,0 +1,167 @@
+name: revalidate-sandbox
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Unique case identifier"
+        required: true
+        type: string
+      launcher_image_ref:
+        description: "Digest-pinned forensic-launcher image ref"
+        required: true
+        type: string
+      replay_topic:
+        description: "Replay topic for this case"
+        required: true
+        type: string
+      result_topic:
+        description: "Result topic for this case"
+        required: true
+        type: string
+      kafka_bootstrap:
+        description: "Kafka bootstrap address"
+        required: false
+        default: "kafka.kafka-poc.svc.cluster.local:9092"
+        type: string
+      namespace:
+        description: "Namespace for revalidation job"
+        required: false
+        default: "forensic-sandbox"
+        type: string
+      note:
+        description: "Optional note"
+        required: false
+        default: "revalidation requested by workflow"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  revalidate-sandbox:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ inputs.case_id }}"
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+          IMAGE_REF="${{ inputs.launcher_image_ref }}"
+          if [[ ! "$IMAGE_REF" =~ ^[^:@]+(/[^:@]+)*@sha256:[0-9a-f]{64}$ ]]; then
+            echo "launcher_image_ref must be digest-pinned"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: case/${{ inputs.case_id }}
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Read case record
+        id: record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ inputs.case_id }}"
+          RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
+
+          if [[ ! -f "$RECORD_PATH" ]]; then
+            echo "Case record not found: $RECORD_PATH"
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          case_id = "${{ inputs.case_id }}"
+          path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+
+          candidate = data.get("candidate_image_ref")
+          manifest = data.get("sandbox_manifest_path")
+          current_gen = int(data.get("revalidation_generation", 0))
+          flags = data.get("flags", {})
+
+          if not candidate:
+              raise SystemExit("candidate_image_ref is empty in case record")
+          if not manifest:
+              raise SystemExit("sandbox_manifest_path is empty in case record")
+          if flags.get("resolved") is True:
+              raise SystemExit("case is already resolved")
+
+          next_gen = current_gen + 1
+
+          out = Path("${GITHUB_OUTPUT}")
+          with out.open("a", encoding="utf-8") as f:
+              f.write(f"candidate_image_ref={candidate}\n")
+              f.write(f"sandbox_manifest_path={manifest}\n")
+              f.write(f"next_generation={next_gen}\n")
+          PY
+
+      - name: Render revalidation job manifest
+        id: render
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python scripts/render_revalidation_job.py \
+            --case-id "${{ inputs.case_id }}" \
+            --generation "${{ steps.record.outputs.next_generation }}" \
+            --namespace "${{ inputs.namespace }}" \
+            --validation-mode "fix-verify" \
+            --kafka-bootstrap "${{ inputs.kafka_bootstrap }}" \
+            --replay-topic "${{ inputs.replay_topic }}" \
+            --result-topic "${{ inputs.result_topic }}" \
+            --launcher-image-ref "${{ inputs.launcher_image_ref }}" \
+            --update-record \
+            --note "${{ inputs.note }}"
+
+      - name: Commit revalidation manifest and case record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-${{ inputs.case_id }}.yaml"
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): request revalidation for ${{ inputs.case_id }}"
+
+      - name: Push case branch updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:case/${{ inputs.case_id }}"
+
+      - name: Summary
+        shell: bash
+        run: |
+          echo "case_id=${{ inputs.case_id }}"
+          echo "revalidation_generation=${{ steps.record.outputs.next_generation }}"
+          echo "revalidation_manifest=gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-${{ inputs.case_id }}.yaml"
+          echo "next_snapshot_call:"
+          echo "  workflow = snapshot-revalidation-verdict"
+          echo "  case_id  = ${{ inputs.case_id }}"
+          echo "  generation = ${{ steps.record.outputs.next_generation }}"
+          echo "  namespace = ${{ inputs.namespace }}"

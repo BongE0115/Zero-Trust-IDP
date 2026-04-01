@@ -1,10 +1,10 @@
-name: Activate Forensic Sandbox
+name: activate-sandbox
 
 on:
   workflow_dispatch:
     inputs:
       spec_json:
-        description: "Forensic sandbox spec JSON"
+        description: "Sandbox spec JSON"
         required: true
         type: string
       failure_artifact_json:
@@ -19,39 +19,28 @@ on:
 permissions:
   contents: write
 
+env:
+  TEMPLATE_YAML_PATH: gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
+  LAUNCHER_IMAGE_REF: ghcr.io/bonge0115/forensic-launcher:latest
+  SPEC_PATH: /tmp/sandbox-spec/spec.json
+  FAILURE_ARTIFACT_PATH: /tmp/sandbox-spec/failure-artifact.json
+  NORMAL_ARTIFACT_PATH: /tmp/sandbox-spec/normal-artifact.json
+
 jobs:
   activate-sandbox:
     runs-on: ubuntu-latest
-
-    env:
-      WORK_DIR: /tmp/sandbox-spec
-      SPEC_PATH: /tmp/sandbox-spec/spec.json
-      FAILURE_ARTIFACT_PATH: /tmp/sandbox-spec/failure-artifact.json
-      NORMAL_ARTIFACT_PATH: /tmp/sandbox-spec/normal-artifact.json
-      TEMPLATE_YAML_PATH: gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
-      LAUNCHER_IMAGE_REF: ghcr.io/bonge0115/forensic-launcher:latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          ref: jy
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyyaml
-
-      - name: Write spec and artifacts
+      - name: Prepare sandbox inputs
         shell: bash
         run: |
-          mkdir -p "${WORK_DIR}"
-
+          mkdir -p /tmp/sandbox-spec
           cat > "${SPEC_PATH}" <<'EOF'
           ${{ inputs.spec_json }}
           EOF
@@ -64,10 +53,7 @@ jobs:
           ${{ inputs.normal_artifact_json }}
           EOF
 
-          echo "[OK] spec and artifacts written"
-          ls -lah "${WORK_DIR}"
-
-      - name: Validate input JSON shape
+      - name: Validate input JSON files
         shell: bash
         run: |
           python - <<'PY'
@@ -78,12 +64,8 @@ jobs:
           failure = json.loads(Path("/tmp/sandbox-spec/failure-artifact.json").read_text(encoding="utf-8"))
           normal = json.loads(Path("/tmp/sandbox-spec/normal-artifact.json").read_text(encoding="utf-8"))
 
-          required_spec_top = ["metadata", "sandbox", "failure"]
-          for key in required_spec_top:
-              if key not in spec:
-                  raise ValueError(f"spec missing key: {key}")
-
           case_id = spec["metadata"]["case_id"]
+
           if failure.get("case_id") != case_id:
               raise ValueError(
                   f"failure artifact case_id mismatch: expected={case_id}, actual={failure.get('case_id')}"
@@ -148,6 +130,49 @@ jobs:
             --template-yaml "${TEMPLATE_YAML_PATH}" \
             --output-yaml "${{ steps.case_path.outputs.output_yaml }}"
 
+      - name: Initialize case record as sandbox_created
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ steps.case_path.outputs.case_id }}"
+          SANDBOX_MANIFEST="${{ steps.case_path.outputs.output_yaml }}"
+
+          SOURCE_SERVICE="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          spec = json.loads(Path("/tmp/sandbox-spec/spec.json").read_text(encoding="utf-8"))
+          print(spec["metadata"]["source_service"])
+          PY
+          )"
+
+          SOURCE_IMAGE_REF="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          spec = json.loads(Path("/tmp/sandbox-spec/spec.json").read_text(encoding="utf-8"))
+          print(spec["sandbox"]["consumer_image_ref"])
+          PY
+          )"
+
+          if [[ -f "gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json" ]]; then
+            echo "Case record already exists, updating sandbox_created state"
+            python scripts/update_case_record.py update \
+              --case-id "${CASE_ID}" \
+              --status "sandbox_created" \
+              --service "${SOURCE_SERVICE}" \
+              --source-image-ref "${SOURCE_IMAGE_REF}" \
+              --sandbox-manifest-path "${SANDBOX_MANIFEST}" \
+              --note "sandbox manifest activated"
+          else
+            python scripts/update_case_record.py create \
+              --case-id "${CASE_ID}" \
+              --service "${SOURCE_SERVICE}" \
+              --status "sandbox_created" \
+              --source-image-ref "${SOURCE_IMAGE_REF}" \
+              --sandbox-manifest-path "${SANDBOX_MANIFEST}" \
+              --note "sandbox manifest activated"
+          fi
+
       - name: Show generated manifest
         shell: bash
         run: |
@@ -158,15 +183,17 @@ jobs:
       - name: Show git diff
         shell: bash
         run: |
-          git diff -- "${{ steps.case_path.outputs.output_yaml }}" || true
+          git diff -- "${{ steps.case_path.outputs.output_yaml }}" \
+                     "gitops/apps/forensic-sandbox/cases/records/${{ steps.case_path.outputs.case_id }}.json" || true
 
-      - name: Commit generated case manifest
+      - name: Commit generated case manifest and record
         shell: bash
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
 
           git add "${{ steps.case_path.outputs.output_yaml }}"
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ steps.case_path.outputs.case_id }}.json"
 
           git commit -m "forensic sandbox case: ${{ steps.case_path.outputs.case_id }}" || echo "No changes to commit"
 

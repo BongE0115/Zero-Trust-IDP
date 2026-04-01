@@ -1,278 +1,21 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Service
 metadata:
-  name: forensic-sandbox-app
+  name: mongodb-temp
   namespace: forensic-sandbox
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
 spec:
-  replicas: 0
   selector:
-    matchLabels:
-      app: forensic-sandbox-app
-  template:
-    metadata:
-      labels:
-        app: forensic-sandbox-app
-    spec:
-      serviceAccountName: sandbox-app-sa
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 3000
-        fsGroup: 2000
-      volumes:
-        - name: forensic-artifacts
-          emptyDir: {}
-      initContainers:
-        - name: topic-init
-          image: "bitnamilegacy/kafka:3.7"
-          imagePullPolicy: IfNotPresent
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -eu
-
-              echo "[TOPIC_INIT] bootstrap=${KAFKA_BOOTSTRAP}"
-              echo "[TOPIC_INIT] replay_topic=${REPLAY_TOPIC}"
-              echo "[TOPIC_INIT] result_topic=${RESULT_TOPIC}"
-
-              kafka-topics.sh --bootstrap-server "${KAFKA_BOOTSTRAP}" \
-                --create --if-not-exists \
-                --topic "${REPLAY_TOPIC}" \
-                --partitions "${TOPIC_PARTITIONS}" \
-                --replication-factor "${TOPIC_REPLICATION_FACTOR}"
-
-              kafka-topics.sh --bootstrap-server "${KAFKA_BOOTSTRAP}" \
-                --create --if-not-exists \
-                --topic "${RESULT_TOPIC}" \
-                --partitions "${TOPIC_PARTITIONS}" \
-                --replication-factor "${TOPIC_REPLICATION_FACTOR}"
-
-              echo "[TOPIC_INIT] topic creation finished"
-          env:
-            - name: KAFKA_BOOTSTRAP
-              value: "kafka.kafka-poc.svc.cluster.local:9092"
-            - name: REPLAY_TOPIC
-              value: "orders-replay-placeholder"
-            - name: RESULT_TOPIC
-              value: "orders-result-placeholder"
-            - name: TOPIC_PARTITIONS
-              value: "1"
-            - name: TOPIC_REPLICATION_FACTOR
-              value: "1"
-
-        - name: artifact-init
-          image: busybox:1.36
-          command:
-            - /bin/sh
-            - -c
-            - |
-              mkdir -p /artifacts
-              cat > /artifacts/failure.json <<'EOF'
-              {}
-              EOF
-              cat > /artifacts/normal.json <<'EOF'
-              {}
-              EOF
-          volumeMounts:
-            - name: forensic-artifacts
-              mountPath: /artifacts
-
-      containers:
-        - name: consumer-app
-          image: "ghcr.io/bonge0115/worker-consumer:placeholder"
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "256Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-          volumeMounts:
-            - name: forensic-artifacts
-              mountPath: /artifacts
-          env:
-            - name: KAFKA_BOOTSTRAP
-              value: "kafka.kafka-poc.svc.cluster.local:9092"
-            - name: SOURCE_TOPIC
-              value: "orders-replay-placeholder"
-            - name: DLQ_TOPIC
-              value: "orders-dlq"
-            - name: GROUP_ID
-              value: "orders-consumer-sandbox-placeholder"
-            - name: SERVICE_NAME
-              value: "forensic-sandbox-app"
-            - name: NAMESPACE
-              value: "forensic-sandbox"
-            - name: DEPLOYMENT_NAME
-              value: "forensic-sandbox-app"
-            - name: IMAGE_REF
-              value: "ghcr.io/bonge0115/worker-consumer:placeholder"
-            - name: CONFIG_VERSION
-              value: "sandbox-v1"
-            - name: DEPENDENCY_PROFILE
-              value: "sandbox"
-            - name: DB_MODE
-              value: "mock"
-            - name: DB_HOST
-              value: "mongodb-temp.forensic-sandbox.svc.cluster.local"
-            - name: CACHE_MODE
-              value: "mock"
-            - name: CACHE_HOST
-              value: ""
-            - name: EXTERNAL_API_MODE
-              value: "mock"
-            - name: EXTERNAL_API_BASE_URL
-              value: ""
-            - name: FORCE_FAIL_FIELD
-              value: "should_fail"
-            - name: ENABLE_DLQ_PUBLISH
-              value: "false"
-            - name: FAILURE_ERROR_TYPE
-              value: ""
-            - name: FAILURE_ERROR_MESSAGE
-              value: ""
-            - name: REPLAY_PAYLOAD_HASH
-              value: ""
-            - name: REPLAY_ORDER_ID
-              value: ""
-            - name: RUN_MODE
-              value: "sandbox"
-            - name: CASE_ID
-              value: ""
-            - name: RESULT_TOPIC
-              value: ""
-            - name: EMIT_RESULT_EVENT
-              value: "true"
-            - name: NORMAL_PAYLOAD_HASH
-              value: ""
-            - name: READY_FILE_PATH
-              value: "/artifacts/consumer-ready.json"
-            - name: ISOLATION_MODE
-              value: "sandbox_strict"
-            - name: ALLOWED_REPLAY_TOPIC
-              value: ""
-            - name: ALLOWED_RESULT_TOPIC
-              value: ""
-
-# forensic-launcher job
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: forensic-launcher-job
-  namespace: forensic-sandbox
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
-spec:
-  backoffLimit: 0
-  template:
-    metadata:
-      labels:
-        app: forensic-launcher-job
-    spec:
-      serviceAccountName: sandbox-app-sa
-      restartPolicy: Never
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 3000
-        fsGroup: 2000
-      volumes:
-        - name: forensic-artifacts
-          emptyDir: {}
-      initContainers:
-        - name: artifact-init
-          image: busybox:1.36
-          command:
-            - /bin/sh
-            - -c
-            - |
-              mkdir -p /artifacts
-              cat > /artifacts/failure.json <<'EOF'
-              {}
-              EOF
-              cat > /artifacts/normal.json <<'EOF'
-              {}
-              EOF
-          volumeMounts:
-            - name: forensic-artifacts
-              mountPath: /artifacts
-      containers:
-        - name: forensic-launcher
-          image: "ghcr.io/bonge0115/forensic-launcher:45e394d"
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          resources:
-            requests:
-              cpu: "50m"
-              memory: "128Mi"
-            limits:
-              cpu: "250m"
-              memory: "256Mi"
-          volumeMounts:
-            - name: forensic-artifacts
-              mountPath: /artifacts
-          env:
-            - name: KAFKA_BOOTSTRAP
-              value: "kafka.kafka-poc.svc.cluster.local:9092"
-            - name: CASE_ID
-              value: ""
-            - name: REPLAY_TOPIC
-              value: ""
-            - name: FAILURE_ARTIFACT_PATH
-              value: "/artifacts/failure.json"
-            - name: NORMAL_ARTIFACT_PATH
-              value: "/artifacts/normal.json"
-            - name: ENABLE_NORMAL_VALIDATION
-              value: "false"
-            - name: BETWEEN_FAILURE_AND_NORMAL_SECONDS
-              value: "10"
-            - name: PRODUCER_RETRY_COUNT
-              value: "30"
-            - name: PRODUCER_RETRY_INTERVAL_SECONDS
-              value: "2"
-            - name: RESULT_TOPIC
-              value: ""
-            - name: RESULT_GROUP_ID
-              value: ""
-            - name: VERDICT_FILE_PATH
-              value: "/artifacts/verdict.json"
-            - name: RESULT_WAIT_SECONDS
-              value: "60"
-            - name: EXPECTED_FAILURE_ERROR_TYPE
-              value: ""
-            - name: READY_FILE_PATH
-              value: "/artifacts/consumer-ready.json"
-            - name: READY_WAIT_SECONDS
-              value: "90"
-            - name: ISOLATION_MODE
-              value: "sandbox_strict"
-            - name: ALLOWED_REPLAY_TOPIC
-              value: ""
-            - name: ALLOWED_RESULT_TOPIC
-              value: ""
-
+    app: mongodb-temp
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: 27017
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mongodb-temp
   namespace: forensic-sandbox
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
 spec:
   replicas: 1
   selector:
@@ -283,48 +26,288 @@ spec:
       labels:
         app: mongodb-temp
     spec:
-      securityContext:
-        fsGroup: 999
       containers:
         - name: mongodb-temp
           image: mongo:7
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 27017
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 999
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
-          volumeMounts:
-            - name: mongo-data
-              mountPath: /data/db
-            - name: mongo-tmp
-              mountPath: /tmp
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "256Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-      volumes:
-        - name: mongo-data
-          emptyDir: {}
-        - name: mongo-tmp
-          emptyDir: {}
-
 ---
-apiVersion: v1
-kind: Service
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: mongodb-temp
+  name: forensic-sandbox-app
   namespace: forensic-sandbox
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
 spec:
+  replicas: 1
   selector:
-    app: mongodb-temp
-  ports:
-    - port: 27017
-      targetPort: 27017
+    matchLabels:
+      app: forensic-sandbox-app
+  template:
+    metadata:
+      labels:
+        app: forensic-sandbox-app
+    spec:
+      initContainers:
+        - name: topic-init
+          image: bitnami/kafka:3.7.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "topic-init placeholder"
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: kafka.kafka-poc.svc.cluster.local:9092
+            - name: REPLAY_TOPIC
+              value: ""
+            - name: RESULT_TOPIC
+              value: ""
+            - name: TOPIC_PARTITIONS
+              value: "1"
+            - name: TOPIC_REPLICATION_FACTOR
+              value: "1"
+
+        - name: artifact-init
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /artifacts
+              echo '{}' > /artifacts/failure.json
+              echo '{}' > /artifacts/normal.json
+          volumeMounts:
+            - name: artifacts
+              mountPath: /artifacts
+
+      containers:
+        - name: consumer-app
+          image: ghcr.io/bonge0115/worker-consumer:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: kafka.kafka-poc.svc.cluster.local:9092
+            - name: SOURCE_TOPIC
+              value: ""
+            - name: DLQ_TOPIC
+              value: orders-dlq
+            - name: GROUP_ID
+              value: orders-consumer-sandbox
+            - name: SERVICE_NAME
+              value: forensic-sandbox-app
+            - name: NAMESPACE
+              value: forensic-sandbox
+            - name: DEPLOYMENT_NAME
+              value: forensic-sandbox-app
+            - name: IMAGE_REF
+              value: ghcr.io/bonge0115/worker-consumer:latest
+            - name: CONFIG_VERSION
+              value: v1
+            - name: DEPENDENCY_PROFILE
+              value: sandbox
+            - name: DB_MODE
+              value: mock
+            - name: DB_HOST
+              value: mongodb-temp.forensic-sandbox.svc.cluster.local
+            - name: CACHE_MODE
+              value: mock
+            - name: CACHE_HOST
+              value: ""
+            - name: EXTERNAL_API_MODE
+              value: mock
+            - name: EXTERNAL_API_BASE_URL
+              value: ""
+            - name: FORCE_FAIL_FIELD
+              value: should_fail
+            - name: ENABLE_DLQ_PUBLISH
+              value: "false"
+            - name: RUN_MODE
+              value: sandbox
+            - name: CASE_ID
+              value: ""
+            - name: RESULT_TOPIC
+              value: ""
+            - name: EMIT_RESULT_EVENT
+              value: "true"
+            - name: READY_FILE_PATH
+              value: /artifacts/consumer-ready.json
+            - name: ISOLATION_MODE
+              value: sandbox_strict
+            - name: ALLOWED_REPLAY_TOPIC
+              value: ""
+            - name: ALLOWED_RESULT_TOPIC
+              value: ""
+
+            # 새 validation 관련 env
+            - name: VALIDATION_MODE
+              value: reproduce
+            - name: VALIDATION_RUN_ID
+              value: ""
+            - name: REVALIDATION_GENERATION
+              value: "0"
+            - name: EXPECTED_FAILURE_STATUS
+              value: failed
+            - name: EXPECTED_NORMAL_STATUS
+              value: success
+            - name: FAILURE_ERROR_TYPE
+              value: ""
+            - name: FAILURE_ERROR_MESSAGE
+              value: ""
+
+          volumeMounts:
+            - name: artifacts
+              mountPath: /artifacts
+
+        - name: forensic-launcher
+          image: ghcr.io/bonge0115/forensic-launcher:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: kafka.kafka-poc.svc.cluster.local:9092
+            - name: CASE_ID
+              value: ""
+            - name: REPLAY_TOPIC
+              value: ""
+            - name: RESULT_TOPIC
+              value: ""
+            - name: RESULT_GROUP_ID
+              value: forensic-launcher
+            - name: FAILURE_ARTIFACT_PATH
+              value: /artifacts/failure.json
+            - name: NORMAL_ARTIFACT_PATH
+              value: /artifacts/normal.json
+            - name: VERDICT_FILE_PATH
+              value: /artifacts/verdict.json
+            - name: ENABLE_NORMAL_VALIDATION
+              value: "false"
+            - name: READY_FILE_PATH
+              value: /artifacts/consumer-ready.json
+            - name: READY_WAIT_SECONDS
+              value: "90"
+            - name: BETWEEN_FAILURE_AND_NORMAL_SECONDS
+              value: "10"
+            - name: RESULT_WAIT_SECONDS
+              value: "60"
+            - name: EXPECTED_FAILURE_ERROR_TYPE
+              value: ""
+            - name: ISOLATION_MODE
+              value: sandbox_strict
+            - name: ALLOWED_REPLAY_TOPIC
+              value: ""
+            - name: ALLOWED_RESULT_TOPIC
+              value: ""
+
+            # 새 validation 관련 env
+            - name: VALIDATION_MODE
+              value: reproduce
+            - name: VALIDATION_RUN_ID
+              value: ""
+            - name: REVALIDATION_GENERATION
+              value: "0"
+            - name: EXPECTED_FAILURE_STATUS
+              value: failed
+            - name: EXPECTED_NORMAL_STATUS
+              value: success
+            - name: IMAGE_REF
+              value: ghcr.io/bonge0115/forensic-launcher:latest
+
+          volumeMounts:
+            - name: artifacts
+              mountPath: /artifacts
+
+      volumes:
+        - name: artifacts
+          emptyDir: {}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: forensic-launcher-job
+  namespace: forensic-sandbox
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: forensic-launcher-job
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: artifact-init
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /artifacts
+              echo '{}' > /artifacts/failure.json
+              echo '{}' > /artifacts/normal.json
+          volumeMounts:
+            - name: artifacts
+              mountPath: /artifacts
+
+      containers:
+        - name: forensic-launcher
+          image: ghcr.io/bonge0115/forensic-launcher:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: kafka.kafka-poc.svc.cluster.local:9092
+            - name: CASE_ID
+              value: ""
+            - name: REPLAY_TOPIC
+              value: ""
+            - name: RESULT_TOPIC
+              value: ""
+            - name: RESULT_GROUP_ID
+              value: forensic-launcher
+            - name: FAILURE_ARTIFACT_PATH
+              value: /artifacts/failure.json
+            - name: NORMAL_ARTIFACT_PATH
+              value: /artifacts/normal.json
+            - name: VERDICT_FILE_PATH
+              value: /artifacts/verdict.json
+            - name: ENABLE_NORMAL_VALIDATION
+              value: "false"
+            - name: READY_FILE_PATH
+              value: /artifacts/consumer-ready.json
+            - name: READY_WAIT_SECONDS
+              value: "90"
+            - name: BETWEEN_FAILURE_AND_NORMAL_SECONDS
+              value: "10"
+            - name: RESULT_WAIT_SECONDS
+              value: "60"
+            - name: EXPECTED_FAILURE_ERROR_TYPE
+              value: ""
+            - name: ISOLATION_MODE
+              value: sandbox_strict
+            - name: ALLOWED_REPLAY_TOPIC
+              value: ""
+            - name: ALLOWED_RESULT_TOPIC
+              value: ""
+
+            # 새 validation 관련 env
+            - name: VALIDATION_MODE
+              value: reproduce
+            - name: VALIDATION_RUN_ID
+              value: ""
+            - name: REVALIDATION_GENERATION
+              value: "0"
+            - name: EXPECTED_FAILURE_STATUS
+              value: failed
+            - name: EXPECTED_NORMAL_STATUS
+              value: success
+            - name: IMAGE_REF
+              value: ghcr.io/bonge0115/forensic-launcher:latest
+
+          volumeMounts:
+            - name: artifacts
+              mountPath: /artifacts
+
+      volumes:
+        - name: artifacts
+          emptyDir: {}

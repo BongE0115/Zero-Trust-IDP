@@ -1,0 +1,173 @@
+name: build-case-candidate
+
+on:
+  push:
+    branches:
+      - "case/**"
+    paths:
+      - "services/worker-consumer/**"
+      - "scripts/patch_case_candidate.py"
+      - "scripts/update_case_record.py"
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/worker-consumer
+
+jobs:
+  build-case-candidate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout case branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse case_id from branch
+        id: parse
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REF_NAME="${GITHUB_REF_NAME}"
+
+          if [[ ! "$REF_NAME" =~ ^case/(.+)$ ]]; then
+            echo "Not a case branch: $REF_NAME"
+            exit 1
+          fi
+
+          CASE_ID="${BASH_REMATCH[1]}"
+
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+          echo "case_id=$CASE_ID" >> "$GITHUB_OUTPUT"
+          echo "case_branch=$REF_NAME" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push candidate image
+        id: build_push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/worker-consumer/Dockerfile
+          push: true
+          provenance: false
+          tags: |
+            ${{ env.IMAGE_NAME }}:case-${{ steps.parse.outputs.case_id }}-${{ steps.parse.outputs.short_sha }}
+
+      - name: Resolve digest-pinned image ref
+        id: digest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DIGEST="${{ steps.build_push.outputs.digest }}"
+          if [[ -z "$DIGEST" ]]; then
+            echo "Missing digest from build step"
+            exit 1
+          fi
+
+          IMAGE_REF="${{ env.IMAGE_NAME }}@${DIGEST}"
+          echo "image_ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Read sandbox manifest path from case record
+        id: record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ steps.parse.outputs.case_id }}"
+          RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
+
+          if [[ ! -f "$RECORD_PATH" ]]; then
+            echo "Case record not found: $RECORD_PATH"
+            exit 1
+          fi
+
+          SANDBOX_MANIFEST_PATH="$(python - <<'PY'
+          
+import json
+import sys
+from pathlib import Path
+
+case_id = "${{ steps.parse.outputs.case_id }}"
+path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+data = json.loads(path.read_text(encoding="utf-8"))
+value = data.get("sandbox_manifest_path") or ""
+print(value)
+PY
+)"
+          if [[ -z "$SANDBOX_MANIFEST_PATH" ]]; then
+            echo "sandbox_manifest_path is empty in case record"
+            exit 1
+          fi
+
+          CURRENT_GEN="$(python - <<'PY'
+import json
+from pathlib import Path
+
+case_id = "${{ steps.parse.outputs.case_id }}"
+path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+data = json.loads(path.read_text(encoding="utf-8"))
+print(int(data.get("revalidation_generation", 0)))
+PY
+)"
+          NEXT_GEN=$((CURRENT_GEN + 1))
+
+          echo "sandbox_manifest_path=$SANDBOX_MANIFEST_PATH" >> "$GITHUB_OUTPUT"
+          echo "next_generation=$NEXT_GEN" >> "$GITHUB_OUTPUT"
+
+      - name: Patch sandbox manifest with candidate image
+        id: patch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python scripts/patch_case_candidate.py \
+            --case-id "${{ steps.parse.outputs.case_id }}" \
+            --manifest-path "${{ steps.record.outputs.sandbox_manifest_path }}" \
+            --candidate-image-ref "${{ steps.digest.outputs.image_ref }}" \
+            --generation "${{ steps.record.outputs.next_generation }}" \
+            --set-case-configmap \
+            --update-record \
+            --note "candidate image built from case branch ${GITHUB_REF_NAME}"
+
+      - name: Commit updated sandbox manifest and case record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "${{ steps.record.outputs.sandbox_manifest_path }}"
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ steps.parse.outputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): patch candidate image for ${{ steps.parse.outputs.case_id }}"
+
+      - name: Push case branch updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:${GITHUB_REF_NAME}"

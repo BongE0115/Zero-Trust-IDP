@@ -15,7 +15,7 @@ def load_yaml_all(path: Path) -> List[Dict[str, Any]]:
 
 def dump_yaml_all(path: Path, docs: List[Dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    with path.open("w", encoding="utf-8", newline="\n") as f:
         yaml.safe_dump_all(
             docs,
             f,
@@ -148,6 +148,9 @@ def build_case_configmap(
     deployment_name: str,
     case_configmap_name: str,
     mongo_host: str,
+    validation_mode: str,
+    validation_run_id: str,
+    revalidation_generation: int,
 ) -> Dict[str, Any]:
     metadata = spec["metadata"]
     failure = spec["failure"]
@@ -200,6 +203,11 @@ def build_case_configmap(
             "allowed_result_topic": sandbox_isolation.get("allowed_result_topic", ""),
             "verdict_file_path": launcher_env.get("VERDICT_FILE_PATH", "/artifacts/verdict.json"),
             "mongo_host": mongo_host,
+            "validation_mode": validation_mode,
+            "validation_run_id": validation_run_id,
+            "revalidation_generation": str(revalidation_generation),
+            "expected_failure_status": validation.get("expected_failure_status", ""),
+            "expected_normal_status": validation.get("expected_normal_status", ""),
         },
     }
 
@@ -216,6 +224,15 @@ def build_case_manifest_docs(
     failure = spec["failure"]
     validation = spec.get("validation", {})
     topic_init = spec.get("topic_init", {})
+
+    validation_mode = validation.get("validation_mode", "reproduce")
+    validation_run_id = validation.get("validation_run_id", "")
+    revalidation_generation = int(validation.get("revalidation_generation", 0))
+    expected_failure_status = validation.get(
+        "expected_failure_status",
+        "failed" if validation_mode == "reproduce" else "success",
+    )
+    expected_normal_status = validation.get("expected_normal_status", "success")
 
     template_deployment = find_deployment(template_docs, sandbox["deployment_name"])
     deployment = copy.deepcopy(template_deployment)
@@ -318,6 +335,12 @@ def build_case_manifest_docs(
     upsert_env(consumer_container, "REPLAY_PAYLOAD_HASH", failure["payload_hash"])
     upsert_env(consumer_container, "REPLAY_ORDER_ID", failure["order_id"])
     upsert_env(consumer_container, "NORMAL_PAYLOAD_HASH", validation.get("normal_payload_hash", ""))
+    upsert_env(consumer_container, "CASE_ID", metadata["case_id"])
+    upsert_env(consumer_container, "VALIDATION_MODE", validation_mode)
+    upsert_env(consumer_container, "VALIDATION_RUN_ID", validation_run_id)
+    upsert_env(consumer_container, "REVALIDATION_GENERATION", str(revalidation_generation))
+    upsert_env(consumer_container, "EXPECTED_FAILURE_STATUS", expected_failure_status)
+    upsert_env(consumer_container, "EXPECTED_NORMAL_STATUS", expected_normal_status)
 
     for k, v in sandbox["launcher_env"].items():
         upsert_env(launcher_container, k, v)
@@ -329,6 +352,11 @@ def build_case_manifest_docs(
         "ENABLE_NORMAL_VALIDATION",
         "true" if validation.get("normal_fixture_available", False) else "false"
     )
+    upsert_env(launcher_container, "VALIDATION_MODE", validation_mode)
+    upsert_env(launcher_container, "VALIDATION_RUN_ID", validation_run_id)
+    upsert_env(launcher_container, "REVALIDATION_GENERATION", str(revalidation_generation))
+    upsert_env(launcher_container, "EXPECTED_FAILURE_STATUS", expected_failure_status)
+    upsert_env(launcher_container, "EXPECTED_NORMAL_STATUS", expected_normal_status)
 
     patch_init_container_for_artifacts(deployment, failure_artifact, normal_artifact)
     patch_job_artifact_init_for_artifacts(job, failure_artifact, normal_artifact)
@@ -340,6 +368,9 @@ def build_case_manifest_docs(
         deployment_name=case_deployment_name,
         case_configmap_name=case_configmap_name,
         mongo_host=case_mongo_host,
+        validation_mode=validation_mode,
+        validation_run_id=validation_run_id,
+        revalidation_generation=revalidation_generation,
     )
 
     return [mongo_service, mongo_deployment, deployment, job, case_configmap]
@@ -376,11 +407,15 @@ def main():
 
     dump_yaml_all(output_yaml_path, case_docs)
 
+    validation = spec.get("validation", {})
     print("[OK] case manifest generated")
     print(f"[OK] case_id={spec['metadata']['case_id']}")
     print(f"[OK] output_yaml={output_yaml_path}")
     print(f"[OK] replay_topic={spec['sandbox']['replay_topic']}")
     print(f"[OK] result_topic={spec['sandbox']['result_topic']}")
+    print(f"[OK] validation_mode={validation.get('validation_mode', 'reproduce')}")
+    print(f"[OK] validation_run_id={validation.get('validation_run_id', '')}")
+    print(f"[OK] revalidation_generation={validation.get('revalidation_generation', 0)}")
 
 
 if __name__ == "__main__":

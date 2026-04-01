@@ -1,0 +1,171 @@
+name: snapshot-revalidation-verdict
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Unique case identifier"
+        required: true
+        type: string
+      namespace:
+        description: "Namespace where revalidation pod runs"
+        required: false
+        default: "forensic-sandbox"
+        type: string
+      generation:
+        description: "Revalidation generation"
+        required: true
+        type: string
+      note:
+        description: "Optional note"
+        required: false
+        default: "verdict snapshot stored by workflow via kubectl"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot-revalidation-verdict:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ inputs.case_id }}"
+          GEN="${{ inputs.generation }}"
+
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+          if [[ ! "$GEN" =~ ^[0-9]+$ ]]; then
+            echo "generation must be numeric"
+            exit 1
+          fi
+
+      - name: Checkout case branch
+        uses: actions/checkout@v4
+        with:
+          ref: case/${{ inputs.case_id }}
+          fetch-depth: 0
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Configure kubeconfig
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.kube"
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+      - name: Verify cluster access
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl get ns "${{ inputs.namespace }}"
+
+      - name: Resolve revalidation pod
+        id: pod
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          CASE_ID="${{ inputs.case_id }}"
+          GEN="${{ inputs.generation }}"
+
+          SELECTOR="forensic-case-id=${CASE_ID},forensic-validation-mode=fix-verify,forensic-revalidation-generation=${GEN}"
+
+          POD_NAME="$(kubectl get pods -n "$NS" -l "$SELECTOR" \
+            --sort-by=.metadata.creationTimestamp \
+            -o jsonpath='{.items[-1:].metadata.name}')"
+
+          if [[ -z "$POD_NAME" ]]; then
+            echo "No pod found for selector: $SELECTOR"
+            kubectl get pods -n "$NS" --show-labels
+            exit 1
+          fi
+
+          echo "pod_name=$POD_NAME" >> "$GITHUB_OUTPUT"
+          echo "selector=$SELECTOR" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for verdict file
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          POD="${{ steps.pod.outputs.pod_name }}"
+
+          for i in $(seq 1 60); do
+            PHASE="$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.status.phase}')"
+            echo "pod phase=$PHASE"
+
+            if kubectl exec -n "$NS" "$POD" -- test -f /artifacts/verdict.json 2>/dev/null; then
+              echo "verdict file exists"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Timed out waiting for /artifacts/verdict.json"
+          exit 1
+
+      - name: Fetch verdict.json from pod
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          POD="${{ steps.pod.outputs.pod_name }}"
+
+          mkdir -p /tmp/revalidation-verdict
+          kubectl exec -n "$NS" "$POD" -- cat /artifacts/verdict.json > /tmp/revalidation-verdict/verdict.json
+
+          test -s /tmp/revalidation-verdict/verdict.json
+
+      - name: Export verdict snapshot into repo path
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python scripts/export_verdict_snapshot.py \
+            --case-id "${{ inputs.case_id }}" \
+            --input-verdict "/tmp/revalidation-verdict/verdict.json" \
+            --annotate-source-path
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit verdict snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No verdict snapshot changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): snapshot revalidation verdict for ${{ inputs.case_id }}"
+
+      - name: Push case branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:case/${{ inputs.case_id }}"
