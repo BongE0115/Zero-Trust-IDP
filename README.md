@@ -7,7 +7,7 @@
 
 Bash
 # Kafka가 있는 디렉토리로 이동 (Docker Compose 파일이 있는 곳)
-cd ~/hs  # (실제 docker-compose.yml이 있는 경로에 맞게 이동하세요)
+cd ~/hs
 
 # Kafka 컨테이너 실행
 docker-compose up -d
@@ -24,9 +24,13 @@ export KAFKA_BOOTSTRAP="127.0.0.1:9092"
 
 # 실행!
 python app/consumer.py
-동작 원리: 1. 켜지자마자 Kafka의 orders라는 우체통(토픽)을 계속 쳐다보고 있습니다.
-2. 주문이 들어오면 처리를 시도하다가, should_fail=True라는 값을 보면 고의로 **ValueError**를 발생시킵니다.
-3. 에러가 난 주문 데이터를 버리지 않고, Kafka의 orders-dlq (Dead Letter Queue, 에러 보관함) 이라는 격리된 우체통으로 던져버립니다.
+동작 원리:
+
+켜지자마자 Kafka의 orders라는 우체통(토픽)을 계속 쳐다보고 있습니다.
+
+주문이 들어오면 처리를 시도하다가, should_fail=True라는 값을 보면 고의로 **ValueError**를 발생시킵니다.
+
+에러가 난 주문 데이터를 버리지 않고, Kafka의 orders-dlq (Dead Letter Queue, 에러 보관함) 이라는 격리된 우체통으로 던져버립니다.
 
 🖥️ 터미널 3: DLQ Handler (감시 경찰 / 슬랙 알림 요원)
 에러 보관함(orders-dlq)만 전문적으로 감시하다가, 문제가 생기면 즉시 슬랙으로 경고를 때리는 경찰 역할입니다.
