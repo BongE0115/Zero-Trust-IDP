@@ -3,15 +3,27 @@ import json
 import os
 import time
 import hashlib
+import base64
+import zlib
 from datetime import datetime, timezone
 from typing import Any, Dict
-import requests
+import sys
 
+# 📍 [추가] slack_notifier 임포트
+try:
+    from slack_notifier import send_slack_alert
+except ImportError:
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        from slack_notifier import send_slack_alert
+    except ImportError:
+        def send_slack_alert(event, score=0.0, category="UNKNOWN", action="NONE", payload_for_github=""):
+            print(f"[DUMMY SLACK] Alert: {category} | Action: {action}")
 
 def getenv(name: str, default: str = "") -> str:
     return os.getenv(name, default)
 
-
+# --- [상수 설정] ---
 KAFKA_BOOTSTRAP = getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092")
 DLQ_TOPIC = getenv("DLQ_TOPIC", "orders-dlq")
 GROUP_ID = getenv("GROUP_ID", "orders-dlq-handler")
@@ -36,38 +48,40 @@ TOPIC_INIT_IMAGE = getenv("TOPIC_INIT_IMAGE", "bitnami/kafka:3.7.0")
 TOPIC_INIT_PARTITIONS = int(getenv("TOPIC_INIT_PARTITIONS", "1"))
 TOPIC_INIT_REPLICATION_FACTOR = int(getenv("TOPIC_INIT_REPLICATION_FACTOR", "1"))
 
-SPEC_OUTPUT_MODE = getenv("SPEC_OUTPUT_MODE", "stdout")  # stdout | file
+SPEC_OUTPUT_MODE = getenv("SPEC_OUTPUT_MODE", "stdout")
 SPEC_OUTPUT_DIR = getenv("SPEC_OUTPUT_DIR", "/tmp/sandbox-specs")
 
 REPLAY_ARTIFACT_OUTPUT_DIR = getenv("REPLAY_ARTIFACT_OUTPUT_DIR", "/tmp/replay-artifacts")
 VALIDATION_ARTIFACT_OUTPUT_DIR = getenv("VALIDATION_ARTIFACT_OUTPUT_DIR", "/tmp/validation-artifacts")
 
-GITHUB_TOKEN = getenv("GITHUB_TOKEN", "")
-GITHUB_OWNER = getenv("GITHUB_OWNER", "")
-GITHUB_REPO = getenv("GITHUB_REPO", "")
-GITHUB_REF = getenv("GITHUB_REF", "jy")
+# --- [📍 추가: hs 브랜치의 지능형 에러 카테고리 맵] ---
+ERROR_POLICY_MAP = {
+    "TimeoutError": {"category": "NETWORK_TIMEOUT", "action": "REPLAY"},
+    "ConnectionError": {"category": "CONNECTION_FAILURE", "action": "REPLAY"},
+    "KeyError": {"category": "DATA_MISMATCH", "action": "SANDBOX"},
+    "ValueError": {"category": "INVALID_FORMAT", "action": "SANDBOX"},
+    "JSONDecodeError": {"category": "PAYLOAD_CORRUPT", "action": "SANDBOX"},
+    "DataTruncation": {"category": "DB_CONSTRAINT_VIOLATION", "action": "SANDBOX"},
+}
 
-ACTIVATE_SANDBOX_WORKFLOW_FILE = getenv("ACTIVATE_SANDBOX_WORKFLOW_FILE", "activate-sandbox.yaml")
-CREATE_CASE_BRANCH_WORKFLOW_FILE = getenv("CREATE_CASE_BRANCH_WORKFLOW_FILE", "create-case-branch.yaml")
-
-ENABLE_GITHUB_DISPATCH = getenv("ENABLE_GITHUB_DISPATCH", "false").lower() == "true"
+def classify_error(error_type):
+    policy = ERROR_POLICY_MAP.get(error_type)
+    if policy:
+        return policy["category"], policy["action"]
+    return "UNKNOWN_CATEGORY", "SANDBOX"
 
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-
 def stable_json_dumps(data: Any) -> str:
     return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-
 
 def sha256_of_json(data: Any) -> str:
     return hashlib.sha256(stable_json_dumps(data).encode("utf-8")).hexdigest()
 
-
 def sanitize_case_id(case_id: str) -> str:
     return "".join(c if c.isalnum() or c == "-" else "-" for c in case_id).lower()
-
 
 def get_consumer():
     for _ in range(60):
@@ -85,7 +99,6 @@ def get_consumer():
             time.sleep(2)
     raise RuntimeError("Kafka consumer init failed")
 
-
 def get_nested(event: Dict[str, Any], *keys, default=None):
     current = event
     for key in keys:
@@ -96,13 +109,11 @@ def get_nested(event: Dict[str, Any], *keys, default=None):
             return default
     return current
 
-
 def build_case_id_from_payload(source_service: str, payload: Dict[str, Any]) -> str:
     order_id = str(payload.get("order_id", "unknown-order"))
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     digest = sha256_of_json(payload)[:8]
     return f"{source_service}-{order_id}-{ts}-{digest}"
-
 
 def normalize_legacy_event(event: Dict[str, Any]) -> Dict[str, Any]:
     if "runtime" in event and "source" in event and "error" in event and "repro_config" in event:
@@ -179,30 +190,13 @@ def normalize_legacy_event(event: Dict[str, Any]) -> Dict[str, Any]:
         "normal_validation_payload": normal_payload,
     }
 
-
 def print_alert(event: Dict[str, Any]):
     original_payload = event.get("original_payload", {}) or {}
-
     print("=" * 100)
     print("[ALERT] DLQ failure event detected")
     print(f"[ALERT] detected_at={utc_now_iso()}")
     print(f"[ALERT] case_id={event.get('case_id', 'unknown')}")
-    print(f"[ALERT] source_service={get_nested(event, 'source', 'service', default='unknown')}")
-    print(f"[ALERT] source_namespace={get_nested(event, 'source', 'namespace', default='unknown')}")
-    print(f"[ALERT] source_deployment={get_nested(event, 'source', 'deployment', default='unknown')}")
-    print(f"[ALERT] source_topic={get_nested(event, 'source', 'topic', default='unknown')}")
-    print(f"[ALERT] consumer_group={get_nested(event, 'source', 'consumer_group', default='unknown')}")
-    print(f"[ALERT] image_ref={get_nested(event, 'runtime', 'image_ref', default='unknown')}")
-    print(f"[ALERT] config_version={get_nested(event, 'runtime', 'config_version', default='unknown')}")
-    print(f"[ALERT] dependency_profile={get_nested(event, 'runtime', 'dependency_profile', default='unknown')}")
-    print(f"[ALERT] error_type={get_nested(event, 'error', 'type', default='unknown')}")
-    print(f"[ALERT] error_message={get_nested(event, 'error', 'message', default='unknown')}")
-    print(f"[ALERT] replay_target_topic={get_nested(event, 'replay', 'target_topic', default='unknown')}")
-    print(f"[ALERT] failure_payload_hash={get_nested(event, 'replay', 'failure_payload_hash', default='unknown')}")
-    print(f"[ALERT] normal_fixture_available={get_nested(event, 'validation', 'normal_fixture_available', default=False)}")
-    print(f"[ALERT] original_payload={json.dumps(original_payload, ensure_ascii=False)}")
     print("=" * 100)
-
 
 def build_failure_replay_artifact(event: Dict[str, Any]) -> Dict[str, Any]:
     original_payload = event.get("original_payload", {}) or {}
@@ -219,7 +213,6 @@ def build_failure_replay_artifact(event: Dict[str, Any]) -> Dict[str, Any]:
         "payload": original_payload,
     }
 
-
 def build_normal_validation_artifact(event: Dict[str, Any]) -> Dict[str, Any]:
     case_id = event["case_id"]
     normal_payload = event.get("normal_validation_payload", {}) or {}
@@ -234,7 +227,6 @@ def build_normal_validation_artifact(event: Dict[str, Any]) -> Dict[str, Any]:
         "source_service": get_nested(event, "source", "service", default="unknown"),
         "payload": normal_payload,
     }
-
 
 def build_sandbox_spec(
     event: Dict[str, Any],
@@ -316,7 +308,7 @@ def build_sandbox_spec(
                 "CACHE_HOST": SANDBOX_CACHE_HOST,
                 "EXTERNAL_API_MODE": SANDBOX_EXTERNAL_API_MODE,
                 "EXTERNAL_API_BASE_URL": SANDBOX_EXTERNAL_API_BASE_URL,
-                "FORCE_FAIL_FIELD": repro.get("force_fail_field", "should_fail"),
+                "FORCE_FAIL_FIELD": (event.get("repro_config", {}) or {}).get("force_fail_field", "should_fail"),
                 "ENABLE_DLQ_PUBLISH": "false",
                 "RUN_MODE": "sandbox",
                 "CASE_ID": case_id,
@@ -353,7 +345,7 @@ def build_sandbox_spec(
                 "VALIDATION_RUN_ID": f"{case_id}-repro-0",
                 "REVALIDATION_GENERATION": "0",
                 "EXPECTED_FAILURE_STATUS": "failed",
-                "EXPECTED_NORMAL_STATUS": "success",
+                "EXPECTED_NORMAL_STATUS": "success"
             }
         },
         "artifacts": {
@@ -362,7 +354,6 @@ def build_sandbox_spec(
         },
     }
 
-
 def emit_json_file(output_dir: str, filename: str, payload: Dict[str, Any]) -> str:
     os.makedirs(output_dir, exist_ok=True)
     path = os.path.join(output_dir, filename)
@@ -370,98 +361,18 @@ def emit_json_file(output_dir: str, filename: str, payload: Dict[str, Any]) -> s
         json.dump(payload, f, ensure_ascii=False, indent=2)
     return path
 
-
 def emit_spec(spec: Dict[str, Any]) -> str:
     case_id = spec["metadata"]["case_id"]
-
     if SPEC_OUTPUT_MODE == "file":
         path = emit_json_file(SPEC_OUTPUT_DIR, f"{case_id}.json", spec)
         print(f"[SANDBOX_SPEC] written path={path}")
         return path
-
-    print("[SANDBOX_SPEC_BEGIN]")
-    print(json.dumps(spec, ensure_ascii=False, indent=2))
-    print("[SANDBOX_SPEC_END]")
     return ""
 
 
-def validate_github_dispatch_config():
-    if not ENABLE_GITHUB_DISPATCH:
-        return
-    missing = [
-        name for name, value in [
-            ("GITHUB_TOKEN", GITHUB_TOKEN),
-            ("GITHUB_OWNER", GITHUB_OWNER),
-            ("GITHUB_REPO", GITHUB_REPO),
-            ("GITHUB_REF", GITHUB_REF),
-            ("ACTIVATE_SANDBOX_WORKFLOW_FILE", ACTIVATE_SANDBOX_WORKFLOW_FILE),
-            ("CREATE_CASE_BRANCH_WORKFLOW_FILE", CREATE_CASE_BRANCH_WORKFLOW_FILE),
-        ]
-        if not value
-    ]
-    if missing:
-        raise ValueError(f"Missing GitHub dispatch configuration: {', '.join(missing)}")
-
-
-def github_dispatch(workflow_file: str, inputs: Dict[str, str]):
-    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{workflow_file}/dispatches"
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    payload = {"ref": GITHUB_REF, "inputs": inputs}
-    resp = requests.post(url, headers=headers, json=payload, timeout=20)
-
-    if resp.status_code not in (204, 201):
-        raise RuntimeError(
-            f"GitHub dispatch failed workflow={workflow_file} "
-            f"status={resp.status_code}, body={resp.text}"
-        )
-
-    print(f"[GITHUB_DISPATCH] workflow={workflow_file} dispatched")
-
-
-def dispatch_activate_sandbox(spec: Dict[str, Any], failure_artifact: Dict[str, Any], normal_artifact: Dict[str, Any]):
-    github_dispatch(
-        ACTIVATE_SANDBOX_WORKFLOW_FILE,
-        {
-            "spec_json": json.dumps(spec, ensure_ascii=False),
-            "failure_artifact_json": json.dumps(failure_artifact, ensure_ascii=False),
-            "normal_artifact_json": json.dumps(normal_artifact, ensure_ascii=False),
-        },
-    )
-    print(f"[GITHUB_DISPATCH] activate-sandbox case_id={spec['metadata']['case_id']}")
-
-
-def dispatch_create_case_branch(spec: Dict[str, Any]):
-    case_id = spec["metadata"]["case_id"]
-    github_dispatch(
-        CREATE_CASE_BRANCH_WORKFLOW_FILE,
-        {
-            "case_id": case_id,
-            "service": spec["metadata"]["source_service"],
-            "base_ref": GITHUB_REF,
-            "source_image_ref": spec["sandbox"]["consumer_image_ref"],
-            "sandbox_manifest_path": spec["metadata"].get(
-                "sandbox_manifest_path",
-                f"gitops/apps/forensic-sandbox/cases/sandbox-case-{sanitize_case_id(case_id)[:48]}.yaml"
-            ),
-            "note": "case branch created from dlq handler",
-        },
-    )
-    print(f"[GITHUB_DISPATCH] create-case-branch case_id={case_id}")
-
-
 def main():
-    validate_github_dispatch_config()
     consumer = get_consumer()
-
-    print(
-        f"[INFO] DLQ handler started. dlq={DLQ_TOPIC}, "
-        f"group={GROUP_ID}, spec_output_mode={SPEC_OUTPUT_MODE}, "
-        f"github_dispatch={ENABLE_GITHUB_DISPATCH}"
-    )
+    print(f"[INFO] DLQ handler started with ChatOps. dlq={DLQ_TOPIC}")
 
     for message in consumer:
         raw_event = message.value
@@ -471,48 +382,46 @@ def main():
             print_alert(event)
 
             case_id = event["case_id"]
+            error_type = event.get("error", {}).get("type", "UnknownError")
+            
+            category, action = classify_error(error_type)
+            print(f"\n📥 [DLQ DETECTED] Type: {error_type} | Category: {category} | Action: {action}")
 
             failure_artifact = build_failure_replay_artifact(event)
-            failure_artifact_path = emit_json_file(
-                REPLAY_ARTIFACT_OUTPUT_DIR,
-                f"{case_id}-failure.json",
-                failure_artifact
-            )
-            print(f"[REPLAY_ARTIFACT] written path={failure_artifact_path}")
-
+            failure_artifact_path = emit_json_file(REPLAY_ARTIFACT_OUTPUT_DIR, f"{case_id}-failure.json", failure_artifact)
+            
             normal_artifact = build_normal_validation_artifact(event)
-            normal_artifact_path = emit_json_file(
-                VALIDATION_ARTIFACT_OUTPUT_DIR,
-                f"{case_id}-normal.json",
-                normal_artifact
-            )
-            print(f"[VALIDATION_ARTIFACT] written path={normal_artifact_path}")
-
+            normal_artifact_path = emit_json_file(VALIDATION_ARTIFACT_OUTPUT_DIR, f"{case_id}-normal.json", normal_artifact)
+            
             sandbox_spec = build_sandbox_spec(event, failure_artifact_path, normal_artifact_path)
-
+            
             safe_case = sanitize_case_id(case_id)
-            sandbox_spec["metadata"]["sandbox_manifest_path"] = (
-                f"gitops/apps/forensic-sandbox/cases/sandbox-case-{safe_case[:48]}.yaml"
-            )
+            sandbox_spec["metadata"]["sandbox_manifest_path"] = f"gitops/apps/forensic-sandbox/cases/sandbox-case-{safe_case[:48]}.yaml"
+            
+            emit_spec(sandbox_spec)
 
-            spec_path = emit_spec(sandbox_spec)
+            if action == "SANDBOX":
+                # 🌟 [ChatOps 마법] 깃허브 자동 발사를 지우고, 슬랙 버튼에 데이터를 묶어서 전송 대기!
+                github_payload = {
+                    "spec_json": json.dumps(sandbox_spec, ensure_ascii=False),
+                    "failure_artifact_json": json.dumps(failure_artifact, ensure_ascii=False),
+                    "normal_artifact_json": json.dumps(normal_artifact, ensure_ascii=False)
+                }
 
-            if ENABLE_GITHUB_DISPATCH:
-                # 순서 고정: 1) sandbox manifest 생성 2) case branch 생성
-                dispatch_activate_sandbox(
-                    spec=sandbox_spec,
-                    failure_artifact=failure_artifact,
-                    normal_artifact=normal_artifact,
-                )
-                dispatch_create_case_branch(sandbox_spec)
+                # 2000자 제한 회피용 압축 & Base64 인코딩
+                compressed_data = zlib.compress(json.dumps(github_payload).encode('utf-8'))
+                encoded_payload = base64.b64encode(compressed_data).decode('utf-8')
 
-            print(
-                "[NEXT_ACTION] sandbox activation dispatched, then case branch creation dispatched. "
-                "developer will work on case/<case-id>; sandbox will remain isolated."
-            )
+                print(f"🚨 [ACTION: SANDBOX] 샌드박스 재료 생성 완료. Slack 승인 대기 중...")
+                
+                event["error_type"] = error_type
+                event["error_message"] = event.get("error", {}).get("message", "No message")
+                
+                send_slack_alert(event, category=category, action=action, payload_for_github=encoded_payload)
 
-            if spec_path:
-                print(f"[NEXT_ACTION] sandbox_spec_path={spec_path}")
+            else:
+                print(f"❓ [ACTION: MANUAL] 정의되지 않은 패턴. 수동 확인 요청 슬랙 발송.")
+                send_slack_alert(event, category="UNDEFINED", action="MANUAL_CHECK")
 
         except Exception as e:
             print(f"[ERROR] Failed to process DLQ event: {e}")
