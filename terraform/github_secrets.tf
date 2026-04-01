@@ -13,7 +13,7 @@ terraform {
 
 provider "github" {
   owner = var.github_owner
-  token = nonsensitive(data.aws_ssm_parameter.github_secret_sync_token[0].value)
+  token = var.enable_github_secret_sync ? nonsensitive(data.aws_ssm_parameter.github_secret_sync_token[0].value) : ""
 }
 
 data "aws_ssm_parameter" "github_secret_sync_token" {

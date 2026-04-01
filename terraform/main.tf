@@ -9,7 +9,7 @@ terraform {
     bucket         = "my-team-zerotrust-tfstate-1234"
     key            = "terraform.tfstate"
     region         = "ap-northeast-2"
-    dynamodb_table = "terraform-state-lock" 
+    dynamodb_table = "terraform-state-lock"
     encrypt        = true
   }
 }
@@ -490,10 +490,10 @@ resource "aws_security_group" "k3s_server_sg" {
   }
 
   ingress {
-    description = "ICMP from VPC for testing"
-    from_port   = -1
-    to_port     = -1
-    protocol    = "icmp"
+    description     = "ICMP from VPC for testing"
+    from_port       = -1
+    to_port         = -1
+    protocol        = "icmp"
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
@@ -560,10 +560,10 @@ resource "aws_security_group" "k3s_agent_sg" {
   }
 
   ingress {
-    description = "ICMP from VPC for testing"
-    from_port   = -1
-    to_port     = -1
-    protocol    = "icmp"
+    description     = "ICMP from VPC for testing"
+    from_port       = -1
+    to_port         = -1
+    protocol        = "icmp"
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
@@ -758,7 +758,7 @@ resource "aws_db_instance" "aiops_rds" {
   identifier = "aiops-mysql-db"
 
   engine         = "mysql"
-  engine_version = "8.0"      # MySQL 8.0 시리즈 사용
+  engine_version = "8.0" # MySQL 8.0 시리즈 사용
   port           = 3306
 
   instance_class    = "db.t3.micro"
@@ -809,7 +809,7 @@ resource "aws_instance" "nat" {
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public_a.id
   vpc_security_group_ids      = [aws_security_group.nat_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
+  iam_instance_profile        = aws_iam_instance_profile.ssm_node_profile.name
   associate_public_ip_address = true
   source_dest_check           = false
 
@@ -843,12 +843,12 @@ data "cloudinit_config" "monitoring_config" {
 
   part {
     content_type = "text/x-shellscript"
-    content      = templatefile("${path.module}/templates/monitoring.sh.tpl", {
+    content = templatefile("${path.module}/templates/monitoring.sh.tpl", {
       aws_region            = "ap-northeast-2"
       k3s_server_private_ip = aws_instance.k3s_server.private_ip
       k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
 
-      gitops_repo_url       = "https://github.com/BongE0115/Zero-Trust-IDP.git"
+      gitops_repo_url        = "https://github.com/BongE0115/Zero-Trust-IDP.git"
       gitops_target_revision = "jy"
 
       argocd_values_content = file("${path.module}/../gitops/bootstrap/argocd/values.yaml")
@@ -864,13 +864,13 @@ resource "aws_instance" "monitoring_server" {
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public_a.id
   vpc_security_group_ids      = [aws_security_group.monitoring_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ssm_monitoring_profile.name
+  iam_instance_profile        = aws_iam_instance_profile.ssm_monitoring_profile.name
   associate_public_ip_address = true
 
   # 위에서 만든 압축 monitoring_config를 가져와서 넣어준다. 
-  user_data_base64 = data.cloudinit_config.monitoring_config.rendered
+  user_data_base64            = data.cloudinit_config.monitoring_config.rendered
   user_data_replace_on_change = true
-  
+
   tags = {
     Name = "aiops-monitoring-control"
     Role = "Monitoring_Node"
@@ -885,11 +885,11 @@ resource "aws_instance" "k3s_server" {
   instance_type          = "m7i-flex.large"
   subnet_id              = aws_subnet.private_a.id
   vpc_security_group_ids = [aws_security_group.k3s_server_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
 
   root_block_device {
-    volume_size = 30  # 기본 8GB에서 30GB로 증설
-    volume_type = "gp3" # 최신 고성능 범용 스토리지
+    volume_size           = 30    # 기본 8GB에서 30GB로 증설
+    volume_type           = "gp3" # 최신 고성능 범용 스토리지
     delete_on_termination = true
   }
 
@@ -897,7 +897,7 @@ resource "aws_instance" "k3s_server" {
     tailscale_auth_key = var.tailscale_auth_key
     k3s_token          = var.k3s_token
     local_tailscale_ip = var.local_tailscale_ip
-    frontend_addr      = "${aws_lb.aiops_alb.dns_name}:8080" 
+    frontend_addr      = "${aws_lb.aiops_alb.dns_name}:8080"
     project_name       = "Zero-Trust-IDP"
   })
 
@@ -915,11 +915,11 @@ resource "aws_instance" "k3s_agent" {
   instance_type          = "c7i-flex.large"
   subnet_id              = aws_subnet.private_b.id
   vpc_security_group_ids = [aws_security_group.k3s_agent_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ssm_node_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
 
   root_block_device {
-    volume_size = 30  # 기본 8GB에서 30GB로 증설
-    volume_type = "gp3" # 최신 고성능 범용 스토리지
+    volume_size           = 30    # 기본 8GB에서 30GB로 증설
+    volume_type           = "gp3" # 최신 고성능 범용 스토리지
     delete_on_termination = true
   }
 
