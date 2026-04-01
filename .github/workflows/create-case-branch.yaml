@@ -1,0 +1,118 @@
+name: create-case-branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Unique case identifier"
+        required: true
+        type: string
+      service:
+        description: "Target service name"
+        required: true
+        type: string
+      base_ref:
+        description: "Base branch for case branch creation"
+        required: false
+        default: "jy"
+        type: string
+      source_image_ref:
+        description: "Production image reference at failure time"
+        required: false
+        type: string
+      sandbox_manifest_path:
+        description: "Path to sandbox manifest for this case"
+        required: false
+        type: string
+      note:
+        description: "Optional note"
+        required: false
+        default: "case branch created by workflow"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  create-case-branch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ inputs.case_id }}"
+          BASE_REF="${{ inputs.base_ref }}"
+
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+          if [[ -z "$BASE_REF" ]]; then
+            echo "base_ref is required"
+            exit 1
+          fi
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_ref }}
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure case branch does not already exist remotely
+        shell: bash
+        run: |
+          set -euo pipefail
+          CASE_BRANCH="case/${{ inputs.case_id }}"
+
+          if git ls-remote --exit-code --heads origin "$CASE_BRANCH" >/dev/null 2>&1; then
+            echo "Remote branch already exists: $CASE_BRANCH"
+            exit 1
+          fi
+
+      - name: Create case branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          CASE_BRANCH="case/${{ inputs.case_id }}"
+          git checkout -b "$CASE_BRANCH"
+
+      - name: Create initial case record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ inputs.case_id }}"
+          CASE_BRANCH="case/${CASE_ID}"
+
+          python scripts/update_case_record.py create \
+            --case-id "$CASE_ID" \
+            --service "${{ inputs.service }}" \
+            --branch-name "$CASE_BRANCH" \
+            --status "branch_created" \
+            --source-image-ref "${{ inputs.source_image_ref }}" \
+            --sandbox-manifest-path "${{ inputs.sandbox_manifest_path }}" \
+            --note "${{ inputs.note }}"
+
+      - name: Commit case record
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+          git commit -m "chore(case): initialize case record for ${{ inputs.case_id }}"
+
+      - name: Push case branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          CASE_BRANCH="case/${{ inputs.case_id }}"
+          git push -u origin "$CASE_BRANCH"
