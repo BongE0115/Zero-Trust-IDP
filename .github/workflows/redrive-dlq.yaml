@@ -1,0 +1,140 @@
+name: redrive-dlq
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Unique case identifier"
+        required: true
+        type: string
+      kafka_bootstrap:
+        description: "Kafka bootstrap address"
+        required: false
+        default: "kafka.kafka-poc.svc.cluster.local:9092"
+        type: string
+      dlq_topic:
+        description: "DLQ topic containing failure events"
+        required: false
+        default: "orders-dlq"
+        type: string
+      target_topic:
+        description: "Production topic to redrive original payload into"
+        required: false
+        default: "orders"
+        type: string
+      max_scan_messages:
+        description: "Max DLQ messages to scan for this case"
+        required: false
+        default: "10000"
+        type: string
+      note:
+        description: "Optional note"
+        required: false
+        default: "redrive executed by workflow"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  redrive-dlq:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ inputs.case_id }}"
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+          if [[ ! "${{ inputs.max_scan_messages }}" =~ ^[0-9]+$ ]]; then
+            echo "max_scan_messages must be numeric"
+            exit 1
+          fi
+
+      - name: Checkout case branch
+        uses: actions/checkout@v4
+        with:
+          ref: case/${{ inputs.case_id }}
+          fetch-depth: 0
+
+      - name: Ensure case is eligible for redrive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          case_id = "${{ inputs.case_id }}"
+          record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          if not record_path.exists():
+              raise SystemExit(f"Case record not found: {record_path}")
+
+          data = json.loads(record_path.read_text(encoding="utf-8"))
+          flags = data.get("flags", {})
+
+          if flags.get("promoted") is not True:
+              raise SystemExit("Redrive denied: promoted flag is not true")
+
+          if flags.get("redriven") is True:
+              raise SystemExit("Redrive denied: case already redriven")
+
+          print("Redrive eligibility check passed")
+          PY
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install kafka-python
+
+      - name: Redrive original payload from DLQ
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python scripts/redrive_case_messages.py \
+            --case-id "${{ inputs.case_id }}" \
+            --kafka-bootstrap "${{ inputs.kafka_bootstrap }}" \
+            --dlq-topic "${{ inputs.dlq_topic }}" \
+            --target-topic "${{ inputs.target_topic }}" \
+            --max-scan-messages "${{ inputs.max_scan_messages }}" \
+            --note "${{ inputs.note }}"
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit updated case record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No case record changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): redrive dlq messages for ${{ inputs.case_id }}"
+
+      - name: Push case branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:case/${{ inputs.case_id }}"
