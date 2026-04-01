@@ -43,3 +43,36 @@ variable "local_tailscale_ip" {
   type        = string
   default     = "" # destroy 목적이므로 빈 문자열이나 임의의 더미(dummy) 값을 넣어도 무방합니다.
 }
+
+## kubeconfig 전용
+
+variable "enable_github_secret_sync" {
+  description = "Whether Terraform should automatically sync KUBECONFIG_B64 into GitHub Actions secrets"
+  type        = bool
+  default     = false
+}
+
+variable "github_owner" {
+  description = "GitHub owner or organization name"
+  type        = string
+  default     = ""
+}
+
+variable "github_repository" {
+  description = "GitHub repository name only, without owner"
+  type        = string
+  default     = ""
+}
+
+variable "github_token" {
+  description = "GitHub token with permission to manage repository Actions secrets"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "github_actions_kubeconfig_secret_name" {
+  description = "GitHub Actions secret name for kubeconfig"
+  type        = string
+  default     = "KUBECONFIG_B64"
+}
