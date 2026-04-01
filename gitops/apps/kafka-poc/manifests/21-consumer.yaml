@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: worker-consumer
-          image: ghcr.io/bonge0115/worker-consumer:26b16fe
+          image: ghcr.io/bonge0115/worker-consumer:b9c7fcc
           imagePullPolicy: Always
           env:
             - name: KAFKA_BOOTSTRAP
@@ -37,7 +37,7 @@ spec:
             # 운영에서 현재 실행 중인 이미지 ref를 명시적으로 기록
             # promote_verified_image.py 가 이 값을 함께 갱신한다.
             - name: IMAGE_REF
-              value: ghcr.io/bonge0115/worker-consumer:26b16fe
+              value: ghcr.io/bonge0115/worker-consumer:b9c7fcc
             - name: CONFIG_VERSION
               value: v1
             - name: DEPENDENCY_PROFILE
