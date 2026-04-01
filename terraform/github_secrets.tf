@@ -32,7 +32,7 @@ data "external" "k3s_kubeconfig_b64" {
 
   query = {
     instance_id     = aws_instance.k3s_server.id
-    region          = data.aws_region.current.name
+    region          = data.aws_region.current.id
     api_server_host = aws_instance.k3s_server.private_ip
   }
 

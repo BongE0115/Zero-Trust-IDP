@@ -76,3 +76,9 @@ variable "github_actions_kubeconfig_secret_name" {
   type        = string
   default     = "KUBECONFIG_B64"
 }
+
+variable "github_secret_sync_ssm_parameter_name" {
+  description = "SSM Parameter Store name containing the GitHub PAT used for syncing KUBECONFIG_B64 into GitHub Actions secrets"
+  type        = string
+  default     = "/zero-trust-idp/github-secret-sync-token"
+}
