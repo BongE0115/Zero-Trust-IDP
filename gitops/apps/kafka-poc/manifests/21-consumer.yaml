@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: worker-consumer
-          image: ghcr.io/bonge0115/worker-consumer:latest
+          image: ghcr.io/bonge0115/worker-consumer:26b16fe
           imagePullPolicy: Always
           env:
             - name: KAFKA_BOOTSTRAP
@@ -34,17 +34,14 @@ spec:
               value: kafka-poc
             - name: DEPLOYMENT_NAME
               value: worker-consumer
-
             # 운영에서 현재 실행 중인 이미지 ref를 명시적으로 기록
             # promote_verified_image.py 가 이 값을 함께 갱신한다.
             - name: IMAGE_REF
-              value: ghcr.io/bonge0115/worker-consumer:latest
-
+              value: ghcr.io/bonge0115/worker-consumer:26b16fe
             - name: CONFIG_VERSION
               value: v1
             - name: DEPENDENCY_PROFILE
               value: production
-
             - name: DB_MODE
               value: mysql
             - name: DB_HOST
@@ -57,18 +54,14 @@ spec:
               value: disabled
             - name: EXTERNAL_API_BASE_URL
               value: ""
-
             - name: FORCE_FAIL_FIELD
               value: should_fail
-
             # 운영에서는 DLQ publish 활성
             - name: ENABLE_DLQ_PUBLISH
               value: "true"
-
             # 운영 모드
             - name: RUN_MODE
               value: production
-
             # 운영에서는 sandbox 관련 값 비움
             - name: CASE_ID
               value: ""
@@ -84,7 +77,6 @@ spec:
               value: ""
             - name: ALLOWED_RESULT_TOPIC
               value: ""
-
             # validation 계열도 운영에서는 비움
             - name: VALIDATION_MODE
               value: reproduce
