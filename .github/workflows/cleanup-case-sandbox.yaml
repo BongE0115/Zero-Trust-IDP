@@ -16,6 +16,9 @@ on:
 permissions:
   contents: write
 
+env:
+  RECORD_BRANCH: jy
+
 jobs:
   cleanup-case-sandbox:
     runs-on: ubuntu-latest
@@ -31,10 +34,10 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout case branch
+      - name: Checkout jy record branch
         uses: actions/checkout@v4
         with:
-          ref: case/${{ inputs.case_id }}
+          ref: ${{ env.RECORD_BRANCH }}
           fetch-depth: 0
 
       - name: Configure git
@@ -43,7 +46,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Validate cleanup eligibility and capture paths
+      - name: Validate cleanup eligibility and capture paths from jy record
         id: record
         shell: bash
         run: |
@@ -90,7 +93,7 @@ jobs:
               f.write(f"revalidation_manifest_path={revalidation_manifest_path}\n")
           PY
 
-      - name: Remove case manifests if present
+      - name: Remove case manifests if present on jy
         shell: bash
         run: |
           set -euo pipefail
@@ -110,7 +113,7 @@ jobs:
             echo "Revalidation manifest already absent or not set"
           fi
 
-      - name: Update case record as cleanup completed
+      - name: Update jy case record as cleanup completed
         shell: bash
         run: |
           set -euo pipefail
@@ -122,7 +125,7 @@ jobs:
             --metadata-json '{"cleanup_manifest_deleted": true}' \
             --note "${{ inputs.note }}"
 
-      - name: Commit cleanup changes
+      - name: Commit cleanup changes on jy
         shell: bash
         run: |
           set -euo pipefail
@@ -136,8 +139,8 @@ jobs:
 
           git commit -m "chore(case): cleanup sandbox for ${{ inputs.case_id }}"
 
-      - name: Push case branch
+      - name: Push jy updates
         shell: bash
         run: |
           set -euo pipefail
-          git push origin "HEAD:case/${{ inputs.case_id }}"
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"

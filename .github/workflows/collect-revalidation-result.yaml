@@ -20,6 +20,9 @@ on:
 permissions:
   contents: write
 
+env:
+  RECORD_BRANCH: jy
+
 jobs:
   collect-revalidation-result:
     runs-on: ubuntu-latest
@@ -42,13 +45,19 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout case branch
+      - name: Checkout jy record branch
         uses: actions/checkout@v4
         with:
-          ref: case/${{ inputs.case_id }}
+          ref: ${{ env.RECORD_BRANCH }}
           fetch-depth: 0
 
-      - name: Verify required files exist
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Verify required files exist on jy
         shell: bash
         run: |
           set -euo pipefail
@@ -57,16 +66,16 @@ jobs:
           VERDICT_PATH="${{ inputs.verdict_path }}"
 
           if [[ ! -f "$RECORD_PATH" ]]; then
-            echo "Case record not found: $RECORD_PATH"
+            echo "Case record not found on jy: $RECORD_PATH"
             exit 1
           fi
 
           if [[ ! -f "$VERDICT_PATH" ]]; then
-            echo "Verdict file not found: $VERDICT_PATH"
+            echo "Verdict file not found on jy: $VERDICT_PATH"
             exit 1
           fi
 
-      - name: Collect verdict into case record
+      - name: Collect verdict into jy case record
         shell: bash
         run: |
           set -euo pipefail
@@ -76,13 +85,7 @@ jobs:
             --verdict-path "${{ inputs.verdict_path }}" \
             --note "${{ inputs.note }}"
 
-      - name: Configure git
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Commit updated case record
+      - name: Commit updated jy case record
         shell: bash
         run: |
           set -euo pipefail
@@ -96,8 +99,8 @@ jobs:
 
           git commit -m "chore(case): collect revalidation result for ${{ inputs.case_id }}"
 
-      - name: Push case branch
+      - name: Push jy branch
         shell: bash
         run: |
           set -euo pipefail
-          git push origin "HEAD:case/${{ inputs.case_id }}"
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"

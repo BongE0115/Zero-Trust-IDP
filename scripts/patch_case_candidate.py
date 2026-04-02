@@ -56,16 +56,73 @@ def dump_yaml_all(path: Path, docs: List[Dict[str, Any]]) -> None:
         )
 
 
-def find_deployment(docs: List[Dict[str, Any]]) -> Dict[str, Any]:
-    deployments = [d for d in docs if d.get("kind") == "Deployment"]
+def get_deployments(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [d for d in docs if d.get("kind") == "Deployment"]
+
+
+def get_containers(deployment: Dict[str, Any]) -> List[Dict[str, Any]]:
+    containers = deployment.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+    if not containers:
+        raise ValueError(
+            f"deployment '{deployment.get('metadata', {}).get('name', '<unknown>')}' has no containers"
+        )
+    return containers
+
+
+def find_container_by_name(containers: List[Dict[str, Any]], name: str) -> Dict[str, Any]:
+    for container in containers:
+        if container.get("name") == name:
+            return container
+    raise ValueError(f"container '{name}' not found")
+
+
+def find_sandbox_deployment(docs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    deployments = get_deployments(docs)
     if not deployments:
         raise ValueError("no Deployment found in manifest")
-    if len(deployments) > 1:
-        # 케이스 manifest는 일반적으로 sandbox deployment 1개를 기준으로 본다.
-        # 여러 개면 name 기반 필터를 추가로 넣는 게 안전하지만,
-        # 지금 단계에서는 단일 deployment를 전제한다.
-        raise ValueError("multiple Deployments found; expected exactly one sandbox deployment")
-    return deployments[0]
+
+    # 1) consumer-app 컨테이너를 가진 deployment 우선
+    consumer_candidates: List[Dict[str, Any]] = []
+    for dep in deployments:
+        try:
+            containers = get_containers(dep)
+            _ = find_container_by_name(containers, "consumer-app")
+            consumer_candidates.append(dep)
+        except ValueError:
+            continue
+
+    if len(consumer_candidates) == 1:
+        return consumer_candidates[0]
+
+    if len(consumer_candidates) > 1:
+        # 그래도 여러 개면 forensic-sandbox-app 이름을 우선 사용
+        preferred = [
+            d for d in consumer_candidates
+            if "forensic-sandbox-app" in (d.get("metadata", {}).get("name") or "")
+        ]
+        if len(preferred) == 1:
+            return preferred[0]
+
+        names = [d.get("metadata", {}).get("name", "<unknown>") for d in consumer_candidates]
+        raise ValueError(
+            "multiple consumer-app deployments found; cannot determine sandbox deployment: "
+            + ", ".join(names)
+        )
+
+    # 2) fallback: 이름으로 추정
+    name_candidates = [
+        d for d in deployments
+        if "forensic-sandbox-app" in (d.get("metadata", {}).get("name") or "")
+    ]
+    if len(name_candidates) == 1:
+        return name_candidates[0]
+
+    names = [d.get("metadata", {}).get("name", "<unknown>") for d in deployments]
+    raise ValueError(
+        "sandbox deployment not found. Expected a deployment with container 'consumer-app' "
+        "or name containing 'forensic-sandbox-app'. Found deployments: "
+        + ", ".join(names)
+    )
 
 
 def find_configmap_for_case(docs: List[Dict[str, Any]], case_id: str) -> Optional[Dict[str, Any]]:
@@ -79,20 +136,6 @@ def find_configmap_for_case(docs: List[Dict[str, Any]], case_id: str) -> Optiona
         if labels.get("forensic-case-id") == case_id:
             return doc
     return None
-
-
-def get_containers(deployment: Dict[str, Any]) -> List[Dict[str, Any]]:
-    containers = deployment.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
-    if not containers:
-        raise ValueError("deployment has no containers")
-    return containers
-
-
-def find_container_by_name(containers: List[Dict[str, Any]], name: str) -> Dict[str, Any]:
-    for container in containers:
-        if container.get("name") == name:
-            return container
-    raise ValueError(f"container '{name}' not found")
 
 
 def get_env_list(container: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -154,8 +197,20 @@ def maybe_update_case_record(
         str(generation),
         "--validation-run-id",
         validation_run_id,
+        "--verified-image-ref",
+        "",
+        "--promoted-image-ref",
+        "",
         "--flags-json",
-        json.dumps({"revalidation_passed": False}, ensure_ascii=False),
+        json.dumps(
+            {
+                "revalidation_passed": False,
+                "promoted": False,
+                "resolved": False,
+                "cleanup_completed": False,
+            },
+            ensure_ascii=False,
+        ),
         "--note",
         note,
     ]
@@ -170,10 +225,11 @@ def patch_manifest(
     generation: int,
     validation_run_id: str,
     set_case_configmap: bool,
-) -> Tuple[str, str]:
+) -> Tuple[str, str, str]:
     docs = load_yaml_all(manifest_path)
 
-    deployment = find_deployment(docs)
+    deployment = find_sandbox_deployment(docs)
+    deployment_name = deployment.get("metadata", {}).get("name", "<unknown>")
     consumer = find_container_by_name(get_containers(deployment), "consumer-app")
 
     previous_image_ref = consumer.get("image")
@@ -189,23 +245,28 @@ def patch_manifest(
     upsert_env(consumer, "VALIDATION_RUN_ID", validation_run_id)
     upsert_env(consumer, "CASE_ID", case_id)
 
-    # sandbox strict 쪽은 유지하되, 혹시 빠져 있으면 기본값 고정
+    # sandbox strict 유지
     if not get_env_value(consumer, "ISOLATION_MODE"):
         upsert_env(consumer, "ISOLATION_MODE", "sandbox_strict")
 
-    # ConfigMap도 같이 갱신할 수 있게 처리
+    # 기대 상태를 수정 후 검증 기준으로 강제
+    upsert_env(consumer, "EXPECTED_FAILURE_STATUS", "success")
+    upsert_env(consumer, "EXPECTED_NORMAL_STATUS", "success")
+
     if set_case_configmap:
         configmap = find_configmap_for_case(docs, case_id)
         if configmap is not None:
             data = configmap.setdefault("data", {})
             data["case_id"] = case_id
             data["candidate_image_ref"] = candidate_image_ref
+            data["consumer_image_ref"] = candidate_image_ref
             data["validation_mode"] = "fix-verify"
             data["revalidation_generation"] = str(generation)
             data["validation_run_id"] = validation_run_id
+            data["deployment_name"] = deployment_name
 
     dump_yaml_all(manifest_path, docs)
-    return previous_image_ref, candidate_image_ref
+    return previous_image_ref, candidate_image_ref, deployment_name
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -246,9 +307,12 @@ def main() -> int:
 
         manifest_path = Path(args.manifest_path)
         records_dir = Path(args.records_dir)
-        validation_run_id = args.validation_run_id or f"{args.case_id}-reval-{args.generation}-{uuid.uuid4().hex[:8]}"
+        validation_run_id = (
+            args.validation_run_id
+            or f"{args.case_id}-reval-{args.generation}-{uuid.uuid4().hex[:8]}"
+        )
 
-        old_ref, new_ref = patch_manifest(
+        old_ref, new_ref, deployment_name = patch_manifest(
             manifest_path=manifest_path,
             case_id=args.case_id,
             candidate_image_ref=args.candidate_image_ref,
@@ -271,6 +335,7 @@ def main() -> int:
         result = {
             "case_id": args.case_id,
             "manifest_path": str(manifest_path),
+            "sandbox_deployment_name": deployment_name,
             "previous_image_ref": old_ref,
             "candidate_image_ref": new_ref,
             "revalidation_generation": args.generation,

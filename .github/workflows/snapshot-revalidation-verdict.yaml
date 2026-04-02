@@ -25,6 +25,9 @@ on:
 permissions:
   contents: write
 
+env:
+  RECORD_BRANCH: jy
+
 jobs:
   snapshot-revalidation-verdict:
     runs-on: ubuntu-latest
@@ -48,10 +51,10 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout case branch
+      - name: Checkout jy record branch
         uses: actions/checkout@v4
         with:
-          ref: case/${{ inputs.case_id }}
+          ref: ${{ env.RECORD_BRANCH }}
           fetch-depth: 0
 
       - name: Install kubectl
@@ -134,7 +137,7 @@ jobs:
 
           test -s /tmp/revalidation-verdict/verdict.json
 
-      - name: Export verdict snapshot into repo path
+      - name: Export verdict snapshot into repo path on jy
         shell: bash
         run: |
           set -euo pipefail
@@ -150,7 +153,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Commit verdict snapshot
+      - name: Commit verdict snapshot on jy
         shell: bash
         run: |
           set -euo pipefail
@@ -164,8 +167,8 @@ jobs:
 
           git commit -m "chore(case): snapshot revalidation verdict for ${{ inputs.case_id }}"
 
-      - name: Push case branch
+      - name: Push jy branch
         shell: bash
         run: |
           set -euo pipefail
-          git push origin "HEAD:case/${{ inputs.case_id }}"
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"

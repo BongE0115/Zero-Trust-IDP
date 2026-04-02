@@ -38,6 +38,9 @@ on:
 permissions:
   contents: write
 
+env:
+  RECORD_BRANCH: jy
+
 jobs:
   revalidate-sandbox:
     runs-on: ubuntu-latest
@@ -60,10 +63,10 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout repository
+      - name: Checkout jy record branch
         uses: actions/checkout@v4
         with:
-          ref: case/${{ inputs.case_id }}
+          ref: ${{ env.RECORD_BRANCH }}
           fetch-depth: 0
 
       - name: Configure git
@@ -72,7 +75,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Read case record
+      - name: Read jy case record
         id: record
         shell: bash
         run: |
@@ -82,7 +85,7 @@ jobs:
           RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
 
           if [[ ! -f "$RECORD_PATH" ]]; then
-            echo "Case record not found: $RECORD_PATH"
+            echo "Case record not found on jy: $RECORD_PATH"
             exit 1
           fi
 
@@ -100,9 +103,9 @@ jobs:
           flags = data.get("flags", {})
 
           if not candidate:
-              raise SystemExit("candidate_image_ref is empty in case record")
+              raise SystemExit("candidate_image_ref is empty in jy case record")
           if not manifest:
-              raise SystemExit("sandbox_manifest_path is empty in case record")
+              raise SystemExit("sandbox_manifest_path is empty in jy case record")
           if flags.get("resolved") is True:
               raise SystemExit("case is already resolved")
 
@@ -115,7 +118,7 @@ jobs:
               f.write(f"next_generation={next_gen}\n")
           PY
 
-      - name: Render revalidation job manifest
+      - name: Render revalidation job manifest on jy
         id: render
         shell: bash
         run: |
@@ -133,7 +136,7 @@ jobs:
             --update-record \
             --note "${{ inputs.note }}"
 
-      - name: Commit revalidation manifest and case record
+      - name: Commit revalidation manifest and jy case record
         shell: bash
         run: |
           set -euo pipefail
@@ -148,11 +151,11 @@ jobs:
 
           git commit -m "chore(case): request revalidation for ${{ inputs.case_id }}"
 
-      - name: Push case branch updates
+      - name: Push jy updates
         shell: bash
         run: |
           set -euo pipefail
-          git push origin "HEAD:case/${{ inputs.case_id }}"
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
 
       - name: Summary
         shell: bash
@@ -160,8 +163,3 @@ jobs:
           echo "case_id=${{ inputs.case_id }}"
           echo "revalidation_generation=${{ steps.record.outputs.next_generation }}"
           echo "revalidation_manifest=gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-${{ inputs.case_id }}.yaml"
-          echo "next_snapshot_call:"
-          echo "  workflow = snapshot-revalidation-verdict"
-          echo "  case_id  = ${{ inputs.case_id }}"
-          echo "  generation = ${{ steps.record.outputs.next_generation }}"
-          echo "  namespace = ${{ inputs.namespace }}"

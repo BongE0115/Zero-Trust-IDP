@@ -79,40 +79,62 @@ jobs:
             exit 1
           fi
 
-      - name: Create case branch
+      - name: Create and push case branch
         shell: bash
         run: |
           set -euo pipefail
           CASE_BRANCH="case/${{ inputs.case_id }}"
-          git checkout -b "$CASE_BRANCH"
 
-      - name: Create initial case record
+          git checkout -b "$CASE_BRANCH"
+          git push -u origin "$CASE_BRANCH"
+
+      - name: Switch back to base branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout "${{ inputs.base_ref }}"
+          git pull --ff-only origin "${{ inputs.base_ref }}"
+
+      - name: Update persistent case record on jy
         shell: bash
         run: |
           set -euo pipefail
 
           CASE_ID="${{ inputs.case_id }}"
           CASE_BRANCH="case/${CASE_ID}"
+          RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
 
-          python scripts/update_case_record.py create \
-            --case-id "$CASE_ID" \
-            --service "${{ inputs.service }}" \
-            --branch-name "$CASE_BRANCH" \
-            --status "branch_created" \
-            --source-image-ref "${{ inputs.source_image_ref }}" \
-            --sandbox-manifest-path "${{ inputs.sandbox_manifest_path }}" \
-            --note "${{ inputs.note }}"
+          if [[ -f "$RECORD_PATH" ]]; then
+            python scripts/update_case_record.py update \
+              --case-id "$CASE_ID" \
+              --service "${{ inputs.service }}" \
+              --branch-name "$CASE_BRANCH" \
+              --status "sandbox_created" \
+              --source-image-ref "${{ inputs.source_image_ref }}" \
+              --sandbox-manifest-path "${{ inputs.sandbox_manifest_path }}" \
+              --metadata-json "{\"case_branch_created\": true, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
+              --note "${{ inputs.note }}"
+          else
+            python scripts/update_case_record.py create \
+              --case-id "$CASE_ID" \
+              --service "${{ inputs.service }}" \
+              --branch-name "$CASE_BRANCH" \
+              --status "sandbox_created" \
+              --source-image-ref "${{ inputs.source_image_ref }}" \
+              --sandbox-manifest-path "${{ inputs.sandbox_manifest_path }}" \
+              --metadata-json "{\"case_branch_created\": true, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
+              --note "${{ inputs.note }}"
+          fi
 
-      - name: Commit case record
+      - name: Commit updated case record on jy
         shell: bash
         run: |
           set -euo pipefail
           git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
-          git commit -m "chore(case): initialize case record for ${{ inputs.case_id }}"
+          git commit -m "chore(case): mark case branch created for ${{ inputs.case_id }}" || echo "No changes to commit"
 
-      - name: Push case branch
+      - name: Push updated record on jy
         shell: bash
         run: |
           set -euo pipefail
-          CASE_BRANCH="case/${{ inputs.case_id }}"
-          git push -u origin "$CASE_BRANCH"
+          git push origin "${{ inputs.base_ref }}"

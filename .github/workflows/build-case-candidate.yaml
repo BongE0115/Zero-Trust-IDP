@@ -15,16 +15,18 @@ permissions:
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/worker-consumer
+  RECORD_BRANCH: jy
 
 jobs:
   build-case-candidate:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout case branch
+      - name: Checkout case branch source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          path: case-src
 
       - name: Parse case_id from branch
         id: parse
@@ -51,6 +53,7 @@ jobs:
           echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Configure git
+        working-directory: case-src
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -67,8 +70,8 @@ jobs:
         id: build_push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: services/worker-consumer/Dockerfile
+          context: case-src
+          file: case-src/services/worker-consumer/Dockerfile
           push: true
           provenance: false
           tags: |
@@ -89,8 +92,23 @@ jobs:
           IMAGE_REF="${{ env.IMAGE_NAME }}@${DIGEST}"
           echo "image_ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
 
-      - name: Read sandbox manifest path from case record
+      - name: Checkout jy record branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RECORD_BRANCH }}
+          fetch-depth: 0
+          path: record-repo
+
+      - name: Configure git on record branch
+        working-directory: record-repo
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Read sandbox manifest path from jy case record
         id: record
+        working-directory: record-repo
         shell: bash
         run: |
           set -euo pipefail
@@ -99,29 +117,26 @@ jobs:
           RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
 
           if [[ ! -f "$RECORD_PATH" ]]; then
-            echo "Case record not found: $RECORD_PATH"
+            echo "Case record not found on jy: $RECORD_PATH"
             exit 1
           fi
 
-          SANDBOX_MANIFEST_PATH="$(python - <<'PY'
-          
+          SANDBOX_MANIFEST_PATH="$(python - <<PY
 import json
-import sys
 from pathlib import Path
 
 case_id = "${{ steps.parse.outputs.case_id }}"
 path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
 data = json.loads(path.read_text(encoding="utf-8"))
-value = data.get("sandbox_manifest_path") or ""
-print(value)
+print(data.get("sandbox_manifest_path") or "")
 PY
 )"
           if [[ -z "$SANDBOX_MANIFEST_PATH" ]]; then
-            echo "sandbox_manifest_path is empty in case record"
+            echo "sandbox_manifest_path is empty in jy case record"
             exit 1
           fi
 
-          CURRENT_GEN="$(python - <<'PY'
+          CURRENT_GEN="$(python - <<PY
 import json
 from pathlib import Path
 
@@ -136,8 +151,9 @@ PY
           echo "sandbox_manifest_path=$SANDBOX_MANIFEST_PATH" >> "$GITHUB_OUTPUT"
           echo "next_generation=$NEXT_GEN" >> "$GITHUB_OUTPUT"
 
-      - name: Patch sandbox manifest with candidate image
+      - name: Patch sandbox manifest and jy case record
         id: patch
+        working-directory: record-repo
         shell: bash
         run: |
           set -euo pipefail
@@ -149,9 +165,10 @@ PY
             --generation "${{ steps.record.outputs.next_generation }}" \
             --set-case-configmap \
             --update-record \
-            --note "candidate image built from case branch ${GITHUB_REF_NAME}"
+            --note "candidate image built from case branch ${{ steps.parse.outputs.case_branch }}"
 
-      - name: Commit updated sandbox manifest and case record
+      - name: Commit updated sandbox manifest and jy case record
+        working-directory: record-repo
         shell: bash
         run: |
           set -euo pipefail
@@ -166,8 +183,9 @@ PY
 
           git commit -m "chore(case): patch candidate image for ${{ steps.parse.outputs.case_id }}"
 
-      - name: Push case branch updates
+      - name: Push jy record branch updates
+        working-directory: record-repo
         shell: bash
         run: |
           set -euo pipefail
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
