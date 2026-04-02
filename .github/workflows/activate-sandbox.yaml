@@ -200,7 +200,27 @@ jobs:
       - name: Push manifest and record changes
         shell: bash
         run: |
-          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+          set -euo pipefail
+
+          BRANCH="${{ env.RECORD_BRANCH }}"
+
+          for attempt in 1 2 3 4 5; do
+            echo "[INFO] push attempt ${attempt}"
+
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+
+            if git push origin "HEAD:${BRANCH}"; then
+              echo "[OK] push succeeded"
+              exit 0
+            fi
+
+            echo "[WARN] push rejected, retrying..."
+            sleep $((attempt * 2))
+          done
+
+          echo "[ERROR] failed to push after multiple attempts"
+          exit 1
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
