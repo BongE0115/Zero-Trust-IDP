@@ -327,15 +327,17 @@ if [ "$${ENABLE_MONITORING_GITHUB_RUNNER}" = "true" ]; then
     exit 1
   fi
 
+chown -R ubuntu:ubuntu "$RUNNER_ROOT" 
+
   if [ ! -f "$RUNNER_ROOT/.runner" ]; then
-    ./config.sh \
+    sudo -u ubuntu ./config.sh \
       --unattended \
       --replace \
       --name "$RUNNER_NAME" \
       --url "$RUNNER_URL" \
       --token "$REG_TOKEN" \
       --labels "$GITHUB_RUNNER_LABELS,private-vpc,$PRIVATE_IP" \
-      --work "_work"
+      --work "_work" 
   else
     echo "[INFO] Runner already configured. Skipping config.sh." | tee -a /opt/bootstrap/logs/github-runner.log
   fi
