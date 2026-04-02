@@ -110,6 +110,7 @@ resource "null_resource" "auto_run_setup" {
   depends_on = [local_file.local_node_setup_script]
 
   provisioner "local-exec" {
+    interpreter = ["bash", "-c"] # WSL 환경에서도 호환되도록 bash 사용
     command = "./setup_local_env.sh" # <--- sudo 제거
   }
 }
