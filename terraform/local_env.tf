@@ -106,11 +106,31 @@ resource "local_file" "local_node_setup_script" {
   EOT
 }
 
-resource "null_resource" "auto_run_setup" {
-  depends_on = [local_file.local_node_setup_script]
+# 1. 🔍 OS 자동 판별 로직
+locals {
+  # pathexpand("~")의 결과가 'C:\'나 'D:\' 같은 알파벳으로 시작하면 Windows로 간주합니다.
+  is_windows = length(regexall("^[a-zA-Z]:", pathexpand("~"))) > 0
+}
+
+# 2. 🐧 우분투(Linux) 환경일 때 자동으로 실행되는 블록
+resource "null_resource" "setup_linux" {
+  # Windows가 아닐 때만 1개를 생성하여 실행합니다.
+  count = local.is_windows ? 0 : 1
 
   provisioner "local-exec" {
-    interpreter = ["bash", "-c"] # WSL 환경에서도 호환되도록 bash 사용
-    command = "./setup_local_env.sh" # <--- sudo 제거
+    command     = "./setup_local_env.sh"
+    interpreter = ["bash", "-c"] # 순수 bash 터미널 사용
+  }
+}
+
+# 3. 🪟 윈도우(Windows) 환경일 때 자동으로 실행되는 블록
+resource "null_resource" "setup_windows" {
+  # Windows일 때만 1개를 생성하여 실행합니다.
+  count = local.is_windows ? 1 : 0
+
+  provisioner "local-exec" {
+    # Windows CMD에서 wsl 명령어를 통해 리눅스 환경으로 넘겨서 실행합니다.
+    command     = "wsl ./setup_local_env.sh"
+    interpreter = ["cmd", "/C"] # Windows 기본 터미널 사용
   }
 }
