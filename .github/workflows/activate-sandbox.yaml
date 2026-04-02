@@ -21,10 +21,10 @@ permissions:
 
 env:
   TEMPLATE_YAML_PATH: gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
-  LAUNCHER_IMAGE_REF: ghcr.io/bonge0115/forensic-launcher:latest
   SPEC_PATH: /tmp/sandbox-spec/spec.json
   FAILURE_ARTIFACT_PATH: /tmp/sandbox-spec/failure-artifact.json
   NORMAL_ARTIFACT_PATH: /tmp/sandbox-spec/normal-artifact.json
+  RECORD_BRANCH: jy
 
 jobs:
   activate-sandbox:
@@ -34,7 +34,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: jy
+          ref: ${{ env.RECORD_BRANCH }}
           fetch-depth: 0
 
       - name: Prepare sandbox inputs
@@ -67,25 +67,11 @@ jobs:
           case_id = spec["metadata"]["case_id"]
 
           if failure.get("case_id") != case_id:
-              raise ValueError(
-                  f"failure artifact case_id mismatch: expected={case_id}, actual={failure.get('case_id')}"
-              )
+              raise ValueError(f"failure artifact case_id mismatch: expected={case_id}, actual={failure.get('case_id')}")
           if normal.get("case_id") != case_id:
-              raise ValueError(
-                  f"normal artifact case_id mismatch: expected={case_id}, actual={normal.get('case_id')}"
-              )
+              raise ValueError(f"normal artifact case_id mismatch: expected={case_id}, actual={normal.get('case_id')}")
 
-          if failure.get("artifact_type") != "failure_replay":
-              raise ValueError(
-                  f"failure artifact_type mismatch: {failure.get('artifact_type')}"
-              )
-          if normal.get("artifact_type") != "normal_validation":
-              raise ValueError(
-                  f"normal artifact_type mismatch: {normal.get('artifact_type')}"
-              )
-
-          print("[OK] input JSON validation passed")
-          print(f"[OK] case_id={case_id}")
+          print(f"[OK] input JSON validation passed case_id={case_id}")
           PY
 
       - name: Derive case metadata and manifest path
@@ -98,10 +84,11 @@ jobs:
           from pathlib import Path
 
           spec = json.loads(Path("/tmp/sandbox-spec/spec.json").read_text(encoding="utf-8"))
-
           case_id = spec["metadata"]["case_id"]
           source_service = spec["metadata"].get("source_service", "")
           source_image_ref = spec["sandbox"].get("consumer_image_ref", "")
+          replay_topic = spec["sandbox"].get("replay_topic", "")
+          result_topic = spec["sandbox"].get("result_topic", "")
           case_branch = f"case/{case_id}"
 
           safe = "".join(c.lower() if c.isalnum() else "-" for c in case_id)
@@ -122,13 +109,8 @@ jobs:
               f.write(f"record_path={record_path}\n")
               f.write(f"source_service={source_service}\n")
               f.write(f"source_image_ref={source_image_ref}\n")
-
-          print(f"[OK] case_id={case_id}")
-          print(f"[OK] case_branch={case_branch}")
-          print(f"[OK] safe_case_id={safe}")
-          print(f"[OK] output_yaml={output_yaml}")
-          print(f"[OK] source_service={source_service}")
-          print(f"[OK] source_image_ref={source_image_ref}")
+              f.write(f"replay_topic={replay_topic}\n")
+              f.write(f"result_topic={result_topic}\n")
           PY
 
       - name: Generate case-specific sandbox manifest
@@ -138,9 +120,40 @@ jobs:
             --spec "${SPEC_PATH}" \
             --failure-artifact "${FAILURE_ARTIFACT_PATH}" \
             --normal-artifact "${NORMAL_ARTIFACT_PATH}" \
-            --launcher-image-ref "${LAUNCHER_IMAGE_REF}" \
             --template-yaml "${TEMPLATE_YAML_PATH}" \
             --output-yaml "${{ steps.case_meta.outputs.output_yaml }}"
+
+      - name: Resolve generated consumer deployment name
+        id: deploy_meta
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import yaml
+          from pathlib import Path
+
+          path = Path("${{ steps.case_meta.outputs.output_yaml }}")
+          docs = [d for d in yaml.safe_load_all(path.read_text(encoding="utf-8")) if d]
+
+          deployment_name = None
+          for doc in docs:
+              if doc.get("kind") != "Deployment":
+                  continue
+              containers = doc.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+              for c in containers:
+                  if c.get("name") == "consumer-app":
+                      deployment_name = doc.get("metadata", {}).get("name")
+                      break
+              if deployment_name:
+                  break
+
+          if not deployment_name:
+              raise SystemExit("consumer deployment name not found in generated manifest")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"deployment_name={deployment_name}\n")
+          print(f"[OK] deployment_name={deployment_name}")
+          PY
 
       - name: Create or refresh case record on jy
         shell: bash
@@ -176,20 +189,6 @@ jobs:
               --note "sandbox manifest created on jy"
           fi
 
-      - name: Show generated manifest
-        shell: bash
-        run: |
-          echo "===== GENERATED CASE MANIFEST ====="
-          cat "${{ steps.case_meta.outputs.output_yaml }}"
-          echo "===== END GENERATED CASE MANIFEST ====="
-
-      - name: Show git diff
-        shell: bash
-        run: |
-          git diff -- \
-            "${{ steps.case_meta.outputs.output_yaml }}" \
-            "${{ steps.case_meta.outputs.record_path }}" || true
-
       - name: Commit generated case manifest and record
         shell: bash
         run: |
@@ -204,13 +203,60 @@ jobs:
       - name: Push manifest and record changes
         shell: bash
         run: |
-          git push origin HEAD
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Configure kubeconfig
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.kube"
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+      - name: Wait for consumer deployment to become available
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl wait \
+            --namespace forensic-sandbox \
+            --for=condition=Available \
+            "deployment/${{ steps.deploy_meta.outputs.deployment_name }}" \
+            --timeout=180s
+
+      - name: Dispatch reproduce launcher workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.WORKFLOW_PAT }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/reproduce-sandbox.yaml/dispatches \
+            -d @- <<EOF
+          {
+            "ref": "${{ env.RECORD_BRANCH }}",
+            "inputs": {
+              "case_id": "${{ steps.case_meta.outputs.case_id }}",
+              "namespace": "forensic-sandbox",
+              "replay_topic": "${{ steps.case_meta.outputs.replay_topic }}",
+              "result_topic": "${{ steps.case_meta.outputs.result_topic }}",
+              "failure_artifact_json": ${{ toJson(inputs.failure_artifact_json) }},
+              "normal_artifact_json": ${{ toJson(inputs.normal_artifact_json) }}
+            }
+          }
+          EOF
 
       - name: Summary
         shell: bash
         run: |
           echo "case_id=${{ steps.case_meta.outputs.case_id }}"
-          echo "safe_case_id=${{ steps.case_meta.outputs.safe_case_id }}"
           echo "case_branch=${{ steps.case_meta.outputs.case_branch }}"
           echo "manifest=${{ steps.case_meta.outputs.output_yaml }}"
-          echo "record=${{ steps.case_meta.outputs.record_path }}"
+          echo "consumer_deployment=${{ steps.deploy_meta.outputs.deployment_name }}"
+          echo "replay_topic=${{ steps.case_meta.outputs.replay_topic }}"
+          echo "result_topic=${{ steps.case_meta.outputs.result_topic }}"

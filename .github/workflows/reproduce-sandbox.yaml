@@ -1,0 +1,213 @@
+name: reproduce-sandbox
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Unique case identifier"
+        required: true
+        type: string
+      namespace:
+        description: "Namespace where launcher job runs"
+        required: false
+        default: "forensic-sandbox"
+        type: string
+      replay_topic:
+        description: "Replay topic for this case"
+        required: true
+        type: string
+      result_topic:
+        description: "Result topic for this case"
+        required: true
+        type: string
+      failure_artifact_json:
+        description: "Failure replay artifact JSON"
+        required: true
+        type: string
+      normal_artifact_json:
+        description: "Normal validation artifact JSON"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  RECORD_BRANCH: jy
+  LAUNCHER_IMAGE_REF: ghcr.io/bonge0115/forensic-launcher:latest
+  OUTPUT_DIR: gitops/apps/forensic-sandbox/cases/revalidation
+
+jobs:
+  reproduce-sandbox:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ inputs.case_id }}"
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+      - name: Checkout jy branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RECORD_BRANCH }}
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Build reproduce launcher manifest
+        id: render
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SAFE="$(echo "${{ inputs.case_id }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-40)"
+          if [[ -z "$SAFE" ]]; then
+            SAFE="case"
+          fi
+
+          OUTPUT_PATH="${{ env.OUTPUT_DIR }}/revalidate-case-${{ inputs.case_id }}.yaml"
+          JOB_NAME="forensic-reproduce-${SAFE}"
+
+          mkdir -p "$(dirname "$OUTPUT_PATH")"
+
+          cat > "$OUTPUT_PATH" <<EOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${JOB_NAME}
+  namespace: ${{ inputs.namespace }}
+  labels:
+    app: ${JOB_NAME}
+    forensic-case-id: ${{ inputs.case_id }}
+    forensic-validation-mode: reproduce
+    forensic-revalidation-generation: "0"
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: ${JOB_NAME}
+        forensic-case-id: ${{ inputs.case_id }}
+        forensic-validation-mode: reproduce
+        forensic-revalidation-generation: "0"
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: artifact-init
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /artifacts
+              cat > /artifacts/failure.json <<'ARTIFACT_FAILURE'
+${{ inputs.failure_artifact_json }}
+ARTIFACT_FAILURE
+              cat > /artifacts/normal.json <<'ARTIFACT_NORMAL'
+${{ inputs.normal_artifact_json }}
+ARTIFACT_NORMAL
+              cat > /artifacts/consumer-ready.json <<'READY_JSON'
+{"ready": true, "source": "workflow_wait"}
+READY_JSON
+          volumeMounts:
+            - name: artifacts
+              mountPath: /artifacts
+      containers:
+        - name: forensic-launcher
+          image: ${{ env.LAUNCHER_IMAGE_REF }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: kafka.kafka-poc.svc.cluster.local:9092
+            - name: CASE_ID
+              value: ${{ inputs.case_id }}
+            - name: REPLAY_TOPIC
+              value: ${{ inputs.replay_topic }}
+            - name: RESULT_TOPIC
+              value: ${{ inputs.result_topic }}
+            - name: RESULT_GROUP_ID
+              value: forensic-launcher-reproduce
+            - name: FAILURE_ARTIFACT_PATH
+              value: /artifacts/failure.json
+            - name: NORMAL_ARTIFACT_PATH
+              value: /artifacts/normal.json
+            - name: VERDICT_FILE_PATH
+              value: /artifacts/verdict.json
+            - name: ENABLE_NORMAL_VALIDATION
+              value: "true"
+            - name: READY_FILE_PATH
+              value: /artifacts/consumer-ready.json
+            - name: READY_WAIT_SECONDS
+              value: "5"
+            - name: BETWEEN_FAILURE_AND_NORMAL_SECONDS
+              value: "5"
+            - name: RESULT_WAIT_SECONDS
+              value: "60"
+            - name: EXPECTED_FAILURE_ERROR_TYPE
+              value: ""
+            - name: ISOLATION_MODE
+              value: sandbox_strict
+            - name: ALLOWED_REPLAY_TOPIC
+              value: ${{ inputs.replay_topic }}
+            - name: ALLOWED_RESULT_TOPIC
+              value: ${{ inputs.result_topic }}
+            - name: VALIDATION_MODE
+              value: reproduce
+            - name: VALIDATION_RUN_ID
+              value: reproduce-${{ inputs.case_id }}-0
+            - name: REVALIDATION_GENERATION
+              value: "0"
+            - name: EXPECTED_FAILURE_STATUS
+              value: failed
+            - name: EXPECTED_NORMAL_STATUS
+              value: success
+            - name: IMAGE_REF
+              value: ${{ env.LAUNCHER_IMAGE_REF }}
+          volumeMounts:
+            - name: artifacts
+              mountPath: /artifacts
+      volumes:
+        - name: artifacts
+          emptyDir: {}
+EOF
+
+          echo "output_path=$OUTPUT_PATH" >> "$GITHUB_OUTPUT"
+          echo "job_name=$JOB_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Update jy case record metadata
+        shell: bash
+        run: |
+          python scripts/update_case_record.py update \
+            --case-id "${{ inputs.case_id }}" \
+            --metadata-json "{\"revalidation_job_manifest_path\": \"${{ steps.render.outputs.output_path }}\"}" \
+            --note "initial reproduce launcher manifest created"
+
+      - name: Commit reproduce launcher manifest and record
+        shell: bash
+        run: |
+          git add "${{ steps.render.outputs.output_path }}"
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): request reproduce launcher for ${{ inputs.case_id }}"
+
+      - name: Push jy branch
+        shell: bash
+        run: |
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
