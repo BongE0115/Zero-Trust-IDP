@@ -29,6 +29,7 @@ env:
 jobs:
   activate-sandbox:
     runs-on: ubuntu-latest
+    environment: forensic-sandbox
 
     steps:
       - name: Checkout repository
@@ -204,6 +205,35 @@ jobs:
         shell: bash
         run: |
           git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+
+      - name: Preflight check for required GitHub secrets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "WORKFLOW_PAT secret is empty or missing"
+            exit 1
+          fi
+
+          REPO="${{ github.repository }}"
+
+          echo "[INFO] Checking repository-level secret metadata for KUBECONFIG_B64..."
+          http_code=$(curl -sS -o /tmp/secret_meta.json -w "%{http_code}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${REPO}/actions/secrets/KUBECONFIG_B64")
+
+          if [[ "$http_code" != "200" ]]; then
+            echo "Repository secret KUBECONFIG_B64 not found or inaccessible (HTTP ${http_code})"
+            echo "If you stored it as an Environment secret, this workflow job will not see it unless the job uses that environment."
+            cat /tmp/secret_meta.json || true
+            exit 1
+          fi
+
+          echo "[OK] Repository secret metadata is visible."
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4

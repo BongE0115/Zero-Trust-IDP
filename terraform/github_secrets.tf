@@ -11,18 +11,9 @@ terraform {
   }
 }
 
-locals {
-  github_owner_trimmed      = trimspace(var.github_owner)
-  github_repository_trimmed = trimspace(var.github_repository)
-  github_secret_name_trimmed = trimspace(var.github_actions_kubeconfig_secret_name)
-  github_sync_token = var.enable_github_secret_sync
-    ? trimspace(nonsensitive(data.aws_ssm_parameter.github_secret_sync_token[0].value))
-    : ""
-}
-
 provider "github" {
-  owner = local.github_owner_trimmed
-  token = local.github_sync_token
+  owner = var.github_owner
+  token = var.enable_github_secret_sync ? nonsensitive(data.aws_ssm_parameter.github_secret_sync_token[0].value) : ""
 }
 
 data "aws_ssm_parameter" "github_secret_sync_token" {
@@ -53,34 +44,19 @@ data "external" "k3s_kubeconfig_b64" {
 resource "github_actions_secret" "kubeconfig_b64" {
   count = var.enable_github_secret_sync ? 1 : 0
 
-  repository      = local.github_repository_trimmed
-  secret_name     = local.github_secret_name_trimmed
+  repository      = trimspace(var.github_repository)
+  secret_name     = trimspace(var.github_actions_kubeconfig_secret_name)
   plaintext_value = data.external.k3s_kubeconfig_b64[0].result.kubeconfig_b64
 
   lifecycle {
     precondition {
-      condition     = length(local.github_owner_trimmed) > 0
+      condition     = length(trimspace(var.github_owner)) > 0
       error_message = "enable_github_secret_sync=true 인데 github_owner 가 비어 있습니다."
     }
 
     precondition {
-      condition     = length(local.github_repository_trimmed) > 0
+      condition     = length(trimspace(var.github_repository)) > 0
       error_message = "enable_github_secret_sync=true 인데 github_repository 가 비어 있습니다."
-    }
-
-    precondition {
-      condition     = length(local.github_secret_name_trimmed) > 0
-      error_message = "github_actions_kubeconfig_secret_name 이 비어 있습니다."
-    }
-
-    precondition {
-      condition     = length(local.github_sync_token) > 0
-      error_message = "SSM 에서 읽은 GitHub PAT 가 비어 있습니다. github_secret_sync_ssm_parameter_name 을 확인하세요."
-    }
-
-    precondition {
-      condition     = can(data.external.k3s_kubeconfig_b64[0].result.kubeconfig_b64) && length(trimspace(data.external.k3s_kubeconfig_b64[0].result.kubeconfig_b64)) > 0
-      error_message = "k3s kubeconfig base64 생성에 실패했습니다. get_k3s_kubeconfig.py 또는 k3s_server/SSM 상태를 확인하세요."
     }
   }
 }
