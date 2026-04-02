@@ -50,6 +50,41 @@ def upsert_env(container: Dict[str, Any], name: str, value: str) -> None:
     env_list.append({"name": name, "value": value})
 
 
+def get_volume_mounts(container: Dict[str, Any]) -> List[Dict[str, str]]:
+    mounts = container.get("volumeMounts")
+    if mounts is None:
+        mounts = []
+        container["volumeMounts"] = mounts
+    return mounts
+
+
+def ensure_volume_mount(container: Dict[str, Any], name: str, mount_path: str) -> None:
+    mounts = get_volume_mounts(container)
+    for mount in mounts:
+        if mount.get("name") == name:
+            mount["mountPath"] = mount_path
+            return
+    mounts.append({"name": name, "mountPath": mount_path})
+
+
+def get_volumes(pod_spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+    volumes = pod_spec.get("volumes")
+    if volumes is None:
+        volumes = []
+        pod_spec["volumes"] = volumes
+    return volumes
+
+
+def ensure_empty_dir_volume(pod_spec: Dict[str, Any], name: str) -> None:
+    volumes = get_volumes(pod_spec)
+    for volume in volumes:
+        if volume.get("name") == name:
+            if "emptyDir" not in volume:
+                volume["emptyDir"] = {}
+            return
+    volumes.append({"name": name, "emptyDir": {}})
+
+
 def find_deployment(docs: List[Dict[str, Any]], deployment_name: str) -> Dict[str, Any]:
     for doc in docs:
         if doc.get("kind") == "Deployment" and doc.get("metadata", {}).get("name") == deployment_name:
@@ -85,6 +120,14 @@ def find_init_container_by_name(init_containers: List[Dict[str, Any]], name: str
     raise ValueError(f"Init container '{name}' not found")
 
 
+def keep_only_named_containers(containers: List[Dict[str, Any]], allowed_names: List[str]) -> List[Dict[str, Any]]:
+    allowed = set(allowed_names)
+    filtered = [c for c in containers if c.get("name") in allowed]
+    if not filtered:
+        raise ValueError(f"None of the expected containers were found: {allowed_names}")
+    return filtered
+
+
 def sanitize_name(value: str, max_len: int = 40) -> str:
     cleaned = "".join(c.lower() if c.isalnum() else "-" for c in value)
     while "--" in cleaned:
@@ -99,16 +142,72 @@ def make_case_suffix(case_id: str) -> str:
     return sanitize_name(case_id, max_len=24)
 
 
+def build_topic_init_command() -> List[str]:
+    script = '''set -eu
+
+BOOTSTRAP="${KAFKA_BOOTSTRAP:?KAFKA_BOOTSTRAP is required}"
+PARTITIONS="${TOPIC_PARTITIONS:-1}"
+REPLICATION="${TOPIC_REPLICATION_FACTOR:-1}"
+
+create_topic_if_needed() {
+  topic="$1"
+  if [ -z "$topic" ]; then
+    return 0
+  fi
+
+  /opt/bitnami/kafka/bin/kafka-topics.sh \
+    --bootstrap-server "$BOOTSTRAP" \
+    --create \
+    --if-not-exists \
+    --topic "$topic" \
+    --partitions "$PARTITIONS" \
+    --replication-factor "$REPLICATION"
+}
+
+create_topic_if_needed "${REPLAY_TOPIC:-}"
+create_topic_if_needed "${RESULT_TOPIC:-}"
+
+echo "topic-init completed"
+'''
+    return ["/bin/sh", "-c", script]
+
+
+def patch_topic_init_container(
+    deployment: Dict[str, Any],
+    topic_init: Dict[str, Any],
+) -> None:
+    pod_spec = deployment["spec"]["template"]["spec"]
+    init_containers = pod_spec.get("initContainers", [])
+    if not init_containers:
+        raise ValueError("initContainers not found in sandbox deployment")
+
+    init_container = find_init_container_by_name(init_containers, "topic-init")
+    if topic_init.get("image"):
+        init_container["image"] = topic_init["image"]
+
+    init_container["command"] = build_topic_init_command()
+    upsert_env(init_container, "KAFKA_BOOTSTRAP", topic_init.get("kafka_bootstrap", ""))
+    upsert_env(init_container, "REPLAY_TOPIC", topic_init.get("replay_topic", ""))
+    upsert_env(init_container, "RESULT_TOPIC", topic_init.get("result_topic", ""))
+    upsert_env(init_container, "TOPIC_PARTITIONS", topic_init.get("partitions", "1"))
+    upsert_env(init_container, "TOPIC_REPLICATION_FACTOR", topic_init.get("replication_factor", "1"))
+
+
 def patch_init_container_for_artifacts(
     deployment: Dict[str, Any],
     failure_artifact: Dict[str, Any],
     normal_artifact: Dict[str, Any],
 ) -> None:
-    init_containers = deployment["spec"]["template"]["spec"].get("initContainers", [])
+    pod_spec = deployment["spec"]["template"]["spec"]
+    ensure_empty_dir_volume(pod_spec, "artifacts")
+
+    init_containers = pod_spec.get("initContainers", [])
     if not init_containers:
         raise ValueError("initContainers not found in sandbox deployment")
 
     init_container = find_init_container_by_name(init_containers, "artifact-init")
+    ensure_volume_mount(init_container, "artifacts", "/artifacts")
+
     script = f"""mkdir -p /artifacts
 cat > /artifacts/failure.json <<'EOF'
 {json.dumps(failure_artifact, ensure_ascii=False, indent=2)}
@@ -125,11 +224,16 @@ def patch_job_artifact_init_for_artifacts(
     failure_artifact: Dict[str, Any],
     normal_artifact: Dict[str, Any],
 ) -> None:
-    init_containers = job["spec"]["template"]["spec"].get("initContainers", [])
+    pod_spec = job["spec"]["template"]["spec"]
+    ensure_empty_dir_volume(pod_spec, "artifacts")
+
+    init_containers = pod_spec.get("initContainers", [])
     if not init_containers:
         raise ValueError("initContainers not found in launcher job")
 
     init_container = find_init_container_by_name(init_containers, "artifact-init")
+    ensure_volume_mount(init_container, "artifacts", "/artifacts")
+
     script = f"""mkdir -p /artifacts
 cat > /artifacts/failure.json <<'EOF'
 {json.dumps(failure_artifact, ensure_ascii=False, indent=2)}
@@ -269,12 +373,17 @@ def build_case_manifest_docs(
     if not containers:
         raise ValueError("Deployment has no containers")
 
+    pod_spec["containers"] = keep_only_named_containers(containers, ["consumer-app"])
+    consumer_container = find_container_by_name(pod_spec["containers"], "consumer-app")
+
     init_containers = pod_spec.get("initContainers", [])
     if not init_containers:
         raise ValueError("Deployment has no initContainers")
 
-    topic_init_container = find_init_container_by_name(init_containers, "topic-init")
-    consumer_container = find_container_by_name(containers, "consumer-app")
+    patch_topic_init_container(deployment, topic_init)
+
+    ensure_empty_dir_volume(pod_spec, "artifacts")
+    ensure_volume_mount(consumer_container, "artifacts", "/artifacts")
 
     job["metadata"]["namespace"] = sandbox["namespace"]
     job["metadata"]["name"] = case_job_name
@@ -291,11 +400,15 @@ def build_case_manifest_docs(
     if not job_containers:
         raise ValueError("Launcher Job has no containers")
 
+    job_pod_spec["containers"] = keep_only_named_containers(job_containers, ["forensic-launcher"])
+    launcher_container = find_container_by_name(job_pod_spec["containers"], "forensic-launcher")
+
     job_init_containers = job_pod_spec.get("initContainers", [])
     if not job_init_containers:
         raise ValueError("Launcher Job has no initContainers")
 
-    launcher_container = find_container_by_name(job_containers, "forensic-launcher")
+    ensure_empty_dir_volume(job_pod_spec, "artifacts")
+    ensure_volume_mount(launcher_container, "artifacts", "/artifacts")
 
     mongo_deployment["metadata"]["namespace"] = sandbox["namespace"]
     mongo_deployment["metadata"]["name"] = case_mongo_name
@@ -314,15 +427,6 @@ def build_case_manifest_docs(
 
     consumer_container["image"] = sandbox["consumer_image_ref"]
     launcher_container["image"] = launcher_image_ref
-
-    if topic_init.get("image"):
-        topic_init_container["image"] = topic_init["image"]
-
-    upsert_env(topic_init_container, "KAFKA_BOOTSTRAP", topic_init.get("kafka_bootstrap", ""))
-    upsert_env(topic_init_container, "REPLAY_TOPIC", topic_init.get("replay_topic", ""))
-    upsert_env(topic_init_container, "RESULT_TOPIC", topic_init.get("result_topic", ""))
-    upsert_env(topic_init_container, "TOPIC_PARTITIONS", topic_init.get("partitions", "1"))
-    upsert_env(topic_init_container, "TOPIC_REPLICATION_FACTOR", topic_init.get("replication_factor", "1"))
 
     for k, v in sandbox["consumer_env"].items():
         upsert_env(consumer_container, k, v)
@@ -347,6 +451,7 @@ def build_case_manifest_docs(
 
     upsert_env(launcher_container, "CASE_ID", metadata["case_id"])
     upsert_env(launcher_container, "REPLAY_TOPIC", sandbox["replay_topic"])
+    upsert_env(launcher_container, "RESULT_TOPIC", sandbox.get("result_topic", ""))
     upsert_env(
         launcher_container,
         "ENABLE_NORMAL_VALIDATION",
