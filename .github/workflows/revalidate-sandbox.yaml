@@ -136,12 +136,19 @@ jobs:
             --update-record \
             --note "${{ inputs.note }}"
 
+      - name: Expose rendered manifest path
+        id: manifest_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "manifest_path=gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-${{ inputs.case_id }}.yaml" >> "$GITHUB_OUTPUT"
+
       - name: Commit revalidation manifest and jy case record
         shell: bash
         run: |
           set -euo pipefail
 
-          git add "gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-${{ inputs.case_id }}.yaml"
+          git add "${{ steps.manifest_meta.outputs.manifest_path }}"
           git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
 
           if git diff --cached --quiet; then
@@ -162,4 +169,4 @@ jobs:
         run: |
           echo "case_id=${{ inputs.case_id }}"
           echo "revalidation_generation=${{ steps.record.outputs.next_generation }}"
-          echo "revalidation_manifest=gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-${{ inputs.case_id }}.yaml"
+          echo "revalidation_manifest=${{ steps.manifest_meta.outputs.manifest_path }}"
