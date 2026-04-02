@@ -155,7 +155,7 @@ jobs:
       - name: Create or refresh case record on jy
         shell: bash
         run: |
-          set -euo 
+          set -euo pipefail
 
           CASE_ID="${{ steps.case_meta.outputs.case_id }}"
           RECORD_PATH="${{ steps.case_meta.outputs.record_path }}"
@@ -164,6 +164,7 @@ jobs:
           SOURCE_IMAGE_REF="${{ steps.case_meta.outputs.source_image_ref }}"
           SANDBOX_MANIFEST_PATH="${{ steps.case_meta.outputs.output_yaml }}"
 
+          # activate-sandbox is the single writer responsible for initial record creation
           if [[ -f "$RECORD_PATH" ]]; then
             python3 scripts/update_case_record.py update \
               --case-id "$CASE_ID" \
@@ -185,6 +186,14 @@ jobs:
               --metadata-json "{\"case_branch_created\": false, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
               --note "sandbox manifest created on jy"
           fi
+
+      - name: Refresh jy before commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ env.RECORD_BRANCH }}"
+          git reset --hard "origin/${{ env.RECORD_BRANCH }}"
+
 
       - name: Commit generated case manifest and record
         shell: bash

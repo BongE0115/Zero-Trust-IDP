@@ -95,6 +95,28 @@ jobs:
           git checkout "${{ inputs.base_ref }}"
           git pull --ff-only origin "${{ inputs.base_ref }}"
 
+      - name: Wait until persistent case record exists on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+
+          for i in $(seq 1 12); do
+            if [[ -f "$RECORD_PATH" ]]; then
+              echo "[OK] case record found: $RECORD_PATH"
+              exit 0
+            fi
+
+            echo "[INFO] case record not found yet (${i}/12), refreshing from origin/${{ inputs.base_ref }}"
+            git fetch origin "${{ inputs.base_ref }}"
+            git reset --hard "origin/${{ inputs.base_ref }}"
+            sleep 5
+          done
+
+          echo "[ERROR] case record must already exist before create-case-branch updates it"
+          exit 1
+
       - name: Update persistent case record on jy
         shell: bash
         run: |
@@ -102,29 +124,16 @@ jobs:
 
           CASE_ID="${{ inputs.case_id }}"
           CASE_BRANCH="case/${CASE_ID}"
-          RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
 
-          if [[ -f "$RECORD_PATH" ]]; then
-            python3 scripts/update_case_record.py update \
-              --case-id "$CASE_ID" \
-              --service "${{ inputs.service }}" \
-              --branch-name "$CASE_BRANCH" \
-              --status "sandbox_created" \
-              --source-image-ref "${{ inputs.source_image_ref }}" \
-              --sandbox-manifest-path "${{ inputs.sandbox_manifest_path }}" \
-              --metadata-json "{\"case_branch_created\": true, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
-              --note "${{ inputs.note }}"
-          else
-            python3 scripts/update_case_record.py create \
-              --case-id "$CASE_ID" \
-              --service "${{ inputs.service }}" \
-              --branch-name "$CASE_BRANCH" \
-              --status "sandbox_created" \
-              --source-image-ref "${{ inputs.source_image_ref }}" \
-              --sandbox-manifest-path "${{ inputs.sandbox_manifest_path }}" \
-              --metadata-json "{\"case_branch_created\": true, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
-              --note "${{ inputs.note }}"
-          fi
+          python3 scripts/update_case_record.py update \
+            --case-id "$CASE_ID" \
+            --service "${{ inputs.service }}" \
+            --branch-name "$CASE_BRANCH" \
+            --status "sandbox_created" \
+            --source-image-ref "${{ inputs.source_image_ref }}" \
+            --sandbox-manifest-path "${{ inputs.sandbox_manifest_path }}" \
+            --metadata-json "{\"case_branch_created\": true, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
+            --note "${{ inputs.note }}"
 
       - name: Commit updated case record on jy
         shell: bash
@@ -137,4 +146,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git push origin "${{ inputs.base_ref }}"
+
+          BRANCH="${{ inputs.base_ref }}"
+
+          for attempt in 1 2 3 4 5; do
+            echo "[INFO] push attempt ${attempt}"
+
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+
+            if git push origin "HEAD:${BRANCH}"; then
+              echo "[OK] push succeeded"
+              exit 0
+            fi
+
+            echo "[WARN] push rejected, retrying..."
+            sleep $((attempt * 2))
+          done
+
+          echo "[ERROR] failed to push after multiple attempts"
+          exit 1
