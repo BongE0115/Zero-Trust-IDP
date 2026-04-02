@@ -336,7 +336,7 @@ resource "aws_iam_role_policy" "monitoring_runner_bootstrap_ssm_policy" {
         Action = [
           "kms:Decrypt"
         ]
-        Resource = "arn:aws:kms:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:alias/aws/ssm"
+        Resource = "arn:aws:kms:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:alias/aws/ssm"
       }
     ]
   })
