@@ -92,7 +92,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python scripts/collect_revalidation_result.py \
+          python3 scriptscollect_revalidation_result.py \
             --case-id "${{ inputs.case_id }}" \
             --verdict-path "${{ inputs.verdict_path }}" \
             --note "${{ inputs.note }}"

@@ -52,7 +52,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           from pathlib import Path
 
@@ -118,7 +118,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python scripts/update_case_record.py update \
+          python3 scriptsupdate_case_record.py update \
             --case-id "${{ inputs.case_id }}" \
             --status "cleanup_completed" \
             --flags-json '{"cleanup_completed": true, "resolved": true}' \
