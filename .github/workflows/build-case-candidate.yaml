@@ -112,6 +112,7 @@ jobs:
           set -euo pipefail
 
           CASE_ID="${{ steps.parse.outputs.case_id }}"
+          export CASE_ID
           RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
 
           if [[ ! -f "$RECORD_PATH" ]]; then
@@ -119,30 +120,34 @@ jobs:
             exit 1
           fi
 
-          SANDBOX_MANIFEST_PATH="$(python -c '
-import json
-from pathlib import Path
+          SANDBOX_MANIFEST_PATH="$(python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-case_id = "${{ steps.parse.outputs.case_id }}"
-path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
-data = json.loads(path.read_text(encoding="utf-8"))
-print(data.get("sandbox_manifest_path") or "")
-')"
+          case_id = os.environ["CASE_ID"]
+          path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          print(data.get("sandbox_manifest_path") or "")
+          PY
+          )"
 
           if [[ -z "$SANDBOX_MANIFEST_PATH" ]]; then
             echo "sandbox_manifest_path is empty in jy case record"
             exit 1
           fi
 
-          CURRENT_GEN="$(python -c '
-import json
-from pathlib import Path
+          CURRENT_GEN="$(python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-case_id = "${{ steps.parse.outputs.case_id }}"
-path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
-data = json.loads(path.read_text(encoding="utf-8"))
-print(int(data.get("revalidation_generation", 0)))
-')"
+          case_id = os.environ["CASE_ID"]
+          path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          print(int(data.get("revalidation_generation", 0)))
+          PY
+          )"
 
           NEXT_GEN=$((CURRENT_GEN + 1))
 

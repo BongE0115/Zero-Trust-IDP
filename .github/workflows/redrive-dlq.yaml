@@ -136,107 +136,107 @@ jobs:
           MANIFEST_PATH="/tmp/${JOB_NAME}.yaml"
 
           cat > "${MANIFEST_PATH}" <<EOF
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: ${JOB_NAME}
-  namespace: ${{ inputs.namespace }}
-  labels:
-    app.kubernetes.io/name: forensic-redrive
-    forensic-case-id: "${{ inputs.case_id }}"
-spec:
-  backoffLimit: 0
-  ttlSecondsAfterFinished: 86400
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: forensic-redrive
-        forensic-case-id: "${{ inputs.case_id }}"
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: redrive
-          image: python:3.11-slim
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -euo pipefail
-              pip install --no-cache-dir kafka-python
-              python - <<'PY'
-              import json
-              import os
-              from kafka import KafkaConsumer, KafkaProducer
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${JOB_NAME}
+            namespace: ${{ inputs.namespace }}
+            labels:
+              app.kubernetes.io/name: forensic-redrive
+              forensic-case-id: "${{ inputs.case_id }}"
+          spec:
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: forensic-redrive
+                  forensic-case-id: "${{ inputs.case_id }}"
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: redrive
+                    image: python:3.11-slim
+                    command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        set -euo pipefail
+                        pip install --no-cache-dir kafka-python
+                        python - <<'PY'
+                        import json
+                        import os
+                        from kafka import KafkaConsumer, KafkaProducer
 
-              case_id = os.environ["CASE_ID"]
-              kafka_bootstrap = os.environ["KAFKA_BOOTSTRAP"]
-              dlq_topic = os.environ["DLQ_TOPIC"]
-              target_topic = os.environ["TARGET_TOPIC"]
-              max_scan_messages = int(os.environ["MAX_SCAN_MESSAGES"])
-              group_id = f"redrive-{case_id}"
+                        case_id = os.environ["CASE_ID"]
+                        kafka_bootstrap = os.environ["KAFKA_BOOTSTRAP"]
+                        dlq_topic = os.environ["DLQ_TOPIC"]
+                        target_topic = os.environ["TARGET_TOPIC"]
+                        max_scan_messages = int(os.environ["MAX_SCAN_MESSAGES"])
+                        group_id = f"redrive-{case_id}"
 
-              consumer = KafkaConsumer(
-                  dlq_topic,
-                  bootstrap_servers=kafka_bootstrap,
-                  group_id=group_id,
-                  auto_offset_reset="earliest",
-                  enable_auto_commit=False,
-                  consumer_timeout_ms=3000,
-                  value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-              )
+                        consumer = KafkaConsumer(
+                            dlq_topic,
+                            bootstrap_servers=kafka_bootstrap,
+                            group_id=group_id,
+                            auto_offset_reset="earliest",
+                            enable_auto_commit=False,
+                            consumer_timeout_ms=3000,
+                            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+                        )
 
-              found = None
-              scanned = 0
-              try:
-                  for message in consumer:
-                      scanned += 1
-                      event = message.value
-                      if isinstance(event, dict) and event.get("case_id") == case_id:
-                          found = event
-                          consumer.commit()
-                          break
-                      if scanned >= max_scan_messages:
-                          break
-              finally:
-                  consumer.close()
+                        found = None
+                        scanned = 0
+                        try:
+                            for message in consumer:
+                                scanned += 1
+                                event = message.value
+                                if isinstance(event, dict) and event.get("case_id") == case_id:
+                                    found = event
+                                    consumer.commit()
+                                    break
+                                if scanned >= max_scan_messages:
+                                    break
+                        finally:
+                            consumer.close()
 
-              if found is None:
-                  raise SystemExit(f"Could not find case_id={case_id} within {max_scan_messages} scanned messages")
+                        if found is None:
+                            raise SystemExit(f"Could not find case_id={case_id} within {max_scan_messages} scanned messages")
 
-              payload = found.get("original_payload")
-              if not isinstance(payload, dict) or not payload:
-                  raise SystemExit("failure event does not contain valid original_payload")
+                        payload = found.get("original_payload")
+                        if not isinstance(payload, dict) or not payload:
+                            raise SystemExit("failure event does not contain valid original_payload")
 
-              producer = KafkaProducer(
-                  bootstrap_servers=kafka_bootstrap,
-                  value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"),
-              )
-              try:
-                  producer.send(target_topic, payload)
-                  producer.flush()
-              finally:
-                  producer.close()
+                        producer = KafkaProducer(
+                            bootstrap_servers=kafka_bootstrap,
+                            value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"),
+                        )
+                        try:
+                            producer.send(target_topic, payload)
+                            producer.flush()
+                        finally:
+                            producer.close()
 
-              print(json.dumps({
-                  "case_id": case_id,
-                  "status": "redriven",
-                  "order_id": payload.get("order_id", ""),
-                  "dlq_topic": dlq_topic,
-                  "target_topic": target_topic
-              }, ensure_ascii=False))
-              PY
-          env:
-            - name: CASE_ID
-              value: "${{ inputs.case_id }}"
-            - name: KAFKA_BOOTSTRAP
-              value: "${{ inputs.kafka_bootstrap }}"
-            - name: DLQ_TOPIC
-              value: "${{ inputs.dlq_topic }}"
-            - name: TARGET_TOPIC
-              value: "${{ inputs.target_topic }}"
-            - name: MAX_SCAN_MESSAGES
-              value: "${{ inputs.max_scan_messages }}"
-EOF
+                        print(json.dumps({
+                            "case_id": case_id,
+                            "status": "redriven",
+                            "order_id": payload.get("order_id", ""),
+                            "dlq_topic": dlq_topic,
+                            "target_topic": target_topic
+                        }, ensure_ascii=False))
+                        PY
+                    env:
+                      - name: CASE_ID
+                        value: "${{ inputs.case_id }}"
+                      - name: KAFKA_BOOTSTRAP
+                        value: "${{ inputs.kafka_bootstrap }}"
+                      - name: DLQ_TOPIC
+                        value: "${{ inputs.dlq_topic }}"
+                      - name: TARGET_TOPIC
+                        value: "${{ inputs.target_topic }}"
+                      - name: MAX_SCAN_MESSAGES
+                        value: "${{ inputs.max_scan_messages }}"
+          EOF
 
           echo "job_name=${JOB_NAME}" >> "$GITHUB_OUTPUT"
           echo "manifest_path=${MANIFEST_PATH}" >> "$GITHUB_OUTPUT"

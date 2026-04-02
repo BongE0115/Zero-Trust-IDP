@@ -41,18 +41,11 @@ jobs:
       - name: Prepare sandbox inputs
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p /tmp/sandbox-spec
-          cat > "${SPEC_PATH}" <<'EOF'
-          ${{ inputs.spec_json }}
-          EOF
-
-          cat > "${FAILURE_ARTIFACT_PATH}" <<'EOF'
-          ${{ inputs.failure_artifact_json }}
-          EOF
-
-          cat > "${NORMAL_ARTIFACT_PATH}" <<'EOF'
-          ${{ inputs.normal_artifact_json }}
-          EOF
+          printf '%s' '${{ inputs.spec_json }}' > "${SPEC_PATH}"
+          printf '%s' '${{ inputs.failure_artifact_json }}' > "${FAILURE_ARTIFACT_PATH}"
+          printf '%s' '${{ inputs.normal_artifact_json }}' > "${NORMAL_ARTIFACT_PATH}"
 
       - name: Validate input JSON files
         shell: bash
@@ -128,12 +121,15 @@ jobs:
         id: deploy_meta
         shell: bash
         run: |
+          OUTPUT_YAML="${{ steps.case_meta.outputs.output_yaml }}"
+          export OUTPUT_YAML
+
           python - <<'PY'
           import os
           import yaml
           from pathlib import Path
 
-          path = Path("${{ steps.case_meta.outputs.output_yaml }}")
+          path = Path(os.environ["OUTPUT_YAML"])
           docs = [d for d in yaml.safe_load_all(path.read_text(encoding="utf-8")) if d]
 
           deployment_name = None
@@ -263,12 +259,7 @@ jobs:
             exit 1
           fi
 
-          http_code=$(curl -sS -o /tmp/reproduce_dispatch.json -w "%{http_code}" \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/reproduce-sandbox.yaml/dispatches" \
-            -d @- <<EOF
+          cat > /tmp/reproduce_dispatch_payload.json <<'JSON'
           {
             "ref": "${{ env.RECORD_BRANCH }}",
             "inputs": {
@@ -280,12 +271,18 @@ jobs:
               "normal_artifact_json": ${{ toJson(inputs.normal_artifact_json) }}
             }
           }
-EOF
-          )
+          JSON
+
+          http_code=$(curl -sS -o /tmp/reproduce_dispatch_response.json -w "%{http_code}" \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/reproduce-sandbox.yaml/dispatches" \
+            --data @/tmp/reproduce_dispatch_payload.json)
 
           if [[ "$http_code" != "204" ]]; then
             echo "Failed to dispatch reproduce workflow (HTTP $http_code)"
-            cat /tmp/reproduce_dispatch.json || true
+            cat /tmp/reproduce_dispatch_response.json || true
             exit 1
           fi
 

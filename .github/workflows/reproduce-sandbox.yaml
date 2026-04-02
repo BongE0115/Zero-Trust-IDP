@@ -82,107 +82,101 @@ jobs:
           mkdir -p "$(dirname "$OUTPUT_PATH")"
 
           cat > "$OUTPUT_PATH" <<EOF
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: ${JOB_NAME}
-  namespace: ${{ inputs.namespace }}
-  labels:
-    app: ${JOB_NAME}
-    forensic-case-id: ${{ inputs.case_id }}
-    forensic-validation-mode: reproduce
-    forensic-revalidation-generation: "0"
-spec:
-  backoffLimit: 0
-  ttlSecondsAfterFinished: 86400
-  template:
-    metadata:
-      labels:
-        app: ${JOB_NAME}
-        forensic-case-id: ${{ inputs.case_id }}
-        forensic-validation-mode: reproduce
-        forensic-revalidation-generation: "0"
-    spec:
-      restartPolicy: Never
-      initContainers:
-        - name: artifact-init
-          image: busybox:1.36
-          imagePullPolicy: IfNotPresent
-          command:
-            - /bin/sh
-            - -c
-            - |
-              mkdir -p /artifacts
-              cat > /artifacts/failure.json <<'ARTIFACT_FAILURE'
-${{ inputs.failure_artifact_json }}
-ARTIFACT_FAILURE
-              cat > /artifacts/normal.json <<'ARTIFACT_NORMAL'
-${{ inputs.normal_artifact_json }}
-ARTIFACT_NORMAL
-              cat > /artifacts/consumer-ready.json <<'READY_JSON'
-{"ready": true, "source": "workflow_wait"}
-READY_JSON
-          volumeMounts:
-            - name: artifacts
-              mountPath: /artifacts
-      containers:
-        - name: forensic-launcher
-          image: ${{ env.LAUNCHER_IMAGE_REF }}
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: KAFKA_BOOTSTRAP
-              value: kafka.kafka-poc.svc.cluster.local:9092
-            - name: CASE_ID
-              value: ${{ inputs.case_id }}
-            - name: REPLAY_TOPIC
-              value: ${{ inputs.replay_topic }}
-            - name: RESULT_TOPIC
-              value: ${{ inputs.result_topic }}
-            - name: RESULT_GROUP_ID
-              value: forensic-launcher-reproduce
-            - name: FAILURE_ARTIFACT_PATH
-              value: /artifacts/failure.json
-            - name: NORMAL_ARTIFACT_PATH
-              value: /artifacts/normal.json
-            - name: VERDICT_FILE_PATH
-              value: /artifacts/verdict.json
-            - name: ENABLE_NORMAL_VALIDATION
-              value: "true"
-            - name: READY_FILE_PATH
-              value: /artifacts/consumer-ready.json
-            - name: READY_WAIT_SECONDS
-              value: "5"
-            - name: BETWEEN_FAILURE_AND_NORMAL_SECONDS
-              value: "5"
-            - name: RESULT_WAIT_SECONDS
-              value: "60"
-            - name: EXPECTED_FAILURE_ERROR_TYPE
-              value: ""
-            - name: ISOLATION_MODE
-              value: sandbox_strict
-            - name: ALLOWED_REPLAY_TOPIC
-              value: ${{ inputs.replay_topic }}
-            - name: ALLOWED_RESULT_TOPIC
-              value: ${{ inputs.result_topic }}
-            - name: VALIDATION_MODE
-              value: reproduce
-            - name: VALIDATION_RUN_ID
-              value: reproduce-${{ inputs.case_id }}-0
-            - name: REVALIDATION_GENERATION
-              value: "0"
-            - name: EXPECTED_FAILURE_STATUS
-              value: failed
-            - name: EXPECTED_NORMAL_STATUS
-              value: success
-            - name: IMAGE_REF
-              value: ${{ env.LAUNCHER_IMAGE_REF }}
-          volumeMounts:
-            - name: artifacts
-              mountPath: /artifacts
-      volumes:
-        - name: artifacts
-          emptyDir: {}
-EOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${JOB_NAME}
+            namespace: ${{ inputs.namespace }}
+            labels:
+              app: ${JOB_NAME}
+              forensic-case-id: ${{ inputs.case_id }}
+              forensic-validation-mode: reproduce
+              forensic-revalidation-generation: "0"
+          spec:
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  app: ${JOB_NAME}
+                  forensic-case-id: ${{ inputs.case_id }}
+                  forensic-validation-mode: reproduce
+                  forensic-revalidation-generation: "0"
+              spec:
+                restartPolicy: Never
+                initContainers:
+                  - name: artifact-init
+                    image: busybox:1.36
+                    imagePullPolicy: IfNotPresent
+                    command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        mkdir -p /artifacts
+                        printf '%s' '${{ inputs.failure_artifact_json }}' > /artifacts/failure.json
+                        printf '%s' '${{ inputs.normal_artifact_json }}' > /artifacts/normal.json
+                        printf '%s' '{"ready": true, "source": "workflow_wait"}' > /artifacts/consumer-ready.json
+                    volumeMounts:
+                      - name: artifacts
+                        mountPath: /artifacts
+                containers:
+                  - name: forensic-launcher
+                    image: ${{ env.LAUNCHER_IMAGE_REF }}
+                    imagePullPolicy: IfNotPresent
+                    env:
+                      - name: KAFKA_BOOTSTRAP
+                        value: kafka.kafka-poc.svc.cluster.local:9092
+                      - name: CASE_ID
+                        value: ${{ inputs.case_id }}
+                      - name: REPLAY_TOPIC
+                        value: ${{ inputs.replay_topic }}
+                      - name: RESULT_TOPIC
+                        value: ${{ inputs.result_topic }}
+                      - name: RESULT_GROUP_ID
+                        value: forensic-launcher-reproduce
+                      - name: FAILURE_ARTIFACT_PATH
+                        value: /artifacts/failure.json
+                      - name: NORMAL_ARTIFACT_PATH
+                        value: /artifacts/normal.json
+                      - name: VERDICT_FILE_PATH
+                        value: /artifacts/verdict.json
+                      - name: ENABLE_NORMAL_VALIDATION
+                        value: "true"
+                      - name: READY_FILE_PATH
+                        value: /artifacts/consumer-ready.json
+                      - name: READY_WAIT_SECONDS
+                        value: "5"
+                      - name: BETWEEN_FAILURE_AND_NORMAL_SECONDS
+                        value: "5"
+                      - name: RESULT_WAIT_SECONDS
+                        value: "60"
+                      - name: EXPECTED_FAILURE_ERROR_TYPE
+                        value: ""
+                      - name: ISOLATION_MODE
+                        value: sandbox_strict
+                      - name: ALLOWED_REPLAY_TOPIC
+                        value: ${{ inputs.replay_topic }}
+                      - name: ALLOWED_RESULT_TOPIC
+                        value: ${{ inputs.result_topic }}
+                      - name: VALIDATION_MODE
+                        value: reproduce
+                      - name: VALIDATION_RUN_ID
+                        value: reproduce-${{ inputs.case_id }}-0
+                      - name: REVALIDATION_GENERATION
+                        value: "0"
+                      - name: EXPECTED_FAILURE_STATUS
+                        value: failed
+                      - name: EXPECTED_NORMAL_STATUS
+                        value: success
+                      - name: IMAGE_REF
+                        value: ${{ env.LAUNCHER_IMAGE_REF }}
+                    volumeMounts:
+                      - name: artifacts
+                        mountPath: /artifacts
+                volumes:
+                  - name: artifacts
+                    emptyDir: {}
+          EOF
 
           echo "output_path=$OUTPUT_PATH" >> "$GITHUB_OUTPUT"
           echo "job_name=$JOB_NAME" >> "$GITHUB_OUTPUT"
