@@ -38,7 +38,7 @@ env:
   OUTPUT_DIR: gitops/apps/forensic-sandbox/cases/reproduce
 
 jobs:
-  reproduce-sandbox:
+  render-reproduce-manifest:
     runs-on: ubuntu-latest
 
     steps:
@@ -207,43 +207,249 @@ jobs:
       - name: Push jy branch
         shell: bash
         run: |
-          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+          set -euo pipefail
 
-      - name: Dispatch snapshot reproduce verdict workflow
+          BRANCH="${{ env.RECORD_BRANCH }}"
+
+          for attempt in 1 2 3 4 5; do
+            echo "[INFO] push attempt ${attempt}"
+
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+
+            if git push origin "HEAD:${BRANCH}"; then
+              echo "[OK] push succeeded"
+              exit 0
+            fi
+
+            echo "[WARN] push rejected, retrying..."
+            sleep $((attempt * 2))
+          done
+
+          echo "[ERROR] failed to push after multiple attempts"
+          exit 1
+
+  snapshot-and-collect-reproduce:
+    needs: render-reproduce-manifest
+    runs-on: [self-hosted, linux, monitoring-node]
+
+    steps:
+      - name: Checkout jy branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RECORD_BRANCH }}
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Configure kubeconfig
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+          KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.kube"
+
+          if [[ -z "${KUBECONFIG_B64_VALUE:-}" ]]; then
+            echo "KUBECONFIG_B64 secret is empty or missing"
+            exit 1
+          fi
+
+          echo "${KUBECONFIG_B64_VALUE}" | base64 -di > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+      - name: Resolve reproduce pod
+        id: pod
+        shell: bash
         run: |
           set -euo pipefail
 
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "WORKFLOW_PAT secret is empty or missing"
-            exit 1
+          NS="${{ inputs.namespace }}"
+          CASE_ID="${{ inputs.case_id }}"
+          GEN="0"
+
+          SELECTOR="forensic-case-id=${CASE_ID},forensic-validation-mode=reproduce,forensic-revalidation-generation=${GEN}"
+
+          for i in $(seq 1 60); do
+            POD_NAME="$(kubectl get pods -n "$NS" -l "$SELECTOR" \
+              --sort-by=.metadata.creationTimestamp \
+              -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null || true)"
+
+            if [[ -n "${POD_NAME:-}" ]]; then
+              echo "pod_name=$POD_NAME" >> "$GITHUB_OUTPUT"
+              echo "[OK] reproduce pod found: $POD_NAME"
+              exit 0
+            fi
+
+            echo "[INFO] reproduce pod not found yet (${i}/60)"
+            sleep 5
+          done
+
+          echo "[ERROR] reproduce pod not found"
+          kubectl get pods -n "$NS" --show-labels || true
+          exit 1
+
+      - name: Wait for verdict file
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          POD="${{ steps.pod.outputs.pod_name }}"
+
+          for i in $(seq 1 90); do
+            PHASE="$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.status.phase}')"
+            echo "[INFO] pod phase=$PHASE"
+
+            if kubectl exec -n "$NS" "$POD" -c forensic-launcher -- test -f /artifacts/verdict.json 2>/dev/null; then
+              echo "[OK] verdict file exists"
+              exit 0
+            fi
+
+            if [[ "$PHASE" == "Failed" || "$PHASE" == "Succeeded" ]]; then
+              echo "[WARN] pod finished before verdict fetch"
+              kubectl logs -n "$NS" "$POD" -c forensic-launcher --tail=200 || true
+              kubectl describe pod -n "$NS" "$POD" || true
+            fi
+
+            sleep 5
+          done
+
+          echo "[ERROR] Timed out waiting for verdict.json"
+          kubectl logs -n "$NS" "$POD" -c forensic-launcher --tail=200 || true
+          kubectl describe pod -n "$NS" "$POD" || true
+          exit 1
+
+      - name: Fetch verdict.json from reproduce pod
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          POD="${{ steps.pod.outputs.pod_name }}"
+
+          mkdir -p /tmp/reproduce-verdict
+          kubectl exec -n "$NS" "$POD" -c forensic-launcher -- cat /artifacts/verdict.json > /tmp/reproduce-verdict/verdict.json
+
+          test -s /tmp/reproduce-verdict/verdict.json
+
+      - name: Export verdict snapshot into repo path on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 scripts/export_verdict_snapshot.py \
+            --case-id "${{ inputs.case_id }}" \
+            --input-verdict "/tmp/reproduce-verdict/verdict.json" \
+            --annotate-source-path
+
+      - name: Collect reproduce verdict into jy case record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ inputs.case_id }}"
+          VERDICT_PATH="gitops/apps/forensic-sandbox/cases/verdicts/${CASE_ID}.json"
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          case_id = os.environ["CASE_ID"]
+          verdict_path = Path(os.environ["VERDICT_PATH"])
+          record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+
+          if not verdict_path.exists():
+              raise SystemExit(f"verdict file not found: {verdict_path}")
+          if not record_path.exists():
+              raise SystemExit(f"case record not found: {record_path}")
+
+          verdict = json.loads(verdict_path.read_text(encoding="utf-8"))
+          record = json.loads(record_path.read_text(encoding="utf-8"))
+
+          flags = record.setdefault("flags", {})
+          metadata = record.setdefault("metadata", {})
+          history = record.setdefault("history", [])
+
+          overall_passed = bool(verdict.get("overall_passed", False))
+          validation_mode = verdict.get("validation_mode", "reproduce")
+          validation_run_id = verdict.get("validation_run_id", "")
+          generation = int(verdict.get("revalidation_generation", 0))
+
+          flags["reproduce_verdict_collected"] = True
+          flags["reproduced"] = overall_passed
+
+          metadata["last_reproduce_verdict_path"] = str(verdict_path)
+          metadata["last_reproduce_overall_passed"] = overall_passed
+          metadata["last_reproduce_validation_mode"] = validation_mode
+          metadata["last_reproduce_validation_run_id"] = validation_run_id
+          metadata["last_reproduce_generation"] = generation
+
+          record["status"] = "reproduced" if overall_passed else "reproduce_failed"
+
+          history.append({
+              "event": "collect_reproduce_result",
+              "case_id": case_id,
+              "overall_passed": overall_passed,
+              "validation_mode": validation_mode,
+              "validation_run_id": validation_run_id,
+              "generation": generation,
+              "verdict_path": str(verdict_path),
+          })
+
+          record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(f"[OK] reproduce verdict collected case_id={case_id} overall_passed={overall_passed}")
+          PY
+        env:
+          CASE_ID: ${{ inputs.case_id }}
+          VERDICT_PATH: gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json
+
+      - name: Commit verdict snapshot and updated record on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json"
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
           fi
 
-          cat > /tmp/snapshot_reproduce_dispatch_payload.json <<'JSON'
-          {
-            "ref": "${{ env.RECORD_BRANCH }}",
-            "inputs": {
-              "case_id": "${{ inputs.case_id }}",
-              "namespace": "${{ inputs.namespace }}",
-              "generation": "0",
-              "note": "snapshot reproduce verdict triggered by reproduce-sandbox"
-            }
-          }
-          JSON
+          git commit -m "chore(case): snapshot and collect reproduce result for ${{ inputs.case_id }}"
 
-          http_code=$(curl -sS -o /tmp/snapshot_reproduce_dispatch_response.json -w "%{http_code}" \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/snapshot-reproduce-verdict.yaml/dispatches" \
-            --data @/tmp/snapshot_reproduce_dispatch_payload.json)
+      - name: Push jy branch
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          if [[ "$http_code" != "204" ]]; then
-            echo "Failed to dispatch snapshot-reproduce-verdict workflow (HTTP $http_code)"
-            cat /tmp/snapshot_reproduce_dispatch_response.json || true
-            exit 1
-          fi
+          BRANCH="${{ env.RECORD_BRANCH }}"
 
-          echo "[OK] snapshot-reproduce-verdict workflow dispatched"
+          for attempt in 1 2 3 4 5; do
+            echo "[INFO] push attempt ${attempt}"
+
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+
+            if git push origin "HEAD:${BRANCH}"; then
+              echo "[OK] push succeeded"
+              exit 0
+            fi
+
+            echo "[WARN] push rejected, retrying..."
+            sleep $((attempt * 2))
+          done
+
+          echo "[ERROR] failed to push after multiple attempts"
+          exit 1
