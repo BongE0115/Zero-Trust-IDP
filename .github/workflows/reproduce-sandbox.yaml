@@ -35,7 +35,7 @@ permissions:
 env:
   RECORD_BRANCH: jy
   LAUNCHER_IMAGE_REF: ghcr.io/bonge0115/forensic-launcher:latest
-  OUTPUT_DIR: gitops/apps/forensic-sandbox/cases/revalidation
+  OUTPUT_DIR: gitops/apps/forensic-sandbox/cases/reproduce
 
 jobs:
   reproduce-sandbox:
@@ -76,7 +76,7 @@ jobs:
             SAFE="case"
           fi
 
-          OUTPUT_PATH="${{ env.OUTPUT_DIR }}/revalidate-case-${{ inputs.case_id }}.yaml"
+          OUTPUT_PATH="${{ env.OUTPUT_DIR }}/reproduce-case-${{ inputs.case_id }}.yaml"
           JOB_NAME="forensic-reproduce-${SAFE}"
 
           mkdir -p "$(dirname "$OUTPUT_PATH")"
@@ -94,6 +94,7 @@ metadata:
     forensic-revalidation-generation: "0"
 spec:
   backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
   template:
     metadata:
       labels:
@@ -191,7 +192,7 @@ EOF
         run: |
           python scripts/update_case_record.py update \
             --case-id "${{ inputs.case_id }}" \
-            --metadata-json "{\"revalidation_job_manifest_path\": \"${{ steps.render.outputs.output_path }}\"}" \
+            --metadata-json "{\"reproduce_job_manifest_path\": \"${{ steps.render.outputs.output_path }}\"}" \
             --note "initial reproduce launcher manifest created"
 
       - name: Commit reproduce launcher manifest and record
