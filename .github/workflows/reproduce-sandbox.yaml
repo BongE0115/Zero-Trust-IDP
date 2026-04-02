@@ -184,7 +184,7 @@ jobs:
       - name: Update jy case record metadata
         shell: bash
         run: |
-          python scripts/update_case_record.py update \
+          python3 scripts/update_case_record.py update \
             --case-id "${{ inputs.case_id }}" \
             --metadata-json "{\"reproduce_job_manifest_path\": \"${{ steps.render.outputs.output_path }}\"}" \
             --note "initial reproduce launcher manifest created"

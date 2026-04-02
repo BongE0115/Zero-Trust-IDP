@@ -120,7 +120,8 @@ jobs:
             exit 1
           fi
 
-          SANDBOX_MANIFEST_PATH="$(python - <<'PY'
+          SANDBOX_MANIFEST_PATH="$(
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -137,7 +138,8 @@ jobs:
             exit 1
           fi
 
-          CURRENT_GEN="$(python - <<'PY'
+          CURRENT_GEN="$(
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -160,7 +162,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python scripts/patch_case_candidate.py \
+          python3 scripts/patch_case_candidate.py \
             --case-id "${{ steps.parse.outputs.case_id }}" \
             --manifest-path "${{ steps.record.outputs.sandbox_manifest_path }}" \
             --candidate-image-ref "${{ steps.digest.outputs.image_ref }}" \

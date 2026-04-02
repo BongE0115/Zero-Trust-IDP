@@ -73,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           from pathlib import Path
 
@@ -163,7 +163,7 @@ jobs:
                       - |
                         set -euo pipefail
                         pip install --no-cache-dir kafka-python
-                        python - <<'PY'
+                        python3 - <<'PY'
                         import json
                         import os
                         from kafka import KafkaConsumer, KafkaProducer
@@ -280,7 +280,7 @@ jobs:
           kubectl logs -n "$NS" "job/$JOB" > /tmp/redrive-job.log
           cat /tmp/redrive-job.log
 
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -308,7 +308,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python scripts/update_case_record.py update \
+          python3 scripts/update_case_record.py update \
             --case-id "${{ inputs.case_id }}" \
             --status "redriven" \
             --increment-redrive \
