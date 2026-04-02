@@ -64,7 +64,8 @@ resource "local_file" "local_node_setup_script" {
     echo "✅ 글로벌 환경변수 주입 완료!"
 
     echo "[5/6] 로컬 전용 마이크로서비스 배포..."
-    GITOPS_PATH="/home/ubuntu/Zero-Trust-IDP/gitops/apps/boutique-local"
+    GITOPS_PATH="$(pwd)/gitops/apps/boutique-local"
+    
     if [ -d "$GITOPS_PATH" ]; then
         sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -k "$GITOPS_PATH" -n boutique-local
         echo "✅ 로컬 마이크로서비스 배포 완료!"
@@ -110,6 +111,7 @@ resource "null_resource" "auto_run_setup" {
   depends_on = [local_file.local_node_setup_script]
 
   provisioner "local-exec" {
-    command = "./setup_local_env.sh" # <--- sudo 제거
+    # 파일에 실행 권한이 없어도 bash가 텍스트로 읽어서 강제로 실행해 줍니다.
+    command = "bash ./setup_local_env.sh" 
   }
 }
