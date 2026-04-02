@@ -46,8 +46,8 @@ sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create configmap aws-global-en
   --from-literal=AWS_REGION="ap-northeast-2" \
   --from-literal=PROJECT_NAME="Zero-Trust-IDP" \
   --from-literal=LOCAL_TAILSCALE_IP="" \
-  --from-literal=AWS_IP="10.10.10.219" \
-  --from-literal=FRONTEND_ADDR="aiops-alb-986045861.ap-northeast-2.elb.amazonaws.com:8080" \
+  --from-literal=AWS_IP="10.10.10.112" \
+  --from-literal=FRONTEND_ADDR="aiops-alb-1541488121.ap-northeast-2.elb.amazonaws.com:8080" \
   --from-literal=PRODUCT_CATALOG_SERVICE_ADDR="productcatalogservice:3550" \
   --from-literal=DISABLE_PROFILER="1" \
   --from-literal=DISABLE_TRACING="1" \
@@ -55,7 +55,8 @@ sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create configmap aws-global-en
 echo "✅ 글로벌 환경변수 주입 완료!"
 
 echo "[5/6] 로컬 전용 마이크로서비스 배포..."
-GITOPS_PATH="/home/ubuntu/Zero-Trust-IDP/gitops/apps/boutique-local"
+GITOPS_PATH="$(pwd)/gitops/apps/boutique-local"
+    
 if [ -d "$GITOPS_PATH" ]; then
     sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -k "$GITOPS_PATH" -n boutique-local
     echo "✅ 로컬 마이크로서비스 배포 완료!"
@@ -67,7 +68,7 @@ echo "[6/6] 🤖 AWS SSM을 통해 마스터 노드의 ArgoCD 자동 연동을 �
     
 # Kubeconfig 읽을 때 sudo 사용
 LOCAL_KUBECONFIG_B64=$(sudo cat /etc/rancher/k3s/k3s.yaml | sed "s/127.0.0.1/$LOCAL_TS_IP/g" | base64 -w 0)
-MASTER_INSTANCE_ID="i-0413b9d0cd6385432"
+MASTER_INSTANCE_ID="i-02e24f062c2f5acdc"
 AWS_REGION="ap-northeast-2"
 
 # aws ssm 명령어는 sudo 없이 현재 사용자 권한으로 실행 (인증 유지)
