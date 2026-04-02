@@ -50,7 +50,7 @@ jobs:
       - name: Validate input JSON files
         shell: bash
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           from pathlib import Path
 
@@ -72,7 +72,7 @@ jobs:
         id: case_meta
         shell: bash
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -110,7 +110,7 @@ jobs:
       - name: Generate case-specific sandbox manifest
         shell: bash
         run: |
-          python scripts/apply_sandbox_spec.py \
+          python3 scripts/apply_sandbox_spec.py \
             --spec "${SPEC_PATH}" \
             --failure-artifact "${FAILURE_ARTIFACT_PATH}" \
             --normal-artifact "${NORMAL_ARTIFACT_PATH}" \
@@ -124,7 +124,7 @@ jobs:
           OUTPUT_YAML="${{ steps.case_meta.outputs.output_yaml }}"
           export OUTPUT_YAML
 
-          python - <<'PY'
+          python3 - <<'PY'
           import os
           import yaml
           from pathlib import Path
@@ -165,7 +165,7 @@ jobs:
           SANDBOX_MANIFEST_PATH="${{ steps.case_meta.outputs.output_yaml }}"
 
           if [[ -f "$RECORD_PATH" ]]; then
-            python scripts/update_case_record.py update \
+            python3 scripts/update_case_record.py update \
               --case-id "$CASE_ID" \
               --service "$SOURCE_SERVICE" \
               --branch-name "$CASE_BRANCH" \
@@ -175,7 +175,7 @@ jobs:
               --metadata-json "{\"case_branch_created\": false, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
               --note "sandbox manifest refreshed on jy"
           else
-            python scripts/update_case_record.py create \
+            python3 scripts/update_case_record.py create \
               --case-id "$CASE_ID" \
               --service "$SOURCE_SERVICE" \
               --branch-name "$CASE_BRANCH" \
