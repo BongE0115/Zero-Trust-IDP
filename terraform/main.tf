@@ -315,6 +315,32 @@ resource "aws_iam_instance_profile" "ssm_monitoring_profile" {
   role = aws_iam_role.ssm_monitoring_role.name
 }
 
+resource "aws_iam_role_policy" "monitoring_runner_bootstrap_ssm_policy" {
+  name = "aiops-monitoring-runner-bootstrap-ssm-policy"
+  role = aws_iam_role.ssm_monitoring_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadGithubRunnerBootstrapTokenFromSSM"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter${var.github_runner_token_ssm_parameter_name}"
+      },
+      {
+        Sid    = "DecryptGithubRunnerBootstrapTokenWithAwsManagedKms"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt"
+        ]
+        Resource = "arn:aws:kms:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:alias/aws/ssm"
+      }
+    ]
+  })
+}
 
 
 
@@ -852,6 +878,14 @@ data "cloudinit_config" "monitoring_config" {
       gitops_target_revision = "jy"
 
       argocd_values_content = file("${path.module}/../gitops/bootstrap/argocd/values.yaml")
+
+      enable_monitoring_github_runner      = var.enable_monitoring_github_runner
+      github_runner_scope                  = var.github_runner_scope
+      github_runner_owner                  = var.github_runner_owner
+      github_runner_repository             = var.github_runner_repository
+      github_runner_labels_csv             = join(",", var.github_runner_labels)
+      github_runner_version                = var.github_runner_version
+      github_runner_token_ssm_parameter    = var.github_runner_token_ssm_parameter_name
     })
   }
 }
@@ -867,13 +901,13 @@ resource "aws_instance" "monitoring_server" {
   iam_instance_profile        = aws_iam_instance_profile.ssm_monitoring_profile.name
   associate_public_ip_address = true
 
-  # 위에서 만든 압축 monitoring_config를 가져와서 넣어준다. 
   user_data_base64            = data.cloudinit_config.monitoring_config.rendered
   user_data_replace_on_change = true
 
   tags = {
-    Name = "aiops-monitoring-control"
-    Role = "Monitoring_Node"
+    Name          = "aiops-monitoring-control"
+    Role          = "Monitoring_Node"
+    GithubRunner  = var.enable_monitoring_github_runner ? "enabled" : "disabled"
   }
 }
 
