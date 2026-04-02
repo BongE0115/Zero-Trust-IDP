@@ -1,0 +1,335 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-temp-worker-consumer-order-fa
+  namespace: forensic-sandbox
+  labels:
+    forensic-case-id: worker-consumer-order-fail-002-20260402T052248Z-15159316
+spec:
+  selector:
+    app: mongodb-temp-worker-consumer-order-fa
+  ports:
+  - name: mongo
+    port: 27017
+    targetPort: 27017
+  template:
+    spec:
+      containers: []
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-temp-worker-consumer-order-fa
+  namespace: forensic-sandbox
+  labels:
+    forensic-case-id: worker-consumer-order-fail-002-20260402T052248Z-15159316
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb-temp-worker-consumer-order-fa
+  template:
+    metadata:
+      labels:
+        app: mongodb-temp-worker-consumer-order-fa
+        forensic-case-id: worker-consumer-order-fail-002-20260402T052248Z-15159316
+    spec:
+      containers:
+      - name: mongodb-temp
+        image: mongo:7
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 27017
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forensic-sandbox-app-worker-consumer-order-fa
+  namespace: forensic-sandbox
+  labels:
+    forensic-case-id: worker-consumer-order-fail-002-20260402T052248Z-15159316
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: forensic-sandbox-app-worker-consumer-order-fa
+  template:
+    metadata:
+      labels:
+        app: forensic-sandbox-app-worker-consumer-order-fa
+        forensic-case-id: worker-consumer-order-fail-002-20260402T052248Z-15159316
+    spec:
+      initContainers:
+      - name: topic-init
+        image: bitnamilegacy/kafka:3.7
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - "set -eu\n\nBOOTSTRAP=\"${KAFKA_BOOTSTRAP:?KAFKA_BOOTSTRAP is required}\"\
+          \nPARTITIONS=\"${TOPIC_PARTITIONS:-1}\"\nREPLICATION=\"${TOPIC_REPLICATION_FACTOR:-1}\"\
+          \n\ncreate_topic_if_needed() {\n  topic=\"$1\"\n  if [ -z \"$topic\" ];\
+          \ then\n    return 0\n  fi\n\n  /opt/bitnami/kafka/bin/kafka-topics.sh \
+          \    --bootstrap-server \"$BOOTSTRAP\"     --create     --if-not-exists\
+          \     --topic \"$topic\"     --partitions \"$PARTITIONS\"     --replication-factor\
+          \ \"$REPLICATION\"\n}\n\ncreate_topic_if_needed \"${REPLAY_TOPIC:-}\"\n\
+          create_topic_if_needed \"${RESULT_TOPIC:-}\"\n\necho \"topic-init completed\"\
+          \n"
+        env:
+        - name: KAFKA_BOOTSTRAP
+          value: kafka.kafka-poc.svc.cluster.local:9092
+        - name: REPLAY_TOPIC
+          value: orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: RESULT_TOPIC
+          value: orders-result-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: TOPIC_PARTITIONS
+          value: '1'
+        - name: TOPIC_REPLICATION_FACTOR
+          value: '1'
+      - name: artifact-init
+        image: busybox:1.36
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - "mkdir -p /artifacts\ncat > /artifacts/failure.json <<'EOF'\n{\n  \"artifact_type\"\
+          : \"failure_replay\",\n  \"case_id\": \"worker-consumer-order-fail-002-20260402T052248Z-15159316\"\
+          ,\n  \"target_topic\": \"orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316\"\
+          ,\n  \"payload_hash\": \"15159316a9f59000825d52768bad95279610b5edeece8e957de506934211a879\"\
+          ,\n  \"created_at\": \"2026-04-02T05:22:48.090251+00:00\",\n  \"source_service\"\
+          : \"worker-consumer\",\n  \"payload\": {\n    \"order_id\": \"order-fail-002\"\
+          ,\n    \"should_fail\": true,\n    \"payload\": {\n      \"item\": \"book\"\
+          ,\n      \"qty\": 1\n    }\n  }\n}\nEOF\ncat > /artifacts/normal.json <<'EOF'\n\
+          {\n  \"artifact_type\": \"normal_validation\",\n  \"case_id\": \"worker-consumer-order-fail-002-20260402T052248Z-15159316\"\
+          ,\n  \"target_topic\": \"orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316\"\
+          ,\n  \"payload_hash\": \"\",\n  \"created_at\": \"2026-04-02T05:22:48.094026+00:00\"\
+          ,\n  \"enabled\": false,\n  \"source_service\": \"worker-consumer\",\n \
+          \ \"payload\": {}\n}\nEOF\n"
+        volumeMounts:
+        - name: artifacts
+          mountPath: /artifacts
+      containers:
+      - name: consumer-app
+        image: ghcr.io/bonge0115/worker-consumer:6976091
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: KAFKA_BOOTSTRAP
+          value: kafka.kafka-poc.svc.cluster.local:9092
+        - name: SOURCE_TOPIC
+          value: orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: DLQ_TOPIC
+          value: orders-dlq
+        - name: GROUP_ID
+          value: orders-consumer-sandbox-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: SERVICE_NAME
+          value: forensic-sandbox-app-worker-consumer-order-fa
+        - name: NAMESPACE
+          value: forensic-sandbox
+        - name: DEPLOYMENT_NAME
+          value: forensic-sandbox-app-worker-consumer-order-fa
+        - name: IMAGE_REF
+          value: ghcr.io/bonge0115/worker-consumer:6976091
+        - name: CONFIG_VERSION
+          value: v1
+        - name: DEPENDENCY_PROFILE
+          value: sandbox
+        - name: DB_MODE
+          value: mock
+        - name: DB_HOST
+          value: mongodb-temp-worker-consumer-order-fa.forensic-sandbox.svc.cluster.local
+        - name: CACHE_MODE
+          value: mock
+        - name: CACHE_HOST
+          value: ''
+        - name: EXTERNAL_API_MODE
+          value: mock
+        - name: EXTERNAL_API_BASE_URL
+          value: ''
+        - name: FORCE_FAIL_FIELD
+          value: should_fail
+        - name: ENABLE_DLQ_PUBLISH
+          value: 'false'
+        - name: RUN_MODE
+          value: sandbox
+        - name: CASE_ID
+          value: worker-consumer-order-fail-002-20260402T052248Z-15159316
+        - name: RESULT_TOPIC
+          value: orders-result-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: EMIT_RESULT_EVENT
+          value: 'true'
+        - name: READY_FILE_PATH
+          value: /artifacts/consumer-ready.json
+        - name: ISOLATION_MODE
+          value: sandbox_strict
+        - name: ALLOWED_REPLAY_TOPIC
+          value: orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: ALLOWED_RESULT_TOPIC
+          value: orders-result-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: VALIDATION_MODE
+          value: reproduce
+        - name: VALIDATION_RUN_ID
+          value: worker-consumer-order-fail-002-20260402T052248Z-15159316-repro-0
+        - name: REVALIDATION_GENERATION
+          value: '0'
+        - name: EXPECTED_FAILURE_STATUS
+          value: failed
+        - name: EXPECTED_NORMAL_STATUS
+          value: success
+        - name: FAILURE_ERROR_TYPE
+          value: ValueError
+        - name: FAILURE_ERROR_MESSAGE
+          value: intentional failure for POC
+        - name: REPLAY_PAYLOAD_HASH
+          value: 15159316a9f59000825d52768bad95279610b5edeece8e957de506934211a879
+        - name: REPLAY_ORDER_ID
+          value: order-fail-002
+        - name: NORMAL_PAYLOAD_HASH
+          value: ''
+        volumeMounts:
+        - name: artifacts
+          mountPath: /artifacts
+      volumes:
+      - name: artifacts
+        emptyDir: {}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: forensic-launcher-job-worker-consumer-order-fa
+  namespace: forensic-sandbox
+  labels:
+    forensic-case-id: worker-consumer-order-fail-002-20260402T052248Z-15159316
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: forensic-launcher-job-worker-consumer-order-fa
+        forensic-case-id: worker-consumer-order-fail-002-20260402T052248Z-15159316
+    spec:
+      restartPolicy: Never
+      initContainers:
+      - name: artifact-init
+        image: busybox:1.36
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - "mkdir -p /artifacts\ncat > /artifacts/failure.json <<'EOF'\n{\n  \"artifact_type\"\
+          : \"failure_replay\",\n  \"case_id\": \"worker-consumer-order-fail-002-20260402T052248Z-15159316\"\
+          ,\n  \"target_topic\": \"orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316\"\
+          ,\n  \"payload_hash\": \"15159316a9f59000825d52768bad95279610b5edeece8e957de506934211a879\"\
+          ,\n  \"created_at\": \"2026-04-02T05:22:48.090251+00:00\",\n  \"source_service\"\
+          : \"worker-consumer\",\n  \"payload\": {\n    \"order_id\": \"order-fail-002\"\
+          ,\n    \"should_fail\": true,\n    \"payload\": {\n      \"item\": \"book\"\
+          ,\n      \"qty\": 1\n    }\n  }\n}\nEOF\ncat > /artifacts/normal.json <<'EOF'\n\
+          {\n  \"artifact_type\": \"normal_validation\",\n  \"case_id\": \"worker-consumer-order-fail-002-20260402T052248Z-15159316\"\
+          ,\n  \"target_topic\": \"orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316\"\
+          ,\n  \"payload_hash\": \"\",\n  \"created_at\": \"2026-04-02T05:22:48.094026+00:00\"\
+          ,\n  \"enabled\": false,\n  \"source_service\": \"worker-consumer\",\n \
+          \ \"payload\": {}\n}\nEOF\n"
+        volumeMounts:
+        - name: artifacts
+          mountPath: /artifacts
+      containers:
+      - name: forensic-launcher
+        image: ghcr.io/bonge0115/forensic-launcher:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: KAFKA_BOOTSTRAP
+          value: kafka.kafka-poc.svc.cluster.local:9092
+        - name: CASE_ID
+          value: worker-consumer-order-fail-002-20260402T052248Z-15159316
+        - name: REPLAY_TOPIC
+          value: orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: RESULT_TOPIC
+          value: orders-result-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: RESULT_GROUP_ID
+          value: forensic-launcher-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: FAILURE_ARTIFACT_PATH
+          value: /artifacts/failure.json
+        - name: NORMAL_ARTIFACT_PATH
+          value: /artifacts/normal.json
+        - name: VERDICT_FILE_PATH
+          value: /artifacts/verdict.json
+        - name: ENABLE_NORMAL_VALIDATION
+          value: 'false'
+        - name: READY_FILE_PATH
+          value: /artifacts/consumer-ready.json
+        - name: READY_WAIT_SECONDS
+          value: '90'
+        - name: BETWEEN_FAILURE_AND_NORMAL_SECONDS
+          value: '10'
+        - name: RESULT_WAIT_SECONDS
+          value: '60'
+        - name: EXPECTED_FAILURE_ERROR_TYPE
+          value: ValueError
+        - name: ISOLATION_MODE
+          value: sandbox_strict
+        - name: ALLOWED_REPLAY_TOPIC
+          value: orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: ALLOWED_RESULT_TOPIC
+          value: orders-result-worker-consumer-order-fail-002-20260402t052248z-15159316
+        - name: VALIDATION_MODE
+          value: reproduce
+        - name: VALIDATION_RUN_ID
+          value: worker-consumer-order-fail-002-20260402T052248Z-15159316-repro-0
+        - name: REVALIDATION_GENERATION
+          value: '0'
+        - name: EXPECTED_FAILURE_STATUS
+          value: failed
+        - name: EXPECTED_NORMAL_STATUS
+          value: success
+        - name: IMAGE_REF
+          value: ghcr.io/bonge0115/forensic-launcher:latest
+        volumeMounts:
+        - name: artifacts
+          mountPath: /artifacts
+      volumes:
+      - name: artifacts
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: forensic-sandbox-case-worker-consumer-order-fa
+  namespace: forensic-sandbox
+  labels:
+    app: forensic-sandbox-app-worker-consumer-order-fa
+    forensic-case-id: worker-consumer-order-fail-002-20260402T052248Z-15159316
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
+data:
+  case_id: worker-consumer-order-fail-002-20260402T052248Z-15159316
+  requested_by: manual-or-workflow
+  source_service: worker-consumer
+  source_namespace: kafka-poc
+  source_deployment: worker-consumer
+  error_type: ValueError
+  error_message: intentional failure for POC
+  consumer_image_ref: ghcr.io/bonge0115/worker-consumer:6976091
+  deployment_name: forensic-sandbox-app-worker-consumer-order-fa
+  replay_topic: orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316
+  result_topic: orders-result-worker-consumer-order-fail-002-20260402t052248z-15159316
+  config_version: v1
+  dependency_profile: sandbox
+  requested_at: '2026-04-02T05:22:48.094659+00:00'
+  failure_payload_hash: 15159316a9f59000825d52768bad95279610b5edeece8e957de506934211a879
+  normal_payload_hash: ''
+  order_id: order-fail-002
+  failure_artifact_type: failure_replay
+  failure_artifact_payload_hash: 15159316a9f59000825d52768bad95279610b5edeece8e957de506934211a879
+  normal_artifact_type: normal_validation
+  normal_artifact_payload_hash: ''
+  normal_validation_enabled: 'false'
+  replay_publish_strategy: launcher_after_sandbox_ready
+  isolation_mode: sandbox_strict
+  allowed_replay_topic: orders-replay-worker-consumer-order-fail-002-20260402t052248z-15159316
+  allowed_result_topic: orders-result-worker-consumer-order-fail-002-20260402t052248z-15159316
+  verdict_file_path: /artifacts/verdict.json
+  mongo_host: mongodb-temp-worker-consumer-order-fa.forensic-sandbox.svc.cluster.local
+  validation_mode: reproduce
+  validation_run_id: worker-consumer-order-fail-002-20260402T052248Z-15159316-repro-0
+  revalidation_generation: '0'
+  expected_failure_status: failed
+  expected_normal_status: success

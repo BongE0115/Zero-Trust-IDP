@@ -27,7 +27,7 @@ output "rds_internal_dns_name" {
 
 output "argocd_access_info" {
   description = "ArgoCD 접속 정보 및 비밀번호 확인 가이드"
-  value = <<EOF
+  value       = <<EOF
 
 =========================================================
 🚀 인프라 프로비저닝 완료! (약 3~5분 뒤부터 접속 가능합니다)

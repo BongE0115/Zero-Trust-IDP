@@ -1,0 +1,216 @@
+name: activate-sandbox
+
+on:
+  workflow_dispatch:
+    inputs:
+      spec_json:
+        description: "Sandbox spec JSON"
+        required: true
+        type: string
+      failure_artifact_json:
+        description: "Failure replay artifact JSON"
+        required: true
+        type: string
+      normal_artifact_json:
+        description: "Normal validation artifact JSON"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  TEMPLATE_YAML_PATH: gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
+  LAUNCHER_IMAGE_REF: ghcr.io/bonge0115/forensic-launcher:latest
+  SPEC_PATH: /tmp/sandbox-spec/spec.json
+  FAILURE_ARTIFACT_PATH: /tmp/sandbox-spec/failure-artifact.json
+  NORMAL_ARTIFACT_PATH: /tmp/sandbox-spec/normal-artifact.json
+
+jobs:
+  activate-sandbox:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: jy
+          fetch-depth: 0
+
+      - name: Prepare sandbox inputs
+        shell: bash
+        run: |
+          mkdir -p /tmp/sandbox-spec
+          cat > "${SPEC_PATH}" <<'EOF'
+          ${{ inputs.spec_json }}
+          EOF
+
+          cat > "${FAILURE_ARTIFACT_PATH}" <<'EOF'
+          ${{ inputs.failure_artifact_json }}
+          EOF
+
+          cat > "${NORMAL_ARTIFACT_PATH}" <<'EOF'
+          ${{ inputs.normal_artifact_json }}
+          EOF
+
+      - name: Validate input JSON files
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          spec = json.loads(Path("/tmp/sandbox-spec/spec.json").read_text(encoding="utf-8"))
+          failure = json.loads(Path("/tmp/sandbox-spec/failure-artifact.json").read_text(encoding="utf-8"))
+          normal = json.loads(Path("/tmp/sandbox-spec/normal-artifact.json").read_text(encoding="utf-8"))
+
+          case_id = spec["metadata"]["case_id"]
+
+          if failure.get("case_id") != case_id:
+              raise ValueError(
+                  f"failure artifact case_id mismatch: expected={case_id}, actual={failure.get('case_id')}"
+              )
+          if normal.get("case_id") != case_id:
+              raise ValueError(
+                  f"normal artifact case_id mismatch: expected={case_id}, actual={normal.get('case_id')}"
+              )
+
+          if failure.get("artifact_type") != "failure_replay":
+              raise ValueError(
+                  f"failure artifact_type mismatch: {failure.get('artifact_type')}"
+              )
+          if normal.get("artifact_type") != "normal_validation":
+              raise ValueError(
+                  f"normal artifact_type mismatch: {normal.get('artifact_type')}"
+              )
+
+          print("[OK] input JSON validation passed")
+          print(f"[OK] case_id={case_id}")
+          PY
+
+      - name: Derive case metadata and manifest path
+        id: case_meta
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          spec = json.loads(Path("/tmp/sandbox-spec/spec.json").read_text(encoding="utf-8"))
+
+          case_id = spec["metadata"]["case_id"]
+          source_service = spec["metadata"].get("source_service", "")
+          source_image_ref = spec["sandbox"].get("consumer_image_ref", "")
+          case_branch = f"case/{case_id}"
+
+          safe = "".join(c.lower() if c.isalnum() else "-" for c in case_id)
+          while "--" in safe:
+              safe = safe.replace("--", "-")
+          safe = safe.strip("-")[:48].rstrip("-")
+          if not safe:
+              safe = "case"
+
+          output_yaml = f"gitops/apps/forensic-sandbox/cases/sandbox-case-{safe}.yaml"
+          record_path = f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json"
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"case_id={case_id}\n")
+              f.write(f"safe_case_id={safe}\n")
+              f.write(f"case_branch={case_branch}\n")
+              f.write(f"output_yaml={output_yaml}\n")
+              f.write(f"record_path={record_path}\n")
+              f.write(f"source_service={source_service}\n")
+              f.write(f"source_image_ref={source_image_ref}\n")
+
+          print(f"[OK] case_id={case_id}")
+          print(f"[OK] case_branch={case_branch}")
+          print(f"[OK] safe_case_id={safe}")
+          print(f"[OK] output_yaml={output_yaml}")
+          print(f"[OK] source_service={source_service}")
+          print(f"[OK] source_image_ref={source_image_ref}")
+          PY
+
+      - name: Generate case-specific sandbox manifest
+        shell: bash
+        run: |
+          python scripts/apply_sandbox_spec.py \
+            --spec "${SPEC_PATH}" \
+            --failure-artifact "${FAILURE_ARTIFACT_PATH}" \
+            --normal-artifact "${NORMAL_ARTIFACT_PATH}" \
+            --launcher-image-ref "${LAUNCHER_IMAGE_REF}" \
+            --template-yaml "${TEMPLATE_YAML_PATH}" \
+            --output-yaml "${{ steps.case_meta.outputs.output_yaml }}"
+
+      - name: Create or refresh case record on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ steps.case_meta.outputs.case_id }}"
+          RECORD_PATH="${{ steps.case_meta.outputs.record_path }}"
+          CASE_BRANCH="${{ steps.case_meta.outputs.case_branch }}"
+          SOURCE_SERVICE="${{ steps.case_meta.outputs.source_service }}"
+          SOURCE_IMAGE_REF="${{ steps.case_meta.outputs.source_image_ref }}"
+          SANDBOX_MANIFEST_PATH="${{ steps.case_meta.outputs.output_yaml }}"
+
+          if [[ -f "$RECORD_PATH" ]]; then
+            python scripts/update_case_record.py update \
+              --case-id "$CASE_ID" \
+              --service "$SOURCE_SERVICE" \
+              --branch-name "$CASE_BRANCH" \
+              --status "sandbox_created" \
+              --source-image-ref "$SOURCE_IMAGE_REF" \
+              --sandbox-manifest-path "$SANDBOX_MANIFEST_PATH" \
+              --metadata-json "{\"case_branch_created\": false, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
+              --note "sandbox manifest refreshed on jy"
+          else
+            python scripts/update_case_record.py create \
+              --case-id "$CASE_ID" \
+              --service "$SOURCE_SERVICE" \
+              --branch-name "$CASE_BRANCH" \
+              --status "sandbox_created" \
+              --source-image-ref "$SOURCE_IMAGE_REF" \
+              --sandbox-manifest-path "$SANDBOX_MANIFEST_PATH" \
+              --metadata-json "{\"case_branch_created\": false, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
+              --note "sandbox manifest created on jy"
+          fi
+
+      - name: Show generated manifest
+        shell: bash
+        run: |
+          echo "===== GENERATED CASE MANIFEST ====="
+          cat "${{ steps.case_meta.outputs.output_yaml }}"
+          echo "===== END GENERATED CASE MANIFEST ====="
+
+      - name: Show git diff
+        shell: bash
+        run: |
+          git diff -- \
+            "${{ steps.case_meta.outputs.output_yaml }}" \
+            "${{ steps.case_meta.outputs.record_path }}" || true
+
+      - name: Commit generated case manifest and record
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+
+          git add "${{ steps.case_meta.outputs.output_yaml }}"
+          git add "${{ steps.case_meta.outputs.record_path }}"
+
+          git commit -m "forensic sandbox case: ${{ steps.case_meta.outputs.case_id }}" || echo "No changes to commit"
+
+      - name: Push manifest and record changes
+        shell: bash
+        run: |
+          git push origin HEAD
+
+      - name: Summary
+        shell: bash
+        run: |
+          echo "case_id=${{ steps.case_meta.outputs.case_id }}"
+          echo "safe_case_id=${{ steps.case_meta.outputs.safe_case_id }}"
+          echo "case_branch=${{ steps.case_meta.outputs.case_branch }}"
+          echo "manifest=${{ steps.case_meta.outputs.output_yaml }}"
+          echo "record=${{ steps.case_meta.outputs.record_path }}"

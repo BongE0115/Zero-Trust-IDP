@@ -1,0 +1,15 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: block-everything-sandbox
+  namespace: forensic-sandbox
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  # [핵심] 이 라벨이 붙은 파드는 무조건 검사 대상
+  selector:
+    matchLabels:
+      app: forensic-sandbox-app
+  action: DENY
+  rules:
+  - {} # [중요] rules가 비어있으면 "모든 트래픽"을 의미합니다.

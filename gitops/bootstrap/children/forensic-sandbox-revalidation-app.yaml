@@ -1,16 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: forensic-sandbox-app
+  name: forensic-sandbox-revalidation
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "3"
 spec:
   project: default
   source:
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
     targetRevision: jy
-    path: gitops/apps/forensic-sandbox/base
+    path: gitops/apps/forensic-sandbox/cases/revalidation
+    directory:
+      recurse: true
+      include: "*.yaml"
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: forensic-sandbox

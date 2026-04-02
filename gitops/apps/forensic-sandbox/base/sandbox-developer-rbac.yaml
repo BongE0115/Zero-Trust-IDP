@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sandbox-developer-role
+  namespace: forensic-sandbox
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "pods/exec"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/exec", "pods/port-forward"]
+  verbs: ["create", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sandbox-developer-binding
+  namespace: forensic-sandbox
+subjects:
+- kind: User
+  name: "developer@yourcompany.com" # 👈 여기에 실제 회원님이나 팀원의 ID를 넣으세요!
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: sandbox-developer-role
+  apiGroup: rbac.authorization.k8s.io

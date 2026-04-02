@@ -1,0 +1,106 @@
+name: collect-revalidation-result
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Unique case identifier"
+        required: true
+        type: string
+      verdict_path:
+        description: "Path to revalidation verdict JSON committed in repo"
+        required: true
+        type: string
+      note:
+        description: "Optional note"
+        required: false
+        default: "revalidation verdict collected by workflow"
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  RECORD_BRANCH: jy
+
+jobs:
+  collect-revalidation-result:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          CASE_ID="${{ inputs.case_id }}"
+          VERDICT_PATH="${{ inputs.verdict_path }}"
+
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+          if [[ -z "$VERDICT_PATH" ]]; then
+            echo "verdict_path is required"
+            exit 1
+          fi
+
+      - name: Checkout jy record branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RECORD_BRANCH }}
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Verify required files exist on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+          VERDICT_PATH="${{ inputs.verdict_path }}"
+
+          if [[ ! -f "$RECORD_PATH" ]]; then
+            echo "Case record not found on jy: $RECORD_PATH"
+            exit 1
+          fi
+
+          if [[ ! -f "$VERDICT_PATH" ]]; then
+            echo "Verdict file not found on jy: $VERDICT_PATH"
+            exit 1
+          fi
+
+      - name: Collect verdict into jy case record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python scripts/collect_revalidation_result.py \
+            --case-id "${{ inputs.case_id }}" \
+            --verdict-path "${{ inputs.verdict_path }}" \
+            --note "${{ inputs.note }}"
+
+      - name: Commit updated jy case record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No case record changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): collect revalidation result for ${{ inputs.case_id }}"
+
+      - name: Push jy branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
