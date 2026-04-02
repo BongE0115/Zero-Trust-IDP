@@ -1,0 +1,232 @@
+name: snapshot-reproduce-verdict
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Unique case identifier"
+        required: true
+        type: string
+      namespace:
+        description: "Namespace where reproduce pod runs"
+        required: false
+        default: "forensic-sandbox"
+        type: string
+      generation:
+        description: "Revalidation generation (for reproduce this is usually 0)"
+        required: true
+        type: string
+      note:
+        description: "Optional note"
+        required: false
+        default: "reproduce verdict snapshot stored by workflow via kubectl"
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  RECORD_BRANCH: jy
+
+jobs:
+  snapshot-reproduce-verdict:
+    runs-on: [self-hosted, linux, monitoring-node]
+
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ inputs.case_id }}"
+          GEN="${{ inputs.generation }}"
+
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+          if [[ ! "$GEN" =~ ^[0-9]+$ ]]; then
+            echo "generation must be numeric"
+            exit 1
+          fi
+
+      - name: Checkout jy record branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RECORD_BRANCH }}
+          fetch-depth: 0
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Configure kubeconfig
+        shell: bash
+        env:
+          KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.kube"
+
+          if [[ -z "${KUBECONFIG_B64_VALUE:-}" ]]; then
+            echo "KUBECONFIG_B64 secret is empty or missing"
+            exit 1
+          fi
+
+          echo "${KUBECONFIG_B64_VALUE}" | base64 -di > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+      - name: Verify cluster access
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl get ns "${{ inputs.namespace }}"
+
+      - name: Resolve reproduce pod
+        id: pod
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          CASE_ID="${{ inputs.case_id }}"
+          GEN="${{ inputs.generation }}"
+
+          SELECTOR="forensic-case-id=${CASE_ID},forensic-validation-mode=reproduce,forensic-revalidation-generation=${GEN}"
+
+          POD_NAME="$(kubectl get pods -n "$NS" -l "$SELECTOR" \
+            --sort-by=.metadata.creationTimestamp \
+            -o jsonpath='{.items[-1:].metadata.name}')"
+
+          if [[ -z "$POD_NAME" ]]; then
+            echo "No pod found for selector: $SELECTOR"
+            kubectl get pods -n "$NS" --show-labels
+            exit 1
+          fi
+
+          echo "pod_name=$POD_NAME" >> "$GITHUB_OUTPUT"
+          echo "selector=$SELECTOR" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for verdict file in reproduce pod
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          POD="${{ steps.pod.outputs.pod_name }}"
+
+          for i in $(seq 1 60); do
+            PHASE="$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.status.phase}')"
+            echo "pod phase=$PHASE"
+
+            if [[ "$PHASE" == "Unknown" ]]; then
+              echo "Pod entered bad phase: $PHASE"
+              kubectl describe pod -n "$NS" "$POD" || true
+              kubectl logs -n "$NS" "$POD" --all-containers=true || true
+              exit 1
+            fi
+
+            # Failed/Succeeded 여도 sleep 중일 수 있으니 exec 먼저 시도
+            if kubectl exec -n "$NS" "$POD" -c forensic-launcher -- test -f /artifacts/verdict.json 2>/dev/null; then
+              echo "verdict file exists"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Timed out waiting for /artifacts/verdict.json in reproduce pod"
+          kubectl describe pod -n "$NS" "$POD" || true
+          kubectl logs -n "$NS" "$POD" --all-containers=true || true
+          exit 1
+
+      - name: Fetch verdict.json from reproduce pod
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          POD="${{ steps.pod.outputs.pod_name }}"
+
+          mkdir -p /tmp/reproduce-verdict
+          kubectl exec -n "$NS" "$POD" -c forensic-launcher -- cat /artifacts/verdict.json > /tmp/reproduce-verdict/verdict.json
+
+          test -s /tmp/reproduce-verdict/verdict.json
+
+      - name: Export reproduce verdict snapshot into repo path on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 scripts/export_verdict_snapshot.py \
+            --case-id "${{ inputs.case_id }}" \
+            --input-verdict "/tmp/reproduce-verdict/verdict.json" \
+            --annotate-source-path
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit reproduce verdict snapshot on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No reproduce verdict snapshot changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): snapshot reproduce verdict for ${{ inputs.case_id }}"
+
+      - name: Push jy branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+          
+      - name: Dispatch collect reproduce result workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "WORKFLOW_PAT secret is empty or missing"
+            exit 1
+          fi
+
+          VERDICT_PATH="gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json"
+
+          cat > /tmp/collect_reproduce_dispatch_payload.json <<'JSON'
+          {
+            "ref": "${{ env.RECORD_BRANCH }}",
+            "inputs": {
+              "case_id": "${{ inputs.case_id }}",
+              "verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json",
+              "note": "collect reproduce result triggered by snapshot-reproduce-verdict"
+            }
+          }
+          JSON
+
+          http_code=$(curl -sS -o /tmp/collect_reproduce_dispatch_response.json -w "%{http_code}" \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/collect-reproduce-result.yaml/dispatches" \
+            --data @/tmp/collect_reproduce_dispatch_payload.json)
+
+          if [[ "$http_code" != "204" ]]; then
+            echo "Failed to dispatch collect-reproduce-result workflow (HTTP $http_code)"
+            cat /tmp/collect_reproduce_dispatch_response.json || true
+            exit 1
+          fi
+
+          echo "[OK] collect-reproduce-result workflow dispatched"
