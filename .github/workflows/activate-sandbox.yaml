@@ -237,15 +237,58 @@ jobs:
           echo "[INFO] forensic-sandbox namespace check:"
           kubectl get ns forensic-sandbox
 
-      - name: Wait for consumer deployment to become available
+      - name: Wait for consumer deployment creation and rollout
         shell: bash
         run: |
           set -euo pipefail
-          kubectl wait \
-            --namespace forensic-sandbox \
-            --for=condition=Available \
-            "deployment/${{ steps.deploy_meta.outputs.deployment_name }}" \
-            --timeout=180s
+
+          NS="forensic-sandbox"
+          DEPLOY="${{ steps.deploy_meta.outputs.deployment_name }}"
+
+          echo "[INFO] waiting for deployment creation: ${DEPLOY}"
+
+          found="false"
+          for i in $(seq 1 30); do
+            if kubectl get deployment "$DEPLOY" -n "$NS" >/dev/null 2>&1; then
+              found="true"
+              echo "[OK] deployment found: ${DEPLOY}"
+              break
+            fi
+            echo "[INFO] deployment not found yet (${i}/30)"
+            sleep 10
+          done
+
+          if [[ "$found" != "true" ]]; then
+            echo "[ERROR] deployment was not created in time"
+            kubectl get deploy -n "$NS" || true
+            kubectl get pods -n "$NS" -o wide || true
+            exit 1
+          fi
+
+          if ! kubectl rollout status "deployment/${DEPLOY}" -n "$NS" --timeout=180s; then
+            echo "[ERROR] rollout failed for ${DEPLOY}"
+            kubectl describe deployment "$DEPLOY" -n "$NS" || true
+            kubectl get pods -n "$NS" -o wide || true
+
+            POD_NAME="$(kubectl get pods -n "$NS" -l app="${DEPLOY}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+            if [[ -n "${POD_NAME:-}" ]]; then
+              echo "[INFO] describe pod: ${POD_NAME}"
+              kubectl describe pod "$POD_NAME" -n "$NS" || true
+
+              echo "[INFO] topic-init logs"
+              kubectl logs "$POD_NAME" -n "$NS" -c topic-init --tail=200 || true
+              kubectl logs "$POD_NAME" -n "$NS" -c topic-init --previous --tail=200 || true
+
+              echo "[INFO] artifact-init logs"
+              kubectl logs "$POD_NAME" -n "$NS" -c artifact-init --tail=200 || true
+              kubectl logs "$POD_NAME" -n "$NS" -c artifact-init --previous --tail=200 || true
+
+              echo "[INFO] consumer-app logs"
+              kubectl logs "$POD_NAME" -n "$NS" -c consumer-app --tail=200 || true
+              kubectl logs "$POD_NAME" -n "$NS" -c consumer-app --previous --tail=200 || true
+            fi
+            exit 1
+          fi
 
       - name: Dispatch reproduce launcher workflow
         shell: bash
