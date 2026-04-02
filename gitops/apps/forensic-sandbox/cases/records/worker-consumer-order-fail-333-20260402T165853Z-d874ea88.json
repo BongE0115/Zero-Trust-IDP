@@ -4,7 +4,7 @@
   "branch_name": "case/worker-consumer-order-fail-333-20260402T165853Z-d874ea88",
   "status": "sandbox_created",
   "created_at": "2026-04-02T16:59:03Z",
-  "updated_at": "2026-04-02T16:59:05Z",
+  "updated_at": "2026-04-02T16:59:16Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:6976091",
   "candidate_image_ref": null,
   "verified_image_ref": null,
@@ -23,7 +23,8 @@
   },
   "metadata": {
     "case_branch_created": false,
-    "case_branch_ref": "case/worker-consumer-order-fail-333-20260402T165853Z-d874ea88"
+    "case_branch_ref": "case/worker-consumer-order-fail-333-20260402T165853Z-d874ea88",
+    "reproduce_job_manifest_path": "gitops/apps/forensic-sandbox/cases/reproduce/reproduce-case-worker-consumer-order-fail-333-20260402T165853Z-d874ea88.yaml"
   },
   "history": [
     {
@@ -37,6 +38,12 @@
       "action": "update",
       "status": "sandbox_created",
       "note": "sandbox manifest refreshed on jy"
+    },
+    {
+      "at": "2026-04-02T16:59:16Z",
+      "action": "update",
+      "status": "sandbox_created",
+      "note": "initial reproduce launcher manifest created"
     }
   ]
 }
