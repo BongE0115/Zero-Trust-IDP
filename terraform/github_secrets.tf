@@ -44,7 +44,19 @@ data "external" "k3s_kubeconfig_b64" {
 resource "github_actions_secret" "kubeconfig_b64" {
   count = var.enable_github_secret_sync ? 1 : 0
 
-  repository      = var.github_repository
-  secret_name     = var.github_actions_kubeconfig_secret_name
+  repository      = trimspace(var.github_repository)
+  secret_name     = trimspace(var.github_actions_kubeconfig_secret_name)
   plaintext_value = data.external.k3s_kubeconfig_b64[0].result.kubeconfig_b64
+
+  lifecycle {
+    precondition {
+      condition     = length(trimspace(var.github_owner)) > 0
+      error_message = "enable_github_secret_sync=true 인데 github_owner 가 비어 있습니다."
+    }
+
+    precondition {
+      condition     = length(trimspace(var.github_repository)) > 0
+      error_message = "enable_github_secret_sync=true 인데 github_repository 가 비어 있습니다."
+    }
+  }
 }

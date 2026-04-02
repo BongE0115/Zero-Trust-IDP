@@ -56,29 +56,42 @@ variable "github_owner" {
   description = "GitHub owner or organization name"
   type        = string
   default     = ""
+
+  validation {
+    condition     = var.enable_github_secret_sync == false || length(trimspace(var.github_owner)) > 0
+    error_message = "enable_github_secret_sync=true 이면 github_owner 는 비어 있을 수 없습니다."
+  }
 }
 
 variable "github_repository" {
   description = "GitHub repository name only, without owner"
   type        = string
   default     = ""
-}
 
-variable "github_token" {
-  description = "GitHub token with permission to manage repository Actions secrets"
-  type        = string
-  sensitive   = true
-  default     = ""
+  validation {
+    condition     = var.enable_github_secret_sync == false || length(trimspace(var.github_repository)) > 0
+    error_message = "enable_github_secret_sync=true 이면 github_repository 는 비어 있을 수 없습니다."
+  }
 }
 
 variable "github_actions_kubeconfig_secret_name" {
   description = "GitHub Actions secret name for kubeconfig"
   type        = string
   default     = "KUBECONFIG_B64"
+
+  validation {
+    condition     = length(trimspace(var.github_actions_kubeconfig_secret_name)) > 0
+    error_message = "github_actions_kubeconfig_secret_name 은 비어 있을 수 없습니다."
+  }
 }
 
 variable "github_secret_sync_ssm_parameter_name" {
   description = "SSM Parameter Store name containing the GitHub PAT used for syncing KUBECONFIG_B64 into GitHub Actions secrets"
   type        = string
   default     = "/zero-trust-idp/github-secret-sync-token"
+
+  validation {
+    condition     = var.enable_github_secret_sync == false || length(trimspace(var.github_secret_sync_ssm_parameter_name)) > 0
+    error_message = "enable_github_secret_sync=true 이면 github_secret_sync_ssm_parameter_name 은 비어 있을 수 없습니다."
+  }
 }
