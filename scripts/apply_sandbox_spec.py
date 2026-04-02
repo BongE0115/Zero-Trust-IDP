@@ -67,7 +67,11 @@ def ensure_volume_mount(container: Dict[str, Any], volume_name: str, mount_path:
         if m.get("name") == volume_name:
             m["mountPath"] = mount_path
             return
-    mounts.append({"name": volume_name, "mountPath": mount_path})
+    mounts.append({"name": name_to_str(volume_name), "mountPath": mount_path})
+
+
+def name_to_str(value: Any) -> str:
+    return "" if value is None else str(value)
 
 
 def find_deployment(docs: List[Dict[str, Any]], deployment_name: str) -> Dict[str, Any]:
@@ -127,24 +131,26 @@ def patch_topic_init_container(
 
     topic_init = find_init_container_by_name(init_containers, "topic-init")
 
-    script = r'''set -euo pipefail
+    # /bin/sh 에서는 pipefail 지원 안 하므로 set -eu 사용
+    # 각 옵션은 실제 개행이 유지되도록 안전하게 구성
+    script = """set -eu
 
 BOOTSTRAP="${KAFKA_BOOTSTRAP}"
 PARTITIONS="${TOPIC_PARTITIONS:-1}"
 REPLICATION_FACTOR="${TOPIC_REPLICATION_FACTOR:-1}"
 
 create_topic() {
-  local topic="$1"
+  topic="$1"
   if [ -z "$topic" ]; then
     return 0
   fi
 
-  /opt/bitnami/kafka/bin/kafka-topics.sh \
-    --bootstrap-server "$BOOTSTRAP" \
-    --create \
-    --if-not-exists \
-    --topic "$topic" \
-    --partitions "$PARTITIONS" \
+  /opt/bitnami/kafka/bin/kafka-topics.sh \\
+    --bootstrap-server "$BOOTSTRAP" \\
+    --create \\
+    --if-not-exists \\
+    --topic "$topic" \\
+    --partitions "$PARTITIONS" \\
     --replication-factor "$REPLICATION_FACTOR"
 }
 
@@ -152,7 +158,7 @@ create_topic "${REPLAY_TOPIC}"
 create_topic "${RESULT_TOPIC}"
 
 echo "[OK] topic-init completed"
-'''
+"""
     topic_init["command"] = ["/bin/sh", "-c", script]
     upsert_env(topic_init, "KAFKA_BOOTSTRAP", kafka_bootstrap)
     upsert_env(topic_init, "REPLAY_TOPIC", replay_topic)
@@ -354,8 +360,6 @@ def build_case_manifest_docs(
         mongo_host=case_mongo_host,
     )
 
-    # launcher Job은 여기서 생성하지 않음.
-    # consumer Deployment가 Ready 된 뒤 별도 workflow에서 Job manifest를 생성/커밋한다.
     return [mongo_service, mongo_deployment, deployment, case_configmap]
 
 
