@@ -6,8 +6,6 @@ on:
       - "case/**"
     paths:
       - "services/worker-consumer/**"
-      - "scripts/patch_case_candidate.py"
-      - "scripts/update_case_record.py"
 
 permissions:
   contents: write
@@ -52,7 +50,7 @@ jobs:
           echo "case_branch=$REF_NAME" >> "$GITHUB_OUTPUT"
           echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-      - name: Configure git
+      - name: Configure git in case source
         working-directory: case-src
         shell: bash
         run: |
@@ -121,7 +119,7 @@ jobs:
             exit 1
           fi
 
-          SANDBOX_MANIFEST_PATH="$(python - <<PY
+          SANDBOX_MANIFEST_PATH="$(python -c '
 import json
 from pathlib import Path
 
@@ -129,14 +127,14 @@ case_id = "${{ steps.parse.outputs.case_id }}"
 path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
 data = json.loads(path.read_text(encoding="utf-8"))
 print(data.get("sandbox_manifest_path") or "")
-PY
-)"
+')"
+
           if [[ -z "$SANDBOX_MANIFEST_PATH" ]]; then
             echo "sandbox_manifest_path is empty in jy case record"
             exit 1
           fi
 
-          CURRENT_GEN="$(python - <<PY
+          CURRENT_GEN="$(python -c '
 import json
 from pathlib import Path
 
@@ -144,15 +142,14 @@ case_id = "${{ steps.parse.outputs.case_id }}"
 path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
 data = json.loads(path.read_text(encoding="utf-8"))
 print(int(data.get("revalidation_generation", 0)))
-PY
-)"
+')"
+
           NEXT_GEN=$((CURRENT_GEN + 1))
 
           echo "sandbox_manifest_path=$SANDBOX_MANIFEST_PATH" >> "$GITHUB_OUTPUT"
           echo "next_generation=$NEXT_GEN" >> "$GITHUB_OUTPUT"
 
       - name: Patch sandbox manifest and jy case record
-        id: patch
         working-directory: record-repo
         shell: bash
         run: |

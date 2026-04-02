@@ -6,7 +6,8 @@ resource "local_file" "local_node_setup_script" {
   filename        = "${path.module}/setup_local_env.sh"
   file_permission = "0755"
 
-  content = <<-EOT
+  # 변경된 부분: content 값을 replace() 함수로 감쌉니다.
+  content = replace(<<-EOT
     #!/bin/bash
     set -e
 
@@ -104,6 +105,7 @@ resource "local_file" "local_node_setup_script" {
     echo "🎉 로컬 환경 세팅 및 GitOps 하이브리드 자동화 완벽 종료!"
     echo "=================================================="
   EOT
+  , "\r\n", "\n") # 추가된 부분: EOT 닫고 쉼표 뒤에 \r\n을 \n으로 치환하도록 설정
 }
 
 # 1. 🔍 OS 자동 판별 로직
