@@ -115,7 +115,7 @@ jobs:
                         mkdir -p /artifacts
                         printf '%s' '${{ inputs.failure_artifact_json }}' > /artifacts/failure.json
                         printf '%s' '${{ inputs.normal_artifact_json }}' > /artifacts/normal.json
-                        printf '%s' '{"ready": true, "source": "workflow_wait"}' > /artifacts/consumer-ready.json
+                        printf '%s' '{"ready": true, "case_id": "${{ inputs.case_id }}", "source_topic": "${{ inputs.replay_topic }}", "source": "workflow_wait"}' > /artifacts/consumer-ready.json
                     volumeMounts:
                       - name: artifacts
                         mountPath: /artifacts
@@ -168,6 +168,8 @@ jobs:
                         value: failed
                       - name: EXPECTED_NORMAL_STATUS
                         value: success
+                      - name: POST_VERDICT_SLEEP_SECONDS
+                        value: "300"
                       - name: IMAGE_REF
                         value: ${{ env.LAUNCHER_IMAGE_REF }}
                     volumeMounts:
