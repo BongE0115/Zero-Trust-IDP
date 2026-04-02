@@ -445,7 +445,7 @@ resource "aws_security_group" "k3s_server_sg" {
     from_port       = 6443
     to_port         = 6443
     protocol        = "tcp"
-    security_groups = [aws_security_group.monitoring_sg.id]
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   ingress {
@@ -453,7 +453,7 @@ resource "aws_security_group" "k3s_server_sg" {
     from_port       = 10250
     to_port         = 10250
     protocol        = "tcp"
-    security_groups = [aws_security_group.monitoring_sg.id]
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   ingress {
@@ -461,7 +461,7 @@ resource "aws_security_group" "k3s_server_sg" {
     from_port       = 9100
     to_port         = 9100
     protocol        = "tcp"
-    security_groups = [aws_security_group.monitoring_sg.id]
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   ingress {
@@ -477,7 +477,7 @@ resource "aws_security_group" "k3s_server_sg" {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   # 핵심 해결: 30080과 30081(Frontend) 포트 모두 오픈
@@ -523,7 +523,7 @@ resource "aws_security_group" "k3s_agent_sg" {
     from_port       = 10250
     to_port         = 10250
     protocol        = "tcp"
-    security_groups = [aws_security_group.monitoring_sg.id]
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   ingress {
@@ -535,11 +535,11 @@ resource "aws_security_group" "k3s_agent_sg" {
   }
 
   ingress {
-    description = "Flannel VXLAN self"
+    description = "Flannel VXLAN from VPC"
     from_port   = 8472
     to_port     = 8472
     protocol    = "udp"
-    self        = true
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   ingress {

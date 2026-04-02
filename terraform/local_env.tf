@@ -64,8 +64,7 @@ resource "local_file" "local_node_setup_script" {
     echo "✅ 글로벌 환경변수 주입 완료!"
 
     echo "[5/6] 로컬 전용 마이크로서비스 배포..."
-    GITOPS_PATH="$(pwd)/gitops/apps/boutique-local"
-    
+    GITOPS_PATH="/home/ubuntu/Zero-Trust-IDP/gitops/apps/boutique-local"
     if [ -d "$GITOPS_PATH" ]; then
         sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -k "$GITOPS_PATH" -n boutique-local
         echo "✅ 로컬 마이크로서비스 배포 완료!"
