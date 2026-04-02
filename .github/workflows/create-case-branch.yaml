@@ -105,7 +105,7 @@ jobs:
           RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
 
           if [[ -f "$RECORD_PATH" ]]; then
-            python3 scriptsupdate_case_record.py update \
+            python3 scripts/update_case_record.py update \
               --case-id "$CASE_ID" \
               --service "${{ inputs.service }}" \
               --branch-name "$CASE_BRANCH" \
@@ -115,7 +115,7 @@ jobs:
               --metadata-json "{\"case_branch_created\": true, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
               --note "${{ inputs.note }}"
           else
-            python3 scriptsupdate_case_record.py create \
+            python3 scripts/update_case_record.py create \
               --case-id "$CASE_ID" \
               --service "${{ inputs.service }}" \
               --branch-name "$CASE_BRANCH" \
