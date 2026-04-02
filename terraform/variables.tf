@@ -95,3 +95,14 @@ variable "github_secret_sync_ssm_parameter_name" {
     error_message = "enable_github_secret_sync=true 이면 github_secret_sync_ssm_parameter_name 은 비어 있을 수 없습니다."
   }
 }
+
+variable "external_python_program" {
+  description = "Command used by Terraform external data source to run Python"
+  type        = list(string)
+  default     = ["python3"]
+
+  validation {
+    condition     = length(var.external_python_program) > 0
+    error_message = "external_python_program must contain at least one element."
+  }
+}

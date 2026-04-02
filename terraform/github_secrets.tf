@@ -25,10 +25,10 @@ data "aws_ssm_parameter" "github_secret_sync_token" {
 data "external" "k3s_kubeconfig_b64" {
   count = var.enable_github_secret_sync ? 1 : 0
 
-  program = [
-    "python3",
-    "${path.module}/scripts/get_k3s_kubeconfig.py"
-  ]
+  program = concat(
+    var.external_python_program,
+    ["${path.module}/scripts/get_k3s_kubeconfig.py"]
+  )
 
   query = {
     instance_id     = aws_instance.k3s_server.id
