@@ -6,8 +6,7 @@ resource "local_file" "local_node_setup_script" {
   filename        = "${path.module}/setup_local_env.sh"
   file_permission = "0755"
 
-  # 변경된 부분: content 값을 replace() 함수로 감쌉니다.
-  content = replace(<<-EOT
+  content = <<-EOT
     #!/bin/bash
     set -e
 
@@ -105,34 +104,12 @@ resource "local_file" "local_node_setup_script" {
     echo "🎉 로컬 환경 세팅 및 GitOps 하이브리드 자동화 완벽 종료!"
     echo "=================================================="
   EOT
-  , "\r\n", "\n") # 추가된 부분: EOT 닫고 쉼표 뒤에 \r\n을 \n으로 치환하도록 설정
 }
 
-# 1. 🔍 OS 자동 판별 로직
-locals {
-  # pathexpand("~")의 결과가 'C:\'나 'D:\' 같은 알파벳으로 시작하면 Windows로 간주합니다.
-  is_windows = length(regexall("^[a-zA-Z]:", pathexpand("~"))) > 0
-}
-
-# 2. 🐧 우분투(Linux) 환경일 때 자동으로 실행되는 블록
-resource "null_resource" "setup_linux" {
-  # Windows가 아닐 때만 1개를 생성하여 실행합니다.
-  count = local.is_windows ? 0 : 1
+resource "null_resource" "auto_run_setup" {
+  depends_on = [local_file.local_node_setup_script]
 
   provisioner "local-exec" {
-    command     = "./setup_local_env.sh"
-    interpreter = ["bash", "-c"] # 순수 bash 터미널 사용
-  }
-}
-
-# 3. 🪟 윈도우(Windows) 환경일 때 자동으로 실행되는 블록
-resource "null_resource" "setup_windows" {
-  # Windows일 때만 1개를 생성하여 실행합니다.
-  count = local.is_windows ? 1 : 0
-
-  provisioner "local-exec" {
-    # Windows CMD에서 wsl 명령어를 통해 리눅스 환경으로 넘겨서 실행합니다.
-    command     = "wsl ./setup_local_env.sh"
-    interpreter = ["cmd", "/C"] # Windows 기본 터미널 사용
+    command = "./setup_local_env.sh" # <--- sudo 제거
   }
 }
