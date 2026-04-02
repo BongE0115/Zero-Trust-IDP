@@ -28,7 +28,7 @@ env:
 
 jobs:
   activate-sandbox:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, monitoring-node]
     environment: forensic-sandbox
 
     steps:
@@ -206,35 +206,6 @@ jobs:
         run: |
           git push origin "HEAD:${{ env.RECORD_BRANCH }}"
 
-      - name: Preflight check for required GitHub secrets
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
-        run: |
-          set -euo pipefail
-
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "WORKFLOW_PAT secret is empty or missing"
-            exit 1
-          fi
-
-          REPO="${{ github.repository }}"
-
-          echo "[INFO] Checking repository-level secret metadata for KUBECONFIG_B64..."
-          http_code=$(curl -sS -o /tmp/secret_meta.json -w "%{http_code}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            "https://api.github.com/repos/${REPO}/actions/secrets/KUBECONFIG_B64")
-
-          if [[ "$http_code" != "200" ]]; then
-            echo "Repository secret KUBECONFIG_B64 not found or inaccessible (HTTP ${http_code})"
-            echo "If you stored it as an Environment secret, this workflow job will not see it unless the job uses that environment."
-            cat /tmp/secret_meta.json || true
-            exit 1
-          fi
-
-          echo "[OK] Repository secret metadata is visible."
-
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
         with:
@@ -242,20 +213,17 @@ jobs:
 
       - name: Configure kubeconfig
         shell: bash
-        # 1. 시크릿을 환경 변수로 안전하게 주입
         env:
           KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
         run: |
           set -euo pipefail
           mkdir -p "${HOME}/.kube"
 
-          # 환경 변수가 비어있는지 확인
-          if [[ -z "$KUBECONFIG_B64_VALUE" ]]; then
+          if [[ -z "${KUBECONFIG_B64_VALUE:-}" ]]; then
             echo "KUBECONFIG_B64 secret is empty or missing"
             exit 1
           fi
 
-          # 2. -i 옵션을 추가하여 공백, 줄바꿈 등 쓰레기 문자를 무시하고 디코딩
           echo "$KUBECONFIG_B64_VALUE" | base64 -di > "${HOME}/.kube/config"
           chmod 600 "${HOME}/.kube/config"
 
@@ -285,18 +253,21 @@ jobs:
 
       - name: Dispatch reproduce launcher workflow
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           set -euo pipefail
 
-          if [[ -z "${{ secrets.WORKFLOW_PAT }}" ]]; then
+          if [[ -z "${GH_TOKEN:-}" ]]; then
             echo "WORKFLOW_PAT secret is empty or missing"
             exit 1
           fi
 
-          curl -sS -X POST \
+          http_code=$(curl -sS -o /tmp/reproduce_dispatch.json -w "%{http_code}" \
+            -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.WORKFLOW_PAT }}" \
-            https://api.github.com/repos/${{ github.repository }}/actions/workflows/reproduce-sandbox.yaml/dispatches \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/reproduce-sandbox.yaml/dispatches" \
             -d @- <<EOF
           {
             "ref": "${{ env.RECORD_BRANCH }}",
@@ -309,7 +280,16 @@ jobs:
               "normal_artifact_json": ${{ toJson(inputs.normal_artifact_json) }}
             }
           }
-          EOF
+EOF
+          )
+
+          if [[ "$http_code" != "204" ]]; then
+            echo "Failed to dispatch reproduce workflow (HTTP $http_code)"
+            cat /tmp/reproduce_dispatch.json || true
+            exit 1
+          fi
+
+          echo "[OK] reproduce workflow dispatched"
 
       - name: Summary
         shell: bash
