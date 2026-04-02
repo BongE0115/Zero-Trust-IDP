@@ -10,6 +10,14 @@ WORKER_PRIVATE_IP="${k3s_agent_private_ip}"
 GITOPS_REPO_URL="${gitops_repo_url}"
 GITOPS_TARGET_REVISION="${gitops_target_revision}"
 
+ENABLE_MONITORING_GITHUB_RUNNER="${enable_monitoring_github_runner}"
+GITHUB_RUNNER_SCOPE="${github_runner_scope}"
+GITHUB_RUNNER_OWNER="${github_runner_owner}"
+GITHUB_RUNNER_REPOSITORY="${github_runner_repository}"
+GITHUB_RUNNER_LABELS="${github_runner_labels_csv}"
+GITHUB_RUNNER_VERSION="${github_runner_version}"
+GITHUB_RUNNER_TOKEN_SSM_PARAMETER="${github_runner_token_ssm_parameter}"
+
 # ---------------------------------------------------------
 # 1. 기본 패키지 설치
 # ---------------------------------------------------------
@@ -19,7 +27,16 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   software-properties-common jq awscli
 
 # ---------------------------------------------------------
-# 2. Grafana 설치
+# 2. kubectl 설치
+# ---------------------------------------------------------
+if ! command -v kubectl >/dev/null 2>&1; then
+  KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+  curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+  chmod +x /usr/local/bin/kubectl
+fi
+
+# ---------------------------------------------------------
+# 3. Grafana 설치
 # ---------------------------------------------------------
 mkdir -p /etc/apt/keyrings
 curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
@@ -30,7 +47,7 @@ systemctl enable grafana-server
 systemctl restart grafana-server
 
 # ---------------------------------------------------------
-# 3. Prometheus 설치
+# 4. Prometheus 설치
 # ---------------------------------------------------------
 id prometheus >/dev/null 2>&1 || useradd --no-create-home --shell /bin/false prometheus
 
@@ -89,7 +106,7 @@ systemctl enable prometheus
 systemctl restart prometheus
 
 # ---------------------------------------------------------
-# 4. Bootstrap 자산 저장
+# 5. Bootstrap 자산 저장
 # ---------------------------------------------------------
 mkdir -p /opt/bootstrap/argocd
 mkdir -p /opt/bootstrap/logs
@@ -101,8 +118,7 @@ EOF
 ARGOCD_VALUES_B64="$(base64 -w0 /opt/bootstrap/argocd/values.yaml)"
 
 # ---------------------------------------------------------
-# 5. SSM 대상 master 인스턴스 찾기
-#    전제: master 태그 Role=K3s_Server
+# 6. SSM 대상 master 인스턴스 찾기
 # ---------------------------------------------------------
 echo "[INFO] Discovering K3s master instance by tag..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
 
@@ -129,7 +145,7 @@ if [ -z "$MASTER_INSTANCE_ID" ] || [ "$MASTER_INSTANCE_ID" = "None" ]; then
 fi
 
 # ---------------------------------------------------------
-# 6. master가 SSM managed node로 등록될 때까지 대기
+# 7. master가 SSM managed node로 등록될 때까지 대기
 # ---------------------------------------------------------
 echo "[INFO] Waiting for master to appear in SSM..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
 
@@ -156,7 +172,7 @@ if [ "$${ONLINE_PING:-}" != "Online" ]; then
 fi
 
 # ---------------------------------------------------------
-# 7. master에 ArgoCD 설치 + Git clone + root-app apply
+# 8. master에 ArgoCD 설치 + Git clone + root-app apply
 # ---------------------------------------------------------
 echo "[INFO] Sending bootstrap command to master via SSM..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
 
@@ -191,8 +207,9 @@ COMMAND_ID="$(aws ssm send-command \
   --output text)"
 
 echo "[INFO] Command sent. CommandId=$COMMAND_ID" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+
 # ---------------------------------------------------------
-# 8. Run Command 완료 대기
+# 9. Run Command 완료 대기
 # ---------------------------------------------------------
 FINAL_STATUS=""
 for i in {1..40}; do
@@ -225,72 +242,109 @@ for i in {1..40}; do
 done
 
 if [ "$${FINAL_STATUS:-}" != "Success" ]; then
-  echo "[ERROR] ArgoCD install/root-app apply did not complete successfully." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+  echo "[ERROR] Timed out waiting for master bootstrap completion." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
   exit 1
 fi
 
 # ---------------------------------------------------------
-# 9. ArgoCD 초기 비밀번호 조회
+# 10. monitoring node용 kubeconfig 생성
 # ---------------------------------------------------------
-echo "[INFO] Fetching ArgoCD initial admin password..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+mkdir -p /root/.kube
+cat > /root/.kube/config <<EOF
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: https://$${MASTER_PRIVATE_IP}:6443
+  name: aiops-k3s
+contexts:
+- context:
+    cluster: aiops-k3s
+    user: aiops-k3s
+  name: aiops-k3s
+current-context: aiops-k3s
+users:
+- name: aiops-k3s
+  user:
+    token: dummy
+EOF
+chmod 600 /root/.kube/config
 
-PASSWORD_COMMAND_ID="$(aws ssm send-command \
-  --region "$AWS_REGION" \
-  --instance-ids "$MASTER_INSTANCE_ID" \
-  --document-name "AWS-RunShellScript" \
-  --comment "Get ArgoCD initial admin password" \
-  --parameters commands='[
-    "#!/bin/bash",
-    "set -euxo pipefail",
-    "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
-    "for i in {1..20}; do",
-    "  if sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get secret -n argocd argocd-initial-admin-secret >/dev/null 2>&1; then break; fi",
-    "  sleep 15",
-    "done",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='\''{.data.password}'\'' | base64 -d"
-  ]' \
-  --query 'Command.CommandId' \
-  --output text)"
+# ---------------------------------------------------------
+# 11. GitHub self-hosted runner 설치 및 등록
+# ---------------------------------------------------------
+if [ "$${ENABLE_MONITORING_GITHUB_RUNNER}" = "true" ]; then
+  echo "[INFO] Installing GitHub Actions self-hosted runner on monitoring node..." | tee -a /opt/bootstrap/logs/github-runner.log
 
-PASSWORD_STATUS=""
-for i in {1..20}; do
-  PASSWORD_STATUS="$(aws ssm get-command-invocation \
+  RUNNER_ROOT="/opt/actions-runner"
+  mkdir -p "$RUNNER_ROOT"
+  cd "$RUNNER_ROOT"
+
+  if [ ! -f "$RUNNER_ROOT/actions-runner-linux-x64-$${GITHUB_RUNNER_VERSION}.tar.gz" ]; then
+    curl -fsSLo "actions-runner-linux-x64-$${GITHUB_RUNNER_VERSION}.tar.gz" \
+      "https://github.com/actions/runner/releases/download/v$${GITHUB_RUNNER_VERSION}/actions-runner-linux-x64-$${GITHUB_RUNNER_VERSION}.tar.gz"
+  fi
+
+  if [ ! -f "$RUNNER_ROOT/bin/Runner.Listener" ]; then
+    tar xzf "actions-runner-linux-x64-$${GITHUB_RUNNER_VERSION}.tar.gz"
+  fi
+
+  INSTANCE_ID="$(curl -fsSL http://169.254.169.254/latest/meta-data/instance-id)"
+  PRIVATE_IP="$(curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4)"
+  RUNNER_NAME="monitoring-$${INSTANCE_ID}"
+
+  GITHUB_BOOTSTRAP_TOKEN="$(aws ssm get-parameter \
     --region "$AWS_REGION" \
-    --command-id "$PASSWORD_COMMAND_ID" \
-    --instance-id "$MASTER_INSTANCE_ID" \
-    --query 'Status' \
-    --output text || true)"
+    --name "$GITHUB_RUNNER_TOKEN_SSM_PARAMETER" \
+    --with-decryption \
+    --query 'Parameter.Value' \
+    --output text)"
 
-  case "$PASSWORD_STATUS" in
-    Success)
-      break
-      ;;
-    Pending|InProgress|Delayed|"")
-      echo "[INFO] Waiting for password command completion... status=$PASSWORD_STATUS ($i/20)" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-      sleep 10
-      ;;
-    *)
-      echo "[ERROR] Password fetch failed with status=$PASSWORD_STATUS" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-      aws ssm get-command-invocation \
-        --region "$AWS_REGION" \
-        --command-id "$PASSWORD_COMMAND_ID" \
-        --instance-id "$MASTER_INSTANCE_ID" \
-        --output json | tee -a /opt/bootstrap/logs/ssm-bootstrap.log || true
-      exit 1
-      ;;
-  esac
-done
+  if [ -z "$GITHUB_BOOTSTRAP_TOKEN" ] || [ "$GITHUB_BOOTSTRAP_TOKEN" = "None" ]; then
+    echo "[ERROR] Failed to read GitHub runner bootstrap token from SSM." | tee -a /opt/bootstrap/logs/github-runner.log
+    exit 1
+  fi
 
-if [ "$${PASSWORD_STATUS:-}" != "Success" ]; then
-  echo "[ERROR] Password fetch did not complete successfully." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-  exit 1
+  if [ "$GITHUB_RUNNER_SCOPE" = "org" ]; then
+    REG_URL="https://api.github.com/orgs/$${GITHUB_RUNNER_OWNER}/actions/runners/registration-token"
+    RUNNER_URL="https://github.com/$${GITHUB_RUNNER_OWNER}"
+  else
+    REG_URL="https://api.github.com/repos/$${GITHUB_RUNNER_OWNER}/$${GITHUB_RUNNER_REPOSITORY}/actions/runners/registration-token"
+    RUNNER_URL="https://github.com/$${GITHUB_RUNNER_OWNER}/$${GITHUB_RUNNER_REPOSITORY}"
+  fi
+
+  REG_JSON="$(curl -fsSL -X POST \
+    -H "Accept: application/vnd.github+json" \
+    -H "Authorization: Bearer $${GITHUB_BOOTSTRAP_TOKEN}" \
+    "$REG_URL")"
+
+  REG_TOKEN="$(echo "$REG_JSON" | jq -r '.token')"
+
+  if [ -z "$REG_TOKEN" ] || [ "$REG_TOKEN" = "null" ]; then
+    echo "[ERROR] Failed to get registration token from GitHub API." | tee -a /opt/bootstrap/logs/github-runner.log
+    echo "$REG_JSON" | tee -a /opt/bootstrap/logs/github-runner.log
+    exit 1
+  fi
+
+  if [ ! -f "$RUNNER_ROOT/.runner" ]; then
+    ./config.sh \
+      --unattended \
+      --replace \
+      --name "$RUNNER_NAME" \
+      --url "$RUNNER_URL" \
+      --token "$REG_TOKEN" \
+      --labels "$GITHUB_RUNNER_LABELS,private-vpc,$PRIVATE_IP" \
+      --work "_work"
+  else
+    echo "[INFO] Runner already configured. Skipping config.sh." | tee -a /opt/bootstrap/logs/github-runner.log
+  fi
+
+  ./svc.sh install root || true
+  ./svc.sh start || true
+
+  systemctl enable actions.runner.* || true
+  systemctl restart actions.runner.* || true
 fi
 
-aws ssm get-command-invocation \
-  --region "$AWS_REGION" \
-  --command-id "$PASSWORD_COMMAND_ID" \
-  --instance-id "$MASTER_INSTANCE_ID" \
-  --query 'StandardOutputContent' \
-  --output text | tee /opt/bootstrap/logs/argocd-initial-password.txt
-
-echo "[INFO] Monitoring bootstrap completed." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+echo "[INFO] Monitoring bootstrap completed successfully." | tee -a "$LOG_FILE"
