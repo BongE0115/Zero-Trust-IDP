@@ -42,3 +42,5 @@ spec:
                 secretKeyRef:
                   name: github-dispatch-secret
                   key: token
+            - name: TOPIC_INIT_IMAGE
+              value: bitnami/kafka:3.7
