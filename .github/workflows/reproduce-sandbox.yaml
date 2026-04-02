@@ -208,3 +208,42 @@ jobs:
         shell: bash
         run: |
           git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+
+      - name: Dispatch snapshot reproduce verdict workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "WORKFLOW_PAT secret is empty or missing"
+            exit 1
+          fi
+
+          cat > /tmp/snapshot_reproduce_dispatch_payload.json <<'JSON'
+          {
+            "ref": "${{ env.RECORD_BRANCH }}",
+            "inputs": {
+              "case_id": "${{ inputs.case_id }}",
+              "namespace": "${{ inputs.namespace }}",
+              "generation": "0",
+              "note": "snapshot reproduce verdict triggered by reproduce-sandbox"
+            }
+          }
+          JSON
+
+          http_code=$(curl -sS -o /tmp/snapshot_reproduce_dispatch_response.json -w "%{http_code}" \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/snapshot-reproduce-verdict.yaml/dispatches" \
+            --data @/tmp/snapshot_reproduce_dispatch_payload.json)
+
+          if [[ "$http_code" != "204" ]]; then
+            echo "Failed to dispatch snapshot-reproduce-verdict workflow (HTTP $http_code)"
+            cat /tmp/snapshot_reproduce_dispatch_response.json || true
+            exit 1
+          fi
+
+          echo "[OK] snapshot-reproduce-verdict workflow dispatched"
