@@ -160,7 +160,7 @@ spec:
             - name: artifacts
               mountPath: /artifacts
         - name: forensic-launcher
-          image: ghcr.io/bonge0115/forensic-launcher:b9c7fcc
+          image: ghcr.io/bonge0115/forensic-launcher:5882d91
           imagePullPolicy: IfNotPresent
           env:
             - name: KAFKA_BOOTSTRAP
@@ -246,7 +246,7 @@ spec:
               mountPath: /artifacts
       containers:
         - name: forensic-launcher
-          image: ghcr.io/bonge0115/forensic-launcher:b9c7fcc
+          image: ghcr.io/bonge0115/forensic-launcher:5882d91
           imagePullPolicy: IfNotPresent
           env:
             - name: KAFKA_BOOTSTRAP
