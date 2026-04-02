@@ -159,7 +159,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python scripts/export_verdict_snapshot.py \
+          python3 scripts/export_verdict_snapshot.py \
             --case-id "${{ inputs.case_id }}" \
             --input-verdict "/tmp/revalidation-verdict/verdict.json" \
             --annotate-source-path
