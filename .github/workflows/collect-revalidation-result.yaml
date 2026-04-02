@@ -45,6 +45,18 @@ jobs:
             exit 1
           fi
 
+          EXPECTED_PREFIX="gitops/apps/forensic-sandbox/cases/verdicts/"
+          if [[ "$VERDICT_PATH" != ${EXPECTED_PREFIX}* ]]; then
+            echo "verdict_path must be under ${EXPECTED_PREFIX}"
+            exit 1
+          fi
+
+          EXPECTED_PATH="${EXPECTED_PREFIX}${CASE_ID}.json"
+          if [[ "$VERDICT_PATH" != "$EXPECTED_PATH" ]]; then
+            echo "verdict_path mismatch: expected ${EXPECTED_PATH}, got ${VERDICT_PATH}"
+            exit 1
+          fi
+
       - name: Checkout jy record branch
         uses: actions/checkout@v4
         with:
