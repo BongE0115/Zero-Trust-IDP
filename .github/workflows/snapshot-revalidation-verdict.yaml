@@ -30,7 +30,7 @@ env:
 
 jobs:
   snapshot-revalidation-verdict:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, monitoring-node]
 
     steps:
       - name: Validate inputs
@@ -64,10 +64,18 @@ jobs:
 
       - name: Configure kubeconfig
         shell: bash
+        env:
+          KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
         run: |
           set -euo pipefail
           mkdir -p "${HOME}/.kube"
-          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > "${HOME}/.kube/config"
+
+          if [[ -z "${KUBECONFIG_B64_VALUE:-}" ]]; then
+            echo "KUBECONFIG_B64 secret is empty or missing"
+            exit 1
+          fi
+
+          echo "${KUBECONFIG_B64_VALUE}" | base64 -di > "${HOME}/.kube/config"
           chmod 600 "${HOME}/.kube/config"
 
       - name: Verify cluster access
@@ -113,6 +121,13 @@ jobs:
             PHASE="$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.status.phase}')"
             echo "pod phase=$PHASE"
 
+            if [[ "$PHASE" == "Failed" || "$PHASE" == "Unknown" ]]; then
+              echo "Pod entered bad phase: $PHASE"
+              kubectl describe pod -n "$NS" "$POD" || true
+              kubectl logs -n "$NS" "$POD" --all-containers=true || true
+              exit 1
+            fi
+
             if kubectl exec -n "$NS" "$POD" -- test -f /artifacts/verdict.json 2>/dev/null; then
               echo "verdict file exists"
               exit 0
@@ -122,6 +137,8 @@ jobs:
           done
 
           echo "Timed out waiting for /artifacts/verdict.json"
+          kubectl describe pod -n "$NS" "$POD" || true
+          kubectl logs -n "$NS" "$POD" --all-containers=true || true
           exit 1
 
       - name: Fetch verdict.json from pod
