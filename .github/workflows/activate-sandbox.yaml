@@ -215,8 +215,28 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${HOME}/.kube"
+
+          if [[ -z "${{ secrets.KUBECONFIG_B64 }}" ]]; then
+            echo "KUBECONFIG_B64 secret is empty or missing"
+            exit 1
+          fi
+
           echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > "${HOME}/.kube/config"
           chmod 600 "${HOME}/.kube/config"
+
+          test -s "${HOME}/.kube/config"
+          echo "[OK] kubeconfig file created"
+
+      - name: Verify cluster access
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "[INFO] current-context:"
+          kubectl config current-context
+          echo "[INFO] namespaces:"
+          kubectl get ns
+          echo "[INFO] forensic-sandbox namespace check:"
+          kubectl get ns forensic-sandbox
 
       - name: Wait for consumer deployment to become available
         shell: bash
@@ -232,6 +252,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          if [[ -z "${{ secrets.WORKFLOW_PAT }}" ]]; then
+            echo "WORKFLOW_PAT secret is empty or missing"
+            exit 1
+          fi
 
           curl -sS -X POST \
             -H "Accept: application/vnd.github+json" \
