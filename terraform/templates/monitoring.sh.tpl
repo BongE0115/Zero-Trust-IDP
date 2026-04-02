@@ -31,7 +31,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
 # ---------------------------------------------------------
 if ! command -v kubectl >/dev/null 2>&1; then
   KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
-  curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+  curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
   chmod +x /usr/local/bin/kubectl
 fi
 

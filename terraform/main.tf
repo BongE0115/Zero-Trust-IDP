@@ -328,7 +328,7 @@ resource "aws_iam_role_policy" "monitoring_runner_bootstrap_ssm_policy" {
         Action = [
           "ssm:GetParameter"
         ]
-        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter${var.github_runner_token_ssm_parameter_name}"
+        Resource = "arn:aws:ssm:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:parameter${var.github_runner_token_ssm_parameter_name}"
       },
       {
         Sid    = "DecryptGithubRunnerBootstrapTokenWithAwsManagedKms"
