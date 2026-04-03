@@ -101,8 +101,11 @@ jobs:
 
           output_yaml = f"gitops/apps/forensic-sandbox/cases/sandbox-case-{safe}.yaml"
           record_path = f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json"
-          failure_artifact_repo_path = f"gitops/apps/forensic-sandbox/cases/artifacts/{case_id}/failure.json"
-          normal_artifact_repo_path = f"gitops/apps/forensic-sandbox/cases/artifacts/{case_id}/normal.json"
+
+          artifacts_dir = f"gitops/apps/forensic-sandbox/cases/artifacts/{case_id}"
+          failure_artifact_repo_path = f"{artifacts_dir}/failure.json"
+          normal_artifact_repo_path = f"{artifacts_dir}/normal.json"
+          redrive_artifact_repo_path = f"{artifacts_dir}/redrive.json"
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
               f.write(f"case_id={case_id}\n")
@@ -114,8 +117,10 @@ jobs:
               f.write(f"source_image_ref={source_image_ref}\n")
               f.write(f"replay_topic={replay_topic}\n")
               f.write(f"result_topic={result_topic}\n")
+              f.write(f"artifacts_dir={artifacts_dir}\n")
               f.write(f"failure_artifact_repo_path={failure_artifact_repo_path}\n")
               f.write(f"normal_artifact_repo_path={normal_artifact_repo_path}\n")
+              f.write(f"redrive_artifact_repo_path={redrive_artifact_repo_path}\n")
           PY
 
       - name: Persist artifact JSON files into repo
@@ -123,23 +128,56 @@ jobs:
         run: |
           set -euo pipefail
 
+          ARTIFACTS_DIR="${{ steps.case_meta.outputs.artifacts_dir }}"
           FAILURE_PATH="${{ steps.case_meta.outputs.failure_artifact_repo_path }}"
           NORMAL_PATH="${{ steps.case_meta.outputs.normal_artifact_repo_path }}"
+          REDRIVE_PATH="${{ steps.case_meta.outputs.redrive_artifact_repo_path }}"
 
-          mkdir -p "$(dirname "$FAILURE_PATH")"
-          mkdir -p "$(dirname "$NORMAL_PATH")"
+          mkdir -p "$ARTIFACTS_DIR"
 
           cp "${FAILURE_ARTIFACT_PATH}" "$FAILURE_PATH"
           cp "${NORMAL_ARTIFACT_PATH}" "$NORMAL_PATH"
 
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          failure_path = Path("${{ steps.case_meta.outputs.failure_artifact_repo_path }}")
+          redrive_path = Path("${{ steps.case_meta.outputs.redrive_artifact_repo_path }}")
+
+          failure = json.loads(failure_path.read_text(encoding="utf-8"))
+
+          payload = None
+          if isinstance(failure.get("original_payload"), dict) and failure.get("original_payload"):
+              payload = failure["original_payload"]
+          elif isinstance(failure.get("payload"), dict) and failure.get("payload"):
+              payload = failure["payload"]
+          elif isinstance(failure, dict) and "order_id" in failure:
+              payload = failure
+
+          if not isinstance(payload, dict) or not payload:
+              raise SystemExit("Could not resolve payload from failure artifact to build redrive.json")
+
+          redrive_payload = dict(payload)
+          if "should_fail" in redrive_payload:
+              redrive_payload["should_fail"] = False
+
+          redrive = {
+              "case_id": failure.get("case_id", ""),
+              "payload": redrive_payload,
+          }
+
+          redrive_path.write_text(json.dumps(redrive, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(f"[OK] wrote redrive artifact: {redrive_path}")
+          PY
+
           test -s "$FAILURE_PATH"
           test -s "$NORMAL_PATH"
+          test -s "$REDRIVE_PATH"
 
           echo "[OK] persisted failure artifact to $FAILURE_PATH"
           echo "[OK] persisted normal artifact to $NORMAL_PATH"
-
-
-
+          echo "[OK] persisted redrive artifact to $REDRIVE_PATH"
 
       - name: Generate case-specific sandbox manifest
         shell: bash
@@ -199,8 +237,9 @@ jobs:
           SANDBOX_MANIFEST_PATH="${{ steps.case_meta.outputs.output_yaml }}"
           FAILURE_ARTIFACT_REPO_PATH="${{ steps.case_meta.outputs.failure_artifact_repo_path }}"
           NORMAL_ARTIFACT_REPO_PATH="${{ steps.case_meta.outputs.normal_artifact_repo_path }}"
+          REDRIVE_ARTIFACT_REPO_PATH="${{ steps.case_meta.outputs.redrive_artifact_repo_path }}"
 
-          METADATA_JSON="{\"case_branch_created\": false, \"case_branch_ref\": \"$CASE_BRANCH\", \"failure_artifact_path\": \"$FAILURE_ARTIFACT_REPO_PATH\", \"normal_artifact_path\": \"$NORMAL_ARTIFACT_REPO_PATH\"}"
+          METADATA_JSON="{\"case_branch_created\": false, \"case_branch_ref\": \"$CASE_BRANCH\", \"failure_artifact_path\": \"$FAILURE_ARTIFACT_REPO_PATH\", \"normal_artifact_path\": \"$NORMAL_ARTIFACT_REPO_PATH\", \"redrive_artifact_path\": \"$REDRIVE_ARTIFACT_REPO_PATH\"}"
 
           if [[ -f "$RECORD_PATH" ]]; then
             python3 scripts/update_case_record.py update \
@@ -224,7 +263,7 @@ jobs:
               --note "sandbox manifest created on jy"
           fi
 
-      - name: Commit generated case manifest and record
+      - name: Commit generated case manifest, record, and artifacts
         shell: bash
         run: |
           set -euo pipefail
@@ -235,10 +274,11 @@ jobs:
           git add "${{ steps.case_meta.outputs.record_path }}"
           git add "${{ steps.case_meta.outputs.failure_artifact_repo_path }}"
           git add "${{ steps.case_meta.outputs.normal_artifact_repo_path }}"
+          git add "${{ steps.case_meta.outputs.redrive_artifact_repo_path }}"
 
           git commit -m "forensic sandbox case: ${{ steps.case_meta.outputs.case_id }}" || echo "No changes to commit"
 
-      - name: Push manifest and record changes
+      - name: Push manifest, record, and artifacts changes
         shell: bash
         run: |
           set -euo pipefail
@@ -459,3 +499,6 @@ jobs:
           echo "consumer_deployment=${{ steps.deploy_meta.outputs.deployment_name }}"
           echo "replay_topic=${{ steps.case_meta.outputs.replay_topic }}"
           echo "result_topic=${{ steps.case_meta.outputs.result_topic }}"
+          echo "failure_artifact=${{ steps.case_meta.outputs.failure_artifact_repo_path }}"
+          echo "normal_artifact=${{ steps.case_meta.outputs.normal_artifact_repo_path }}"
+          echo "redrive_artifact=${{ steps.case_meta.outputs.redrive_artifact_repo_path }}"
