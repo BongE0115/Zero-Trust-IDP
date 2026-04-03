@@ -12,10 +12,13 @@ on:
 permissions:
   contents: write
   packages: write
+  actions: write
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/worker-consumer
   RECORD_BRANCH: jy
+  KAFKA_BOOTSTRAP: kafka.kafka-poc.svc.cluster.local:9092
+  REVALIDATION_NAMESPACE: forensic-sandbox
+  REVALIDATION_WORKFLOW_FILE: revalidate-sandbox.yaml
 
 jobs:
   build-case-candidate:
@@ -60,11 +63,11 @@ jobs:
           OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
           echo "image_name=ghcr.io/${OWNER_LC}/worker-consumer" >> "$GITHUB_OUTPUT"
 
-
       - name: Configure git in case source
         working-directory: case-src
         shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -112,10 +115,11 @@ jobs:
         working-directory: record-repo
         shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Read sandbox manifest path from jy case record
+      - name: Read sandbox manifest path and generation from jy case record
         id: record
         working-directory: record-repo
         shell: bash
@@ -125,6 +129,7 @@ jobs:
           CASE_ID="${{ steps.parse.outputs.case_id }}"
           export CASE_ID
           RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
+          export RECORD_PATH
 
           if [[ ! -f "$RECORD_PATH" ]]; then
             echo "Case record not found on jy: $RECORD_PATH"
@@ -137,8 +142,7 @@ jobs:
           import os
           from pathlib import Path
 
-          case_id = os.environ["CASE_ID"]
-          path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          path = Path(os.environ["RECORD_PATH"])
           data = json.loads(path.read_text(encoding="utf-8"))
           print(data.get("sandbox_manifest_path") or "")
           PY
@@ -155,8 +159,7 @@ jobs:
           import os
           from pathlib import Path
 
-          case_id = os.environ["CASE_ID"]
-          path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          path = Path(os.environ["RECORD_PATH"])
           data = json.loads(path.read_text(encoding="utf-8"))
           print(int(data.get("revalidation_generation", 0)))
           PY
@@ -165,6 +168,7 @@ jobs:
           NEXT_GEN=$((CURRENT_GEN + 1))
 
           echo "sandbox_manifest_path=$SANDBOX_MANIFEST_PATH" >> "$GITHUB_OUTPUT"
+          echo "current_generation=$CURRENT_GEN" >> "$GITHUB_OUTPUT"
           echo "next_generation=$NEXT_GEN" >> "$GITHUB_OUTPUT"
 
       - name: Patch sandbox manifest and jy case record
@@ -181,6 +185,94 @@ jobs:
             --set-case-configmap \
             --update-record \
             --note "candidate image built from case branch ${{ steps.parse.outputs.case_branch }}"
+
+      - name: Force-sync critical record fields after patch
+        working-directory: record-repo
+        shell: bash
+        env:
+          CASE_ID: ${{ steps.parse.outputs.case_id }}
+          NEXT_GEN: ${{ steps.record.outputs.next_generation }}
+          CANDIDATE_IMAGE_REF: ${{ steps.digest.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          case_id = os.environ["CASE_ID"]
+          next_gen = int(os.environ["NEXT_GEN"])
+          candidate_image_ref = os.environ["CANDIDATE_IMAGE_REF"]
+
+          record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          if not record_path.exists():
+              raise SystemExit(f"case record not found: {record_path}")
+
+          record = json.loads(record_path.read_text(encoding="utf-8"))
+          record["status"] = "candidate_built"
+          record["candidate_image_ref"] = candidate_image_ref
+          record["revalidation_generation"] = next_gen
+          record["updated_at"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+          flags = record.setdefault("flags", {})
+          flags["revalidation_passed"] = False
+          flags["promoted"] = False
+          flags["redriven"] = False
+          flags["resolved"] = False
+
+          metadata = record.setdefault("metadata", {})
+          metadata["candidate_build_branch"] = record.get("branch_name", "")
+          metadata["candidate_build_generation"] = next_gen
+
+          history = record.setdefault("history", [])
+          history.append({
+              "at": record["updated_at"],
+              "action": "update",
+              "status": "candidate_built",
+              "note": "force-synced record after candidate patch",
+              "extra": {
+                  "candidate_image_ref": candidate_image_ref,
+                  "revalidation_generation": next_gen
+              }
+          })
+
+          record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(f"[OK] synced record generation={next_gen} case_id={case_id}")
+          PY
+
+      - name: Read revalidation inputs from patched sandbox manifest
+        id: reval_inputs
+        working-directory: record-repo
+        shell: bash
+        env:
+          MANIFEST_PATH: ${{ steps.record.outputs.sandbox_manifest_path }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY' > /tmp/reval_inputs.txt
+          import os
+          import re
+          from pathlib import Path
+
+          manifest_path = Path(os.environ["MANIFEST_PATH"])
+          text = manifest_path.read_text(encoding="utf-8")
+
+          def find_required(pattern: str, name: str) -> str:
+              m = re.search(pattern, text, re.MULTILINE)
+              if not m:
+                  raise SystemExit(f"missing {name} in {manifest_path}")
+              return m.group(1).strip().strip("'").strip('"')
+
+          replay_topic = find_required(r'^\s*replay_topic:\s*(.+?)\s*$', "replay_topic")
+          result_topic = find_required(r'^\s*result_topic:\s*(.+?)\s*$', "result_topic")
+
+          print(f"replay_topic={replay_topic}")
+          print(f"result_topic={result_topic}")
+          PY
+
+          cat /tmp/reval_inputs.txt >> "$GITHUB_OUTPUT"
 
       - name: Commit updated sandbox manifest and jy case record
         working-directory: record-repo
@@ -210,7 +302,11 @@ jobs:
             echo "[INFO] push attempt ${attempt}"
 
             git fetch origin "$BRANCH"
-            git rebase "origin/$BRANCH"
+            if ! git rebase "origin/$BRANCH"; then
+              echo "[WARN] rebase conflict detected, aborting rebase"
+              git rebase --abort || true
+              exit 1
+            fi
 
             if git push origin "HEAD:${BRANCH}"; then
               echo "[OK] push succeeded"
@@ -223,3 +319,28 @@ jobs:
 
           echo "[ERROR] failed to push after multiple attempts"
           exit 1
+
+      - name: Check gh cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh --version
+
+      - name: Dispatch unified revalidate-sandbox workflow
+        working-directory: record-repo
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          gh workflow run "${{ env.REVALIDATION_WORKFLOW_FILE }}" \
+            --ref "${{ env.RECORD_BRANCH }}" \
+            -f case_id="${{ steps.parse.outputs.case_id }}" \
+            -f generation="${{ steps.record.outputs.next_generation }}" \
+            -f replay_topic="${{ steps.reval_inputs.outputs.replay_topic }}" \
+            -f result_topic="${{ steps.reval_inputs.outputs.result_topic }}" \
+            -f kafka_bootstrap="${{ env.KAFKA_BOOTSTRAP }}" \
+            -f namespace="${{ env.REVALIDATION_NAMESPACE }}" \
+            -f note="revalidation requested automatically after candidate build"

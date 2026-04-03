@@ -7,9 +7,14 @@ on:
         description: "Unique case identifier"
         required: true
         type: string
-      launcher_image_ref:
-        description: "Digest-pinned forensic-launcher image ref"
+      generation:
+        description: "Revalidation generation"
         required: true
+        type: string
+      launcher_image_ref:
+        description: "Optional forensic-launcher image ref"
+        required: false
+        default: ""
         type: string
       replay_topic:
         description: "Replay topic for this case"
@@ -40,30 +45,32 @@ permissions:
 
 env:
   RECORD_BRANCH: jy
+  DEFAULT_LAUNCHER_IMAGE_REF: ghcr.io/bonge0115/forensic-launcher:latest
 
 jobs:
-  revalidate-sandbox:
+  render-revalidation-manifest:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Validate inputs
+      - name: Validate basic inputs
         shell: bash
         run: |
           set -euo pipefail
 
           CASE_ID="${{ inputs.case_id }}"
+          GEN="${{ inputs.generation }}"
+
           if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
             echo "Invalid case_id: $CASE_ID"
             exit 1
           fi
 
-          IMAGE_REF="${{ inputs.launcher_image_ref }}"
-          if [[ ! "$IMAGE_REF" =~ ^[^:@]+(/[^:@]+)*@sha256:[0-9a-f]{64}$ ]]; then
-            echo "launcher_image_ref must be digest-pinned"
+          if [[ ! "$GEN" =~ ^[0-9]+$ ]]; then
+            echo "generation must be a non-negative integer"
             exit 1
           fi
 
-      - name: Checkout jy record branch
+      - name: Checkout jy branch
         uses: actions/checkout@v4
         with:
           ref: ${{ env.RECORD_BRANCH }}
@@ -72,8 +79,68 @@ jobs:
       - name: Configure git
         shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve launcher image ref from input or reproduce manifest
+        id: launcher
+        shell: bash
+        env:
+          CASE_ID: ${{ inputs.case_id }}
+          INPUT_REF: ${{ inputs.launcher_image_ref }}
+          DEFAULT_REF: ${{ env.DEFAULT_LAUNCHER_IMAGE_REF }}
+        run: |
+          set -euo pipefail
+
+          RESOLVED_REF="${INPUT_REF}"
+
+          if [[ -z "$RESOLVED_REF" ]]; then
+            REPRO_MANIFEST="gitops/apps/forensic-sandbox/cases/reproduce/reproduce-case-${CASE_ID}.yaml"
+
+            if [[ -f "$REPRO_MANIFEST" ]]; then
+              export REPRO_MANIFEST
+              RESOLVED_REF="$(
+                python3 - <<'PY'
+import os
+import re
+from pathlib import Path
+
+path = Path(os.environ["REPRO_MANIFEST"])
+text = path.read_text(encoding="utf-8")
+m = re.search(r'-\s*name:\s*forensic-launcher\s+image:\s*(\S+)', text, re.MULTILINE)
+print(m.group(1).strip().strip('"').strip("'") if m else "")
+PY
+              )"
+            fi
+          fi
+
+          if [[ -z "$RESOLVED_REF" ]]; then
+            RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
+
+            if [[ -f "$RECORD_PATH" ]]; then
+              export RECORD_PATH
+              RESOLVED_REF="$(
+                python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+path = Path(os.environ["RECORD_PATH"])
+data = json.loads(path.read_text(encoding="utf-8"))
+print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))
+PY
+              )"
+            fi
+          fi
+
+          if [[ -z "$RESOLVED_REF" ]]; then
+            RESOLVED_REF="$DEFAULT_REF"
+            echo "[WARN] launcher image not found from input/reproduce manifest/record, fallback to latest"
+          fi
+
+          echo "launcher_image_ref=$RESOLVED_REF" >> "$GITHUB_OUTPUT"
+          echo "[INFO] resolved launcher image ref: $RESOLVED_REF"
 
       - name: Read jy case record
         id: record
@@ -89,34 +156,37 @@ jobs:
             exit 1
           fi
 
+          export CASE_ID
+          export RECORD_PATH
+          export INPUT_GEN="${{ inputs.generation }}"
+
           python3 - <<'PY'
-          import json
-          from pathlib import Path
+import json
+import os
+from pathlib import Path
 
-          case_id = "${{ inputs.case_id }}"
-          path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
-          data = json.loads(path.read_text(encoding="utf-8"))
+case_id = os.environ["CASE_ID"]
+path = Path(os.environ["RECORD_PATH"])
+input_gen = int(os.environ["INPUT_GEN"])
+data = json.loads(path.read_text(encoding="utf-8"))
 
-          candidate = data.get("candidate_image_ref")
-          manifest = data.get("sandbox_manifest_path")
-          current_gen = int(data.get("revalidation_generation", 0))
-          flags = data.get("flags", {})
+candidate = data.get("candidate_image_ref")
+manifest = data.get("sandbox_manifest_path")
+flags = data.get("flags", {})
 
-          if not candidate:
-              raise SystemExit("candidate_image_ref is empty in jy case record")
-          if not manifest:
-              raise SystemExit("sandbox_manifest_path is empty in jy case record")
-          if flags.get("resolved") is True:
-              raise SystemExit("case is already resolved")
+if not candidate:
+    raise SystemExit("candidate_image_ref is empty in jy case record")
+if not manifest:
+    raise SystemExit("sandbox_manifest_path is empty in jy case record")
+if flags.get("resolved") is True:
+    raise SystemExit("case is already resolved")
 
-          next_gen = current_gen + 1
-
-          out = Path("${GITHUB_OUTPUT}")
-          with out.open("a", encoding="utf-8") as f:
-              f.write(f"candidate_image_ref={candidate}\n")
-              f.write(f"sandbox_manifest_path={manifest}\n")
-              f.write(f"next_generation={next_gen}\n")
-          PY
+out = Path(os.environ["GITHUB_OUTPUT"])
+with out.open("a", encoding="utf-8") as f:
+    f.write(f"candidate_image_ref={candidate}\n")
+    f.write(f"sandbox_manifest_path={manifest}\n")
+    f.write(f"next_generation={input_gen}\n")
+PY
 
       - name: Render revalidation job manifest on jy
         id: render
@@ -132,9 +202,57 @@ jobs:
             --kafka-bootstrap "${{ inputs.kafka_bootstrap }}" \
             --replay-topic "${{ inputs.replay_topic }}" \
             --result-topic "${{ inputs.result_topic }}" \
-            --launcher-image-ref "${{ inputs.launcher_image_ref }}" \
+            --launcher-image-ref "${{ steps.launcher.outputs.launcher_image_ref }}" \
             --update-record \
             --note "${{ inputs.note }}"
+
+      - name: Force-sync record generation after render
+        shell: bash
+        env:
+          CASE_ID: ${{ inputs.case_id }}
+          NEXT_GEN: ${{ steps.record.outputs.next_generation }}
+          LAUNCHER_IMAGE_REF: ${{ steps.launcher.outputs.launcher_image_ref }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+
+case_id = os.environ["CASE_ID"]
+next_gen = int(os.environ["NEXT_GEN"])
+launcher_image_ref = os.environ["LAUNCHER_IMAGE_REF"]
+
+record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+
+if not record_path.exists():
+    raise SystemExit(f"case record not found: {record_path}")
+
+record = json.loads(record_path.read_text(encoding="utf-8"))
+record["revalidation_generation"] = next_gen
+record["updated_at"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+metadata = record.setdefault("metadata", {})
+metadata["last_requested_revalidation_generation"] = next_gen
+metadata["last_requested_launcher_image_ref"] = launcher_image_ref
+
+history = record.setdefault("history", [])
+history.append({
+    "at": record["updated_at"],
+    "action": "update",
+    "status": record.get("status", "candidate_built"),
+    "note": "force-synced record after revalidation render",
+    "extra": {
+        "revalidation_generation": next_gen,
+        "launcher_image_ref": launcher_image_ref
+    }
+})
+
+record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+print(f"[OK] synced record generation={next_gen} case_id={case_id}")
+PY
 
       - name: Expose rendered manifest path
         id: manifest_meta
@@ -158,15 +276,256 @@ jobs:
 
           git commit -m "chore(case): request revalidation for ${{ inputs.case_id }}"
 
-      - name: Push jy updates
+      - name: Push jy branch
         shell: bash
         run: |
           set -euo pipefail
-          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+
+          BRANCH="${{ env.RECORD_BRANCH }}"
+
+          for attempt in 1 2 3 4 5; do
+            echo "[INFO] push attempt ${attempt}"
+
+            git fetch origin "$BRANCH"
+            if ! git rebase "origin/$BRANCH"; then
+              echo "[WARN] rebase conflict detected, aborting rebase"
+              git rebase --abort || true
+              exit 1
+            fi
+
+            if git push origin "HEAD:${BRANCH}"; then
+              echo "[OK] push succeeded"
+              exit 0
+            fi
+
+            echo "[WARN] push rejected, retrying..."
+            sleep $((attempt * 2))
+          done
+
+          echo "[ERROR] failed to push after multiple attempts"
+          exit 1
+
+  snapshot-and-collect-revalidation:
+    needs: render-revalidation-manifest
+    runs-on: [self-hosted, linux, monitoring-node]
+
+    steps:
+      - name: Validate basic inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CASE_ID="${{ inputs.case_id }}"
+          GEN="${{ inputs.generation }}"
+
+          if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid case_id: $CASE_ID"
+            exit 1
+          fi
+
+          if [[ ! "$GEN" =~ ^[0-9]+$ ]]; then
+            echo "generation must be numeric"
+            exit 1
+          fi
+
+      - name: Checkout jy branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RECORD_BRANCH }}
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Configure kubeconfig
+        shell: bash
+        env:
+          KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.kube"
+
+          if [[ -z "${KUBECONFIG_B64_VALUE:-}" ]]; then
+            echo "KUBECONFIG_B64 secret is empty or missing"
+            exit 1
+          fi
+
+          echo "${KUBECONFIG_B64_VALUE}" | base64 -di > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+      - name: Wait for revalidation app to sync
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in $(seq 1 90); do
+            SYNC_STATUS="$(kubectl get application forensic-sandbox-revalidation -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
+            HEALTH_STATUS="$(kubectl get application forensic-sandbox-revalidation -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
+
+            echo "[INFO] revalidation app sync=${SYNC_STATUS} health=${HEALTH_STATUS} (${i}/90)"
+
+            if [[ "$SYNC_STATUS" == "Synced" || "$HEALTH_STATUS" == "Progressing" || "$HEALTH_STATUS" == "Healthy" || "$HEALTH_STATUS" == "Degraded" ]]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+      - name: Resolve revalidation pod
+        id: pod
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          CASE_ID="${{ inputs.case_id }}"
+          GEN="${{ inputs.generation }}"
+          SELECTOR="forensic-case-id=${CASE_ID},forensic-validation-mode=fix-verify,forensic-revalidation-generation=${GEN}"
+
+          for i in $(seq 1 90); do
+            POD_NAME="$(kubectl get pods -n "$NS" -l "$SELECTOR" \
+              --sort-by=.metadata.creationTimestamp \
+              -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null || true)"
+
+            if [[ -n "${POD_NAME:-}" ]]; then
+              echo "pod_name=$POD_NAME" >> "$GITHUB_OUTPUT"
+              echo "selector=$SELECTOR" >> "$GITHUB_OUTPUT"
+              echo "[OK] revalidation pod found: $POD_NAME"
+              exit 0
+            fi
+
+            echo "[INFO] revalidation pod not found yet for selector=${SELECTOR} (${i}/90)"
+            sleep 5
+          done
+
+          echo "[ERROR] revalidation pod not found for selector=${SELECTOR}"
+          kubectl get pods -n "$NS" --show-labels || true
+          kubectl get jobs -n "$NS" --show-labels || true
+          kubectl describe application forensic-sandbox-revalidation -n argocd || true
+          exit 1
+
+      - name: Wait for verdict file
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          POD="${{ steps.pod.outputs.pod_name }}"
+
+          for i in $(seq 1 90); do
+            PHASE="$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.status.phase}')"
+            echo "[INFO] pod phase=$PHASE"
+
+            if kubectl exec -n "$NS" "$POD" -c forensic-launcher -- test -f /artifacts/verdict.json 2>/dev/null; then
+              echo "[OK] verdict file exists"
+              exit 0
+            fi
+
+            if [[ "$PHASE" == "Failed" || "$PHASE" == "Unknown" ]]; then
+              echo "[ERROR] pod entered bad phase=$PHASE"
+              kubectl describe pod -n "$NS" "$POD" || true
+              kubectl logs -n "$NS" "$POD" --all-containers=true || true
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          echo "[ERROR] Timed out waiting for /artifacts/verdict.json"
+          kubectl describe pod -n "$NS" "$POD" || true
+          kubectl logs -n "$NS" "$POD" --all-containers=true || true
+          exit 1
+
+      - name: Fetch verdict.json from pod
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          POD="${{ steps.pod.outputs.pod_name }}"
+
+          mkdir -p /tmp/revalidation-verdict
+          kubectl exec -n "$NS" "$POD" -c forensic-launcher -- cat /artifacts/verdict.json > /tmp/revalidation-verdict/verdict.json
+
+          test -s /tmp/revalidation-verdict/verdict.json
+
+      - name: Export verdict snapshot into repo path on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 scripts/export_verdict_snapshot.py \
+            --case-id "${{ inputs.case_id }}" \
+            --input-verdict "/tmp/revalidation-verdict/verdict.json" \
+            --annotate-source-path
+
+      - name: Collect verdict into jy case record
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 scripts/collect_revalidation_result.py \
+            --case-id "${{ inputs.case_id }}" \
+            --verdict-path "gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json" \
+            --note "revalidation verdict collected by unified workflow"
+
+      - name: Commit verdict snapshot and updated record on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json"
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No revalidation snapshot/record changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): snapshot and collect revalidation result for ${{ inputs.case_id }}"
+
+      - name: Push jy branch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BRANCH="${{ env.RECORD_BRANCH }}"
+
+          for attempt in $(seq 1 5); do
+            echo "[INFO] push attempt ${attempt}"
+
+            git fetch origin "$BRANCH"
+            if ! git rebase "origin/$BRANCH"; then
+              echo "[WARN] rebase conflict detected, aborting rebase"
+              git rebase --abort || true
+              exit 1
+            fi
+
+            if git push origin "HEAD:${BRANCH}"; then
+              echo "[OK] push succeeded"
+              exit 0
+            fi
+
+            echo "[WARN] push rejected, retrying..."
+            sleep $((attempt * 2))
+          done
+
+          echo "[ERROR] failed to push after multiple attempts"
+          exit 1
 
       - name: Summary
         shell: bash
         run: |
+          set -euo pipefail
           echo "case_id=${{ inputs.case_id }}"
-          echo "revalidation_generation=${{ steps.record.outputs.next_generation }}"
-          echo "revalidation_manifest=${{ steps.manifest_meta.outputs.manifest_path }}"
+          echo "generation=${{ inputs.generation }}"
+          echo "verdict_path=gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json"
