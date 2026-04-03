@@ -79,7 +79,7 @@ jobs:
         id: build_push
         uses: docker/build-push-action@v6
         with:
-          context: case-src
+          context: case-src/services/worker-consumer
           file: case-src/services/worker-consumer/Dockerfile
           push: true
           provenance: false
