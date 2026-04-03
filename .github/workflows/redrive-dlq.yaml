@@ -18,7 +18,7 @@ on:
         default: "kafka.kafka-poc.svc.cluster.local:9092"
         type: string
       dlq_topic:
-        description: "DLQ topic containing failure events"
+        description: "Unused for artifact-based redrive; kept for compatibility"
         required: false
         default: "orders-dlq"
         type: string
@@ -28,21 +28,18 @@ on:
         default: "orders"
         type: string
       max_scan_messages:
-        description: "Max DLQ messages to scan for this case"
+        description: "Unused for artifact-based redrive; kept for compatibility"
         required: false
         default: "10000"
         type: string
       note:
         description: "Optional note"
         required: false
-        default: "redrive executed by in-cluster job"
+        default: "redrive executed from stored failure artifact"
         type: string
 
 permissions:
   contents: write
-
-env:
-  RECORD_BRANCH: jy
 
 jobs:
   redrive-dlq:
@@ -60,15 +57,10 @@ jobs:
             exit 1
           fi
 
-          if [[ ! "${{ inputs.max_scan_messages }}" =~ ^[0-9]+$ ]]; then
-            echo "max_scan_messages must be numeric"
-            exit 1
-          fi
-
-      - name: Checkout jy branch
+      - name: Checkout case branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.RECORD_BRANCH }}
+          ref: case/${{ inputs.case_id }}
           fetch-depth: 0
 
       - name: Ensure case is eligible for redrive
@@ -95,6 +87,60 @@ jobs:
               raise SystemExit("Redrive denied: case already redriven")
 
           print("Redrive eligibility check passed")
+          PY
+
+      - name: Resolve original payload from stored failure artifact
+        id: payload
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+
+          case_id = "${{ inputs.case_id }}"
+          record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          if not record_path.exists():
+              raise SystemExit(f"Case record not found: {record_path}")
+
+          record = json.loads(record_path.read_text(encoding="utf-8"))
+          metadata = record.get("metadata", {})
+
+          artifact_path_raw = metadata.get("failure_artifact_path")
+          if not artifact_path_raw:
+              raise SystemExit("metadata.failure_artifact_path is missing in case record")
+
+          artifact_path = Path(artifact_path_raw)
+          if not artifact_path.exists():
+              raise SystemExit(f"Failure artifact file not found: {artifact_path}")
+
+          artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+
+          payload = None
+          if isinstance(artifact.get("original_payload"), dict) and artifact.get("original_payload"):
+              payload = artifact["original_payload"]
+          elif isinstance(artifact.get("payload"), dict) and artifact.get("payload"):
+              payload = artifact["payload"]
+          elif isinstance(artifact, dict) and "order_id" in artifact:
+              payload = artifact
+
+          if not isinstance(payload, dict) or not payload:
+              raise SystemExit("Could not resolve original payload from failure artifact")
+
+          payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+          payload_b64 = base64.b64encode(payload_json.encode("utf-8")).decode("ascii")
+          order_id = str(payload.get("order_id", ""))
+
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          with out.open("a", encoding="utf-8") as f:
+              f.write(f"payload_b64={payload_b64}\n")
+              f.write(f"order_id={order_id}\n")
+              f.write(f"artifact_path={artifact_path_raw}\n")
+
+          print(f"[OK] resolved original payload from {artifact_path_raw}")
           PY
 
       - name: Install kubectl
@@ -167,48 +213,21 @@ jobs:
                         set -euo pipefail
                         pip install --no-cache-dir kafka-python
                         python3 - <<'PY'
+                        import base64
                         import json
                         import os
-                        from kafka import KafkaConsumer, KafkaProducer
+                        from kafka import KafkaProducer
 
                         case_id = os.environ["CASE_ID"]
                         kafka_bootstrap = os.environ["KAFKA_BOOTSTRAP"]
-                        dlq_topic = os.environ["DLQ_TOPIC"]
                         target_topic = os.environ["TARGET_TOPIC"]
-                        max_scan_messages = int(os.environ["MAX_SCAN_MESSAGES"])
-                        group_id = f"redrive-{case_id}"
+                        payload_b64 = os.environ["ORIGINAL_PAYLOAD_B64"]
 
-                        consumer = KafkaConsumer(
-                            dlq_topic,
-                            bootstrap_servers=kafka_bootstrap,
-                            group_id=group_id,
-                            auto_offset_reset="earliest",
-                            enable_auto_commit=False,
-                            consumer_timeout_ms=3000,
-                            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-                        )
+                        payload_json = base64.b64decode(payload_b64).decode("utf-8")
+                        payload = json.loads(payload_json)
 
-                        found = None
-                        scanned = 0
-                        try:
-                            for message in consumer:
-                                scanned += 1
-                                event = message.value
-                                if isinstance(event, dict) and event.get("case_id") == case_id:
-                                    found = event
-                                    consumer.commit()
-                                    break
-                                if scanned >= max_scan_messages:
-                                    break
-                        finally:
-                            consumer.close()
-
-                        if found is None:
-                            raise SystemExit(f"Could not find case_id={case_id} within {max_scan_messages} scanned messages")
-
-                        payload = found.get("original_payload")
                         if not isinstance(payload, dict) or not payload:
-                            raise SystemExit("failure event does not contain valid original_payload")
+                            raise SystemExit("resolved payload is empty or invalid")
 
                         producer = KafkaProducer(
                             bootstrap_servers=kafka_bootstrap,
@@ -224,7 +243,6 @@ jobs:
                             "case_id": case_id,
                             "status": "redriven",
                             "order_id": payload.get("order_id", ""),
-                            "dlq_topic": dlq_topic,
                             "target_topic": target_topic
                         }, ensure_ascii=False))
                         PY
@@ -233,12 +251,10 @@ jobs:
                         value: "${{ inputs.case_id }}"
                       - name: KAFKA_BOOTSTRAP
                         value: "${{ inputs.kafka_bootstrap }}"
-                      - name: DLQ_TOPIC
-                        value: "${{ inputs.dlq_topic }}"
                       - name: TARGET_TOPIC
                         value: "${{ inputs.target_topic }}"
-                      - name: MAX_SCAN_MESSAGES
-                        value: "${{ inputs.max_scan_messages }}"
+                      - name: ORIGINAL_PAYLOAD_B64
+                        value: "${{ steps.payload.outputs.payload_b64 }}"
           EOF
 
           echo "job_name=${JOB_NAME}" >> "$GITHUB_OUTPUT"
@@ -265,6 +281,7 @@ jobs:
           JOB="${{ steps.render.outputs.job_name }}"
 
           if ! kubectl wait --for=condition=Complete -n "$NS" "job/$JOB" --timeout=300s; then
+            echo "Job did not complete successfully"
             kubectl describe job -n "$NS" "$JOB" || true
             kubectl logs -n "$NS" "job/$JOB" || true
             exit 1
@@ -305,7 +322,7 @@ jobs:
               f.write(f"order_id={parsed.get('order_id', '')}\n")
           PY
 
-      - name: Update case record locally on jy
+      - name: Update case record locally
         shell: bash
         run: |
           set -euo pipefail
@@ -315,7 +332,7 @@ jobs:
             --status "redriven" \
             --increment-redrive \
             --flags-json "{\"redriven\": true}" \
-            --metadata-json "{\"last_redrive_target_topic\": \"${{ inputs.target_topic }}\", \"last_redrive_dlq_topic\": \"${{ inputs.dlq_topic }}\", \"last_redrive_original_order_id\": \"${{ steps.logs.outputs.order_id }}\", \"redrive_job_name\": \"${{ steps.render.outputs.job_name }}\", \"redrive_job_namespace\": \"${{ inputs.namespace }}\"}" \
+            --metadata-json "{\"last_redrive_target_topic\": \"${{ inputs.target_topic }}\", \"last_redrive_original_order_id\": \"${{ steps.logs.outputs.order_id }}\", \"last_redrive_source\": \"${{ steps.payload.outputs.artifact_path }}\", \"redrive_job_name\": \"${{ steps.render.outputs.job_name }}\", \"redrive_job_namespace\": \"${{ inputs.namespace }}\"}" \
             --note "${{ inputs.note }}"
 
       - name: Configure git
@@ -336,10 +353,10 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore(case): redrive dlq messages for ${{ inputs.case_id }}"
+          git commit -m "chore(case): redrive stored payload for ${{ inputs.case_id }}"
 
-      - name: Push jy branch
+      - name: Push case branch
         shell: bash
         run: |
           set -euo pipefail
-          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+          git push origin "HEAD:case/${{ inputs.case_id }}"

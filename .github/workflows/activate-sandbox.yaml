@@ -101,6 +101,8 @@ jobs:
 
           output_yaml = f"gitops/apps/forensic-sandbox/cases/sandbox-case-{safe}.yaml"
           record_path = f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json"
+          failure_artifact_repo_path = f"gitops/apps/forensic-sandbox/cases/artifacts/{case_id}/failure.json"
+          normal_artifact_repo_path = f"gitops/apps/forensic-sandbox/cases/artifacts/{case_id}/normal.json"
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
               f.write(f"case_id={case_id}\n")
@@ -112,7 +114,32 @@ jobs:
               f.write(f"source_image_ref={source_image_ref}\n")
               f.write(f"replay_topic={replay_topic}\n")
               f.write(f"result_topic={result_topic}\n")
+              f.write(f"failure_artifact_repo_path={failure_artifact_repo_path}\n")
+              f.write(f"normal_artifact_repo_path={normal_artifact_repo_path}\n")
           PY
+
+      - name: Persist artifact JSON files into repo
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FAILURE_PATH="${{ steps.case_meta.outputs.failure_artifact_repo_path }}"
+          NORMAL_PATH="${{ steps.case_meta.outputs.normal_artifact_repo_path }}"
+
+          mkdir -p "$(dirname "$FAILURE_PATH")"
+          mkdir -p "$(dirname "$NORMAL_PATH")"
+
+          cp "${FAILURE_ARTIFACT_PATH}" "$FAILURE_PATH"
+          cp "${NORMAL_ARTIFACT_PATH}" "$NORMAL_PATH"
+
+          test -s "$FAILURE_PATH"
+          test -s "$NORMAL_PATH"
+
+          echo "[OK] persisted failure artifact to $FAILURE_PATH"
+          echo "[OK] persisted normal artifact to $NORMAL_PATH"
+
+
+
 
       - name: Generate case-specific sandbox manifest
         shell: bash
@@ -170,6 +197,10 @@ jobs:
           SOURCE_SERVICE="${{ steps.case_meta.outputs.source_service }}"
           SOURCE_IMAGE_REF="${{ steps.case_meta.outputs.source_image_ref }}"
           SANDBOX_MANIFEST_PATH="${{ steps.case_meta.outputs.output_yaml }}"
+          FAILURE_ARTIFACT_REPO_PATH="${{ steps.case_meta.outputs.failure_artifact_repo_path }}"
+          NORMAL_ARTIFACT_REPO_PATH="${{ steps.case_meta.outputs.normal_artifact_repo_path }}"
+
+          METADATA_JSON="{\"case_branch_created\": false, \"case_branch_ref\": \"$CASE_BRANCH\", \"failure_artifact_path\": \"$FAILURE_ARTIFACT_REPO_PATH\", \"normal_artifact_path\": \"$NORMAL_ARTIFACT_REPO_PATH\"}"
 
           if [[ -f "$RECORD_PATH" ]]; then
             python3 scripts/update_case_record.py update \
@@ -179,7 +210,7 @@ jobs:
               --status "sandbox_created" \
               --source-image-ref "$SOURCE_IMAGE_REF" \
               --sandbox-manifest-path "$SANDBOX_MANIFEST_PATH" \
-              --metadata-json "{\"case_branch_created\": false, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
+              --metadata-json "$METADATA_JSON" \
               --note "sandbox manifest refreshed on jy"
           else
             python3 scripts/update_case_record.py create \
@@ -189,7 +220,7 @@ jobs:
               --status "sandbox_created" \
               --source-image-ref "$SOURCE_IMAGE_REF" \
               --sandbox-manifest-path "$SANDBOX_MANIFEST_PATH" \
-              --metadata-json "{\"case_branch_created\": false, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
+              --metadata-json "$METADATA_JSON" \
               --note "sandbox manifest created on jy"
           fi
 
@@ -202,6 +233,8 @@ jobs:
 
           git add "${{ steps.case_meta.outputs.output_yaml }}"
           git add "${{ steps.case_meta.outputs.record_path }}"
+          git add "${{ steps.case_meta.outputs.failure_artifact_repo_path }}"
+          git add "${{ steps.case_meta.outputs.normal_artifact_repo_path }}"
 
           git commit -m "forensic sandbox case: ${{ steps.case_meta.outputs.case_id }}" || echo "No changes to commit"
 
