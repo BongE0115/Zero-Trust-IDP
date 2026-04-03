@@ -368,7 +368,6 @@ resource "aws_security_group" "monitoring_sg" {
     cidr_blocks = var.admin_cidr
   }
 
-
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -398,7 +397,6 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # [추가] ArgoCD CLI 및 보안 접속을 위한 HTTPS 개방
   ingress {
     description = "HTTPS (ArgoCD) from Internet"
     from_port   = 443
@@ -436,12 +434,11 @@ resource "aws_security_group" "nat_sg" {
   description = "NAT instance SG for private subnet outbound"
   vpc_id      = aws_vpc.main.id
 
-  # 수정된 aiops-nat-sg 부분
   ingress {
     description = "Allow all from private subnets"
     from_port   = 0
     to_port     = 0
-    protocol    = "-1" # 모든 프로토콜 허용
+    protocol    = "-1" 
     cidr_blocks = [aws_subnet.private_a.cidr_block, aws_subnet.private_b.cidr_block]
   }
 
@@ -466,47 +463,58 @@ resource "aws_security_group" "k3s_server_sg" {
   description = "Security group for K3s master node"
   vpc_id      = aws_vpc.main.id
 
+  # 🔥 수정: Tailscale 망(100.64.0.0/10)도 K3s API 접속 허용
   ingress {
-    description     = "K3s API from monitoring node"
-    from_port       = 6443
-    to_port         = 6443
-    protocol        = "tcp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    description = "K3s API from VPC and Tailscale"
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
+  }
+
+  # 🔥 수정: Tailscale 망도 Kubelet 통신 허용
+  ingress {
+    description = "Kubelet metrics from VPC and Tailscale"
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
   ingress {
-    description     = "Kubelet metrics from monitoring node"
-    from_port       = 10250
-    to_port         = 10250
-    protocol        = "tcp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    description = "Node Exporter metrics"
+    from_port   = 9100
+    to_port     = 9100
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
+  # 🔥 수정: Tailscale 노드도 Flannel 가상 네트워크에 참여 허용
   ingress {
-    description     = "Node Exporter metrics from monitoring node"
-    from_port       = 9100
-    to_port         = 9100
-    protocol        = "tcp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
-  }
-
-  ingress {
-    description = "Flannel VXLAN self"
+    description = "Flannel VXLAN from VPC and Tailscale"
     from_port   = 8472
     to_port     = 8472
     protocol    = "udp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
+  }
+
+  # 🔥 핵심 추가: Tailscale 직접 통신(P2P)을 위한 전용 포트 개방
+  ingress {
+    description = "Tailscale P2P Direct Connection"
+    from_port   = 41641
+    to_port     = 41641
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
+    description = "HTTP from ALB"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
     cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
-  # 핵심 해결: 30080과 30081(Frontend) 포트 모두 오픈
   ingress {
     description     = "NodePort from ALB"
     from_port       = 30080
@@ -544,28 +552,39 @@ resource "aws_security_group" "k3s_agent_sg" {
   description = "Security group for K3s worker node"
   vpc_id      = aws_vpc.main.id
 
+  # 🔥 수정: Tailscale 망도 Kubelet 통신 허용
   ingress {
-    description     = "Kubelet metrics from monitoring node"
-    from_port       = 10250
-    to_port         = 10250
-    protocol        = "tcp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    description = "Kubelet metrics from VPC and Tailscale"
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
   ingress {
-    description     = "Node Exporter metrics from monitoring node"
+    description     = "Node Exporter metrics"
     from_port       = 9100
     to_port         = 9100
     protocol        = "tcp"
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
+  # 🔥 수정: Tailscale 노드도 Flannel 가상 네트워크에 참여 허용
   ingress {
-    description = "Flannel VXLAN from VPC"
+    description = "Flannel VXLAN from VPC and Tailscale"
     from_port   = 8472
     to_port     = 8472
     protocol    = "udp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
+  }
+
+  # 🔥 핵심 추가: Tailscale 직접 통신(P2P)을 위한 전용 포트 개방
+  ingress {
+    description = "Tailscale P2P Direct Connection"
+    from_port   = 41641
+    to_port     = 41641
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -576,7 +595,6 @@ resource "aws_security_group" "k3s_agent_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
-  # 핵심 해결: 30080과 30081(Frontend) 포트 모두 오픈
   ingress {
     description     = "NodePort from ALB"
     from_port       = 30080

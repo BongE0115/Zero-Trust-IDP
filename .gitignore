@@ -105,3 +105,6 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# env.sh (로컬 환경 설정 스크립트, AWS 엑세스 키 등 민감한 정보가 포함될 수 있음)
+*env.sh
