@@ -6,6 +6,8 @@ on:
       - "case/**"
     paths:
       - "services/worker-consumer/**"
+      - "scripts/patch_case_candidate.py"
+      - "scripts/update_case_record.py"
 
 permissions:
   contents: write
@@ -97,7 +99,7 @@ jobs:
           fetch-depth: 0
           path: record-repo
 
-      - name: Configure git on record branch
+      - name: Configure git on jy record branch
         working-directory: record-repo
         shell: bash
         run: |
