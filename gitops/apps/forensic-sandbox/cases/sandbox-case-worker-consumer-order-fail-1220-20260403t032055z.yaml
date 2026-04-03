@@ -106,7 +106,7 @@ spec:
           mountPath: /artifacts
       containers:
       - name: consumer-app
-        image: ghcr.io/bonge0115/worker-consumer@sha256:93bdabcfbd0ca6e7ca2714df5613f4a2c28ae9851e0d617914e33b7d544c171e
+        image: ghcr.io/bonge0115/worker-consumer@sha256:d1904baae42d2c28e6c7b9484b8386117a281b89ffb1442340f37fbba70855a0
         imagePullPolicy: IfNotPresent
         env:
         - name: KAFKA_BOOTSTRAP
@@ -124,7 +124,7 @@ spec:
         - name: DEPLOYMENT_NAME
           value: forensic-sandbox-app-worker-consumer-order-fa
         - name: IMAGE_REF
-          value: ghcr.io/bonge0115/worker-consumer@sha256:93bdabcfbd0ca6e7ca2714df5613f4a2c28ae9851e0d617914e33b7d544c171e
+          value: ghcr.io/bonge0115/worker-consumer@sha256:d1904baae42d2c28e6c7b9484b8386117a281b89ffb1442340f37fbba70855a0
         - name: CONFIG_VERSION
           value: v1
         - name: DEPENDENCY_PROFILE
@@ -206,7 +206,7 @@ data:
   source_deployment: worker-consumer
   error_type: ValueError
   error_message: intentional failure for POC
-  consumer_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:93bdabcfbd0ca6e7ca2714df5613f4a2c28ae9851e0d617914e33b7d544c171e
+  consumer_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:d1904baae42d2c28e6c7b9484b8386117a281b89ffb1442340f37fbba70855a0
   deployment_name: forensic-sandbox-app-worker-consumer-order-fa
   replay_topic: orders-replay-worker-consumer-order-fail-1220-20260403t032055z-fe227e46
   result_topic: orders-result-worker-consumer-order-fail-1220-20260403t032055z-fe227e46
@@ -228,7 +228,7 @@ data:
   mongo_host: mongodb-temp-worker-consumer-order-fa.forensic-sandbox.svc.cluster.local
   expected_failure_status: failed
   expected_normal_status: success
-  candidate_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:93bdabcfbd0ca6e7ca2714df5613f4a2c28ae9851e0d617914e33b7d544c171e
+  candidate_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:d1904baae42d2c28e6c7b9484b8386117a281b89ffb1442340f37fbba70855a0
   validation_mode: fix-verify
   revalidation_generation: '1'
   validation_run_id: worker-consumer-order-fail-1220-20260403T032055Z-fe227e46-reval-g1
