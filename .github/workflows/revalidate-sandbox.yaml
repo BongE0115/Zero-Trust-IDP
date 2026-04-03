@@ -460,7 +460,10 @@ jobs:
 
           python3 scripts/export_verdict_snapshot.py \
             --case-id "${{ inputs.case_id }}" \
+            --generation "${{ inputs.generation }}" \
+            --validation-mode "revalidate" \
             --input-verdict "/tmp/revalidation-verdict/verdict.json" \
+            --output-path "gitops/apps/forensic-sandbox/cases/verdicts/revalidate-${{ inputs.case_id }}-g${{ inputs.generation }}.json" \
             --annotate-source-path
 
       - name: Collect verdict into jy case record
@@ -470,7 +473,8 @@ jobs:
 
           python3 scripts/collect_revalidation_result.py \
             --case-id "${{ inputs.case_id }}" \
-            --verdict-path "gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json" \
+            --generation "${{ inputs.generation }}" \
+            --verdict-path "gitops/apps/forensic-sandbox/cases/verdicts/revalidate-${{ inputs.case_id }}-g${{ inputs.generation }}.json" \
             --note "revalidation verdict collected by unified workflow"
 
       - name: Commit verdict snapshot and updated record on jy
@@ -478,7 +482,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          git add "gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json"
+          git add "gitops/apps/forensic-sandbox/cases/verdicts/revalidate-${{ inputs.case_id }}-g${{ inputs.generation }}.json"
           git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
 
           if git diff --cached --quiet; then
@@ -523,4 +527,4 @@ jobs:
           set -euo pipefail
           echo "case_id=${{ inputs.case_id }}"
           echo "generation=${{ inputs.generation }}"
-          echo "verdict_path=gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json"
+          echo "verdict_path=gitops/apps/forensic-sandbox/cases/verdicts/revalidate-${{ inputs.case_id }}-g${{ inputs.generation }}.json"
