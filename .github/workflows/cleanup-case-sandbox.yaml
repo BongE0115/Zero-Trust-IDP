@@ -118,7 +118,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python3 scriptsupdate_case_record.py update \
+          python3 scripts/update_case_record.py update \
             --case-id "${{ inputs.case_id }}" \
             --status "cleanup_completed" \
             --flags-json '{"cleanup_completed": true, "resolved": true}' \

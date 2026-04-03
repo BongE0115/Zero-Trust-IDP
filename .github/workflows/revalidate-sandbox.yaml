@@ -124,7 +124,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python3 scriptsrender_revalidation_job.py \
+          python3 scripts/render_revalidation_job.py \
             --case-id "${{ inputs.case_id }}" \
             --generation "${{ steps.record.outputs.next_generation }}" \
             --namespace "${{ inputs.namespace }}" \
