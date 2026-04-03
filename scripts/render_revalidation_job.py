@@ -295,6 +295,38 @@ def indent_for_block_scalar(text: str, spaces: int) -> str:
     return textwrap.indent(text, prefix)
 
 
+def validate_rendered_manifest_yaml(rendered: str) -> List[Dict[str, Any]]:
+    try:
+        docs = list(yaml.safe_load_all(rendered))
+    except Exception as e:
+        raise ValueError(f"rendered revalidation manifest is invalid YAML: {e}") from e
+
+    filtered = [doc for doc in docs if doc is not None]
+    if not filtered:
+        raise ValueError("rendered revalidation manifest is empty")
+    return filtered
+
+
+def validate_job_name_in_docs(docs: List[Dict[str, Any]], expected_job_name: str) -> None:
+    job_docs = [doc for doc in docs if isinstance(doc, dict) and doc.get("kind") == "Job"]
+    if not job_docs:
+        raise ValueError("rendered manifest does not contain a Job resource")
+
+    for doc in job_docs:
+        metadata = doc.get("metadata") or {}
+        name = str(metadata.get("name") or "")
+        if not name:
+            raise ValueError("rendered Job metadata.name is empty")
+        if len(name) > 63:
+            raise ValueError(f"rendered Job metadata.name exceeds 63 chars: {len(name)} {name}")
+
+    job_names = [str((doc.get("metadata") or {}).get("name") or "") for doc in job_docs]
+    if expected_job_name not in job_names:
+        raise ValueError(
+            f"expected rendered Job name not found. expected={expected_job_name}, found={job_names}"
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Render a case-specific revalidation launcher Job manifest from a template."
@@ -364,11 +396,18 @@ def main() -> int:
 
         safe_suffix = sanitize_name(args.case_id, max_len=max_suffix_len)
         job_name = f"{job_prefix}{safe_suffix}{job_suffix}"
+
+        if len(job_name) > 63:
+            raise ValueError(f"rendered Job name exceeds 63 chars: {len(job_name)} {job_name}")
+
         output_path = (
             Path(args.output_path)
             if args.output_path
             else output_dir / f"revalidate-case-{args.case_id}.yaml"
         )
+
+        if output_path.name.endswith(".yaml") and len(output_path.stem) > 200:
+            raise ValueError(f"rendered manifest filename is too long/unexpected: {output_path.name}")
 
         ready_stub = {
             "case_id": args.case_id,
@@ -413,6 +452,10 @@ def main() -> int:
         template = load_text(template_path)
         rendered = render_template(template, mapping)
         ensure_no_placeholders_left(rendered)
+
+        rendered_docs = validate_rendered_manifest_yaml(rendered)
+        validate_job_name_in_docs(rendered_docs, job_name)
+
         dump_text(output_path, rendered)
 
         patch_sandbox_manifest_for_revalidation(
