@@ -83,38 +83,18 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Resolve launcher image ref from input or reproduce manifest
+      - name: Resolve launcher image ref
         id: launcher
         shell: bash
         env:
-          CASE_ID: ${{ inputs.case_id }}
           INPUT_REF: ${{ inputs.launcher_image_ref }}
+          DEFAULT_REF: ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc
         run: |
           set -euo pipefail
 
-          RESOLVED_REF="${INPUT_REF}"
-
+          RESOLVED_REF="${INPUT_REF:-}"
           if [[ -z "$RESOLVED_REF" ]]; then
-            REPRO_MANIFEST="gitops/apps/forensic-sandbox/cases/reproduce/reproduce-case-${CASE_ID}.yaml"
-            if [[ -f "$REPRO_MANIFEST" ]]; then
-              RESOLVED_REF="$(
-                python3 -c 'import re, sys; from pathlib import Path; text = Path(sys.argv[1]).read_text(encoding="utf-8"); m = re.search(r"-\s*name:\s*forensic-launcher\s+image:\s*(\S+)", text, re.MULTILINE); print(m.group(1).strip().strip("\"").strip("'"'"'") if m else "")' "$REPRO_MANIFEST"
-              )"
-            fi
-          fi
-
-          if [[ -z "$RESOLVED_REF" ]]; then
-            RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
-            if [[ -f "$RECORD_PATH" ]]; then
-              RESOLVED_REF="$(
-                python3 -c 'import json, sys; from pathlib import Path; data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")); print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))' "$RECORD_PATH"
-              )"
-            fi
-          fi
-
-          if [[ -z "$RESOLVED_REF" ]]; then
-            echo "[ERROR] launcher image ref not found; digest-pinned launcher image is required"
-            exit 1
+            RESOLVED_REF="$DEFAULT_REF"
           fi
 
           if [[ ! "$RESOLVED_REF" =~ ^.+@sha256:[a-f0-9]{64}$ ]]; then
