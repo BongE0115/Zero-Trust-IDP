@@ -2,9 +2,9 @@
   "case_id": "worker-consumer-order-fail-1853-20260403T095326Z-d826363a",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-order-fail-1853-20260403T095326Z-d826363a",
-  "status": "revalidation_requested",
+  "status": "failed",
   "created_at": "2026-04-03T09:53:40Z",
-  "updated_at": "2026-04-03T11:15:27Z",
+  "updated_at": "2026-04-03T11:17:10Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:6976091",
   "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:e43e6ea7fb4aae9065a04a8126e817080b1990ddec4604e29b3c1d43350ed901",
   "verified_image_ref": "",
@@ -40,14 +40,14 @@
     "revalidation_expected_normal_status": "success",
     "last_requested_revalidation_generation": 6,
     "last_requested_launcher_image_ref": "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc",
-    "last_revalidation_verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/revalidate-worker-consumer-order-fail-1853-20260403T095326Z-d826363a-g5.json",
+    "last_revalidation_verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/revalidate-worker-consumer-order-fail-1853-20260403T095326Z-d826363a-g6.json",
     "last_revalidation_overall_passed": false,
     "last_revalidation_mode": "fix-verify",
     "last_revalidation_launcher_image_ref": "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc",
-    "last_revalidation_generation": 5,
+    "last_revalidation_generation": 6,
     "last_revalidation_error": {
       "type": "TimeoutError",
-      "message": "result timeout phase=normal_validation wait_seconds=60"
+      "message": "result timeout phase=failure_replay wait_seconds=60"
     }
   },
   "history": [
@@ -274,6 +274,16 @@
       "extra": {
         "revalidation_generation": 6,
         "launcher_image_ref": "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc"
+      }
+    },
+    {
+      "at": "2026-04-03T11:17:10Z",
+      "action": "update",
+      "status": "failed",
+      "note": "revalidation verdict collected by unified workflow",
+      "extra": {
+        "from_status": "revalidation_requested",
+        "to_status": "failed"
       }
     }
   ]
