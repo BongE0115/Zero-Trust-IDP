@@ -381,6 +381,11 @@ def main() -> int:
         sandbox_manifest_path = Path(sandbox_manifest_path_raw)
         failure_artifact, normal_artifact = extract_artifacts_from_sandbox_manifest(sandbox_manifest_path)
 
+        failure_artifact["target_topic"] = args.replay_topic
+        normal_artifact["target_topic"] = args.replay_topic
+        normal_artifact["enabled"] = (args.enable_normal_validation == "true")
+
+
         template_path = Path(args.template_path)
         output_dir = Path(args.output_dir)
         validation_run_id = args.validation_run_id or deterministic_validation_run_id(args.case_id, args.generation)
