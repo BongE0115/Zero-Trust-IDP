@@ -1,0 +1,47 @@
+{
+  "case_id": "worker-consumer-order-fail-1853-20260403T095326Z-d826363a",
+  "validation_mode": "fix-verify",
+  "validation_run_id": "worker-consumer-order-fail-1853-20260403T095326Z-d826363a-reval-g5",
+  "revalidation_generation": 5,
+  "launcher_image_ref": "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc",
+  "failure_replay": {
+    "passed": true,
+    "result": {
+      "event_type": "sandbox_result",
+      "case_id": "worker-consumer-order-fail-1853-20260403T095326Z-d826363a",
+      "phase": "failure_replay",
+      "status": "success",
+      "payload_hash": "d826363a77b0f4ab0f99525088e46d5cb35fbc67dd34dbafa15432c2c268c1e7",
+      "order_id": "order-fail-1853",
+      "source_topic": "orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a",
+      "service": "forensic-sandbox-app-worker-consumer-order-fa",
+      "namespace": "forensic-sandbox",
+      "deployment": "forensic-sandbox-app-worker-consumer-order-fa",
+      "image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:99d4025b5b5a8315d7a5c204d48b8d19f9db0feb68516c975bfff2b6a167ec74",
+      "processed_at": "2026-04-03T10:53:16.661316+00:00",
+      "validation_mode": "fix-verify",
+      "validation_run_id": "worker-consumer-order-fail-1853-20260403T095326Z-d826363a-reval-g5",
+      "revalidation_generation": 5,
+      "expected_failure_status": "success",
+      "expected_normal_status": "success",
+      "observed_error_type": "",
+      "observed_error_message": ""
+    }
+  },
+  "normal_validation": {
+    "enabled": true,
+    "passed": false,
+    "result": null
+  },
+  "overall_passed": false,
+  "error": {
+    "type": "TimeoutError",
+    "message": "result timeout phase=normal_validation wait_seconds=60"
+  },
+  "_snapshot": {
+    "source_verdict_path": "/tmp/revalidation-verdict/verdict.json",
+    "snapshot_path": "gitops/apps/forensic-sandbox/cases/verdicts/revalidate-worker-consumer-order-fail-1853-20260403T095326Z-d826363a-g5.json",
+    "validation_mode": "revalidate",
+    "generation": 5
+  }
+}
