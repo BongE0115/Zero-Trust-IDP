@@ -290,9 +290,6 @@ def maybe_update_case_record(
     subprocess.run(cmd, check=True)
 
 
-def indent_for_block_scalar(text: str, spaces: int) -> str:
-    prefix = " " * spaces
-    return textwrap.indent(text, prefix)
 
 
 def validate_rendered_manifest_yaml(rendered: str) -> List[Dict[str, Any]]:
@@ -444,16 +441,21 @@ def main() -> int:
             "EXPECTED_FAILURE_STATUS": args.expected_failure_status,
             "EXPECTED_NORMAL_STATUS": args.expected_normal_status,
             "LAUNCHER_IMAGE_REF": args.launcher_image_ref,
-            "FAILURE_ARTIFACT_JSON": indent_for_block_scalar(failure_json, 14),
-            "NORMAL_ARTIFACT_JSON": indent_for_block_scalar(normal_json, 14),
-            "READY_FILE_JSON": indent_for_block_scalar(ready_json, 14),
+            "FAILURE_ARTIFACT_JSON": failure_json,
+            "NORMAL_ARTIFACT_JSON": normal_json,
+            "READY_FILE_JSON": ready_json,
         }
 
         template = load_text(template_path)
         rendered = render_template(template, mapping)
         ensure_no_placeholders_left(rendered)
 
-        rendered_docs = validate_rendered_manifest_yaml(rendered)
+        try:
+            rendered_docs = validate_rendered_manifest_yaml(rendered)
+        except Exception as e:
+            print(rendered, file=sys.stderr)
+            raise
+
         validate_job_name_in_docs(rendered_docs, job_name)
 
         dump_text(output_path, rendered)
