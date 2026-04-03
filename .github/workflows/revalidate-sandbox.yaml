@@ -99,16 +99,19 @@ jobs:
             REPRO_MANIFEST="gitops/apps/forensic-sandbox/cases/reproduce/reproduce-case-${CASE_ID}.yaml"
 
             if [[ -f "$REPRO_MANIFEST" ]]; then
-              RESOLVED_REF=$(python3 -c '
+              export REPRO_MANIFEST
+              RESOLVED_REF="$(
+                python3 - <<'PY'
+import os
 import re
-import sys
 from pathlib import Path
 
-path = Path(sys.argv[1])
+path = Path(os.environ["REPRO_MANIFEST"])
 text = path.read_text(encoding="utf-8")
-m = re.search(r"-\s*name:\s*forensic-launcher\s+image:\s*(\S+)", text, re.MULTILINE)
-print(m.group(1).strip().strip("\"").strip("'"'"'") if m else "")
-' "$REPRO_MANIFEST")
+m = re.search(r'-\s*name:\s*forensic-launcher\s+image:\s*(\S+)', text, re.MULTILINE)
+print(m.group(1).strip().strip('"').strip("'") if m else "")
+PY
+              )"
             fi
           fi
 
@@ -116,15 +119,18 @@ print(m.group(1).strip().strip("\"").strip("'"'"'") if m else "")
             RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
 
             if [[ -f "$RECORD_PATH" ]]; then
-              RESOLVED_REF=$(python3 -c '
+              export RECORD_PATH
+              RESOLVED_REF="$(
+                python3 - <<'PY'
 import json
-import sys
+import os
 from pathlib import Path
 
-path = Path(sys.argv[1])
+path = Path(os.environ["RECORD_PATH"])
 data = json.loads(path.read_text(encoding="utf-8"))
 print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))
-' "$RECORD_PATH")
+PY
+              )"
             fi
           fi
 
@@ -155,32 +161,32 @@ print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))
           export INPUT_GEN="${{ inputs.generation }}"
 
           python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
+import json
+import os
+from pathlib import Path
 
-          case_id = os.environ["CASE_ID"]
-          path = Path(os.environ["RECORD_PATH"])
-          input_gen = int(os.environ["INPUT_GEN"])
-          data = json.loads(path.read_text(encoding="utf-8"))
+case_id = os.environ["CASE_ID"]
+path = Path(os.environ["RECORD_PATH"])
+input_gen = int(os.environ["INPUT_GEN"])
+data = json.loads(path.read_text(encoding="utf-8"))
 
-          candidate = data.get("candidate_image_ref")
-          manifest = data.get("sandbox_manifest_path")
-          flags = data.get("flags", {})
+candidate = data.get("candidate_image_ref")
+manifest = data.get("sandbox_manifest_path")
+flags = data.get("flags", {})
 
-          if not candidate:
-              raise SystemExit("candidate_image_ref is empty in jy case record")
-          if not manifest:
-              raise SystemExit("sandbox_manifest_path is empty in jy case record")
-          if flags.get("resolved") is True:
-              raise SystemExit("case is already resolved")
+if not candidate:
+    raise SystemExit("candidate_image_ref is empty in jy case record")
+if not manifest:
+    raise SystemExit("sandbox_manifest_path is empty in jy case record")
+if flags.get("resolved") is True:
+    raise SystemExit("case is already resolved")
 
-          out = Path(os.environ["GITHUB_OUTPUT"])
-          with out.open("a", encoding="utf-8") as f:
-              f.write(f"candidate_image_ref={candidate}\n")
-              f.write(f"sandbox_manifest_path={manifest}\n")
-              f.write(f"next_generation={input_gen}\n")
-          PY
+out = Path(os.environ["GITHUB_OUTPUT"])
+with out.open("a", encoding="utf-8") as f:
+    f.write(f"candidate_image_ref={candidate}\n")
+    f.write(f"sandbox_manifest_path={manifest}\n")
+    f.write(f"next_generation={input_gen}\n")
+PY
 
       - name: Render revalidation job manifest on jy
         id: render
@@ -210,43 +216,43 @@ print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))
           set -euo pipefail
 
           python3 - <<'PY'
-          import json
-          import os
-          from datetime import datetime, timezone
-          from pathlib import Path
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
 
-          case_id = os.environ["CASE_ID"]
-          next_gen = int(os.environ["NEXT_GEN"])
-          launcher_image_ref = os.environ["LAUNCHER_IMAGE_REF"]
+case_id = os.environ["CASE_ID"]
+next_gen = int(os.environ["NEXT_GEN"])
+launcher_image_ref = os.environ["LAUNCHER_IMAGE_REF"]
 
-          record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
 
-          if not record_path.exists():
-              raise SystemExit(f"case record not found: {record_path}")
+if not record_path.exists():
+    raise SystemExit(f"case record not found: {record_path}")
 
-          record = json.loads(record_path.read_text(encoding="utf-8"))
-          record["revalidation_generation"] = next_gen
-          record["updated_at"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+record = json.loads(record_path.read_text(encoding="utf-8"))
+record["revalidation_generation"] = next_gen
+record["updated_at"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-          metadata = record.setdefault("metadata", {})
-          metadata["last_requested_revalidation_generation"] = next_gen
-          metadata["last_requested_launcher_image_ref"] = launcher_image_ref
+metadata = record.setdefault("metadata", {})
+metadata["last_requested_revalidation_generation"] = next_gen
+metadata["last_requested_launcher_image_ref"] = launcher_image_ref
 
-          history = record.setdefault("history", [])
-          history.append({
-              "at": record["updated_at"],
-              "action": "update",
-              "status": record.get("status", "candidate_built"),
-              "note": "force-synced record after revalidation render",
-              "extra": {
-                  "revalidation_generation": next_gen,
-                  "launcher_image_ref": launcher_image_ref
-              }
-          })
+history = record.setdefault("history", [])
+history.append({
+    "at": record["updated_at"],
+    "action": "update",
+    "status": record.get("status", "candidate_built"),
+    "note": "force-synced record after revalidation render",
+    "extra": {
+        "revalidation_generation": next_gen,
+        "launcher_image_ref": launcher_image_ref
+    }
+})
 
-          record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-          print(f"[OK] synced record generation={next_gen} case_id={case_id}")
-          PY
+record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+print(f"[OK] synced record generation={next_gen} case_id={case_id}")
+PY
 
       - name: Expose rendered manifest path
         id: manifest_meta
@@ -494,7 +500,7 @@ print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))
 
           BRANCH="${{ env.RECORD_BRANCH }}"
 
-          for attempt in 1 2 3 4 5; do
+          for attempt in $(seq 1 5); do
             echo "[INFO] push attempt ${attempt}"
 
             git fetch origin "$BRANCH"
