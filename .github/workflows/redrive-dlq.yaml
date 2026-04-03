@@ -8,34 +8,34 @@ on:
         required: true
         type: string
       namespace:
-        description: "Unused in bypass mode; kept for compatibility"
+        description: "Namespace where redrive job runs"
         required: false
         default: "forensic-sandbox"
         type: string
       kafka_bootstrap:
-        description: "Unused in bypass mode; kept for compatibility"
+        description: "Kafka bootstrap address used inside the cluster"
         required: false
         default: "kafka.kafka-poc.svc.cluster.local:9092"
         type: string
       dlq_topic:
-        description: "Unused in bypass mode; kept for compatibility"
+        description: "Unused for redrive.json mode; kept for compatibility"
         required: false
         default: "orders-dlq"
         type: string
       target_topic:
-        description: "Unused in bypass mode; kept for compatibility"
+        description: "Production topic to publish redrive payload into"
         required: false
         default: "orders"
         type: string
       max_scan_messages:
-        description: "Unused in bypass mode; kept for compatibility"
+        description: "Unused for redrive.json mode; kept for compatibility"
         required: false
         default: "10000"
         type: string
       note:
         description: "Optional note"
         required: false
-        default: "redrive bypassed by workflow"
+        default: "redrive executed from stored redrive artifact"
         type: string
 
 permissions:
@@ -46,7 +46,7 @@ env:
 
 jobs:
   redrive-dlq:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, monitoring-node]
 
     steps:
       - name: Validate inputs
@@ -92,7 +92,241 @@ jobs:
           print("Redrive eligibility check passed")
           PY
 
-      - name: Mark case as redriven without Kafka replay
+      - name: Resolve redrive payload from stored redrive artifact
+        id: payload
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+
+          case_id = "${{ inputs.case_id }}"
+          record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          if not record_path.exists():
+              raise SystemExit(f"Case record not found: {record_path}")
+
+          record = json.loads(record_path.read_text(encoding="utf-8"))
+          metadata = record.get("metadata", {})
+
+          artifact_path_raw = metadata.get("redrive_artifact_path")
+          if not artifact_path_raw:
+              raise SystemExit("metadata.redrive_artifact_path is missing in case record")
+
+          artifact_path = Path(artifact_path_raw)
+          if not artifact_path.exists():
+              raise SystemExit(f"Redrive artifact file not found: {artifact_path}")
+
+          artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+
+          payload = None
+          if isinstance(artifact.get("payload"), dict) and artifact.get("payload"):
+              payload = artifact["payload"]
+          elif isinstance(artifact.get("original_payload"), dict) and artifact.get("original_payload"):
+              payload = artifact["original_payload"]
+          elif isinstance(artifact, dict) and "order_id" in artifact:
+              payload = artifact
+
+          if not isinstance(payload, dict) or not payload:
+              raise SystemExit("Could not resolve payload from redrive artifact")
+
+          payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+          payload_b64 = base64.b64encode(payload_json.encode("utf-8")).decode("ascii")
+          order_id = str(payload.get("order_id", ""))
+
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          with out.open("a", encoding="utf-8") as f:
+              f.write(f"payload_b64={payload_b64}\n")
+              f.write(f"order_id={order_id}\n")
+              f.write(f"artifact_path={artifact_path_raw}\n")
+
+          print(f"[OK] resolved redrive payload from {artifact_path_raw}")
+          print(f"[INFO] order_id={order_id}")
+          PY
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Configure kubeconfig
+        shell: bash
+        env:
+          KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.kube"
+
+          if [[ -z "${KUBECONFIG_B64_VALUE:-}" ]]; then
+            echo "KUBECONFIG_B64 secret is empty or missing"
+            exit 1
+          fi
+
+          echo "${KUBECONFIG_B64_VALUE}" | base64 -di > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+      - name: Verify cluster access
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl get ns "${{ inputs.namespace }}"
+
+      - name: Render in-cluster redrive Job manifest
+        id: render
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SAFE="$(echo "${{ inputs.case_id }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-40)"
+          if [[ -z "$SAFE" ]]; then
+            SAFE="case"
+          fi
+
+          JOB_NAME="forensic-redrive-${SAFE}"
+          MANIFEST_PATH="/tmp/${JOB_NAME}.yaml"
+
+          cat > "${MANIFEST_PATH}" <<EOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${JOB_NAME}
+            namespace: ${{ inputs.namespace }}
+            labels:
+              app.kubernetes.io/name: forensic-redrive
+              forensic-case-id: "${{ inputs.case_id }}"
+          spec:
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: forensic-redrive
+                  forensic-case-id: "${{ inputs.case_id }}"
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: redrive
+                    image: python:3.11-slim
+                    command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        set -euo pipefail
+                        pip install --no-cache-dir kafka-python
+                        python3 - <<'PY'
+                        import base64
+                        import json
+                        import os
+                        from kafka import KafkaProducer
+
+                        case_id = os.environ["CASE_ID"]
+                        kafka_bootstrap = os.environ["KAFKA_BOOTSTRAP"]
+                        target_topic = os.environ["TARGET_TOPIC"]
+                        payload_b64 = os.environ["REDRIVE_PAYLOAD_B64"]
+
+                        payload_json = base64.b64decode(payload_b64).decode("utf-8")
+                        payload = json.loads(payload_json)
+
+                        if not isinstance(payload, dict) or not payload:
+                            raise SystemExit("resolved payload is empty or invalid")
+
+                        producer = KafkaProducer(
+                            bootstrap_servers=kafka_bootstrap,
+                            value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"),
+                        )
+                        try:
+                            producer.send(target_topic, payload)
+                            producer.flush()
+                        finally:
+                            producer.close()
+
+                        print(json.dumps({
+                            "case_id": case_id,
+                            "status": "redriven",
+                            "order_id": payload.get("order_id", ""),
+                            "target_topic": target_topic
+                        }, ensure_ascii=False))
+                        PY
+                    env:
+                      - name: CASE_ID
+                        value: "${{ inputs.case_id }}"
+                      - name: KAFKA_BOOTSTRAP
+                        value: "${{ inputs.kafka_bootstrap }}"
+                      - name: TARGET_TOPIC
+                        value: "${{ inputs.target_topic }}"
+                      - name: REDRIVE_PAYLOAD_B64
+                        value: "${{ steps.payload.outputs.payload_b64 }}"
+          EOF
+
+          echo "job_name=${JOB_NAME}" >> "$GITHUB_OUTPUT"
+          echo "manifest_path=${MANIFEST_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Delete previous Job if exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl delete job -n "${{ inputs.namespace }}" "${{ steps.render.outputs.job_name }}" --ignore-not-found=true
+
+      - name: Apply redrive Job
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl apply -f "${{ steps.render.outputs.manifest_path }}"
+
+      - name: Wait for redrive Job to complete
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          JOB="${{ steps.render.outputs.job_name }}"
+
+          if ! kubectl wait --for=condition=Complete -n "$NS" "job/$JOB" --timeout=300s; then
+            echo "Job did not complete successfully"
+            kubectl describe job -n "$NS" "$JOB" || true
+            kubectl logs -n "$NS" "job/$JOB" || true
+            exit 1
+          fi
+
+      - name: Collect redrive Job logs
+        id: logs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NS="${{ inputs.namespace }}"
+          JOB="${{ steps.render.outputs.job_name }}"
+
+          kubectl logs -n "$NS" "job/$JOB" > /tmp/redrive-job.log
+          cat /tmp/redrive-job.log
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          lines = [line.strip() for line in Path("/tmp/redrive-job.log").read_text(encoding="utf-8").splitlines() if line.strip()]
+          parsed = None
+          for line in reversed(lines):
+              try:
+                  parsed = json.loads(line)
+                  if isinstance(parsed, dict) and parsed.get("status") == "redriven":
+                      break
+              except Exception:
+                  continue
+
+          if not parsed or parsed.get("status") != "redriven":
+              raise SystemExit("Could not parse successful redrive result from job logs")
+
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          with out.open("a", encoding="utf-8") as f:
+              f.write(f"order_id={parsed.get('order_id', '')}\n")
+          PY
+
+      - name: Update case record locally on jy
         shell: bash
         run: |
           set -euo pipefail
@@ -101,8 +335,8 @@ jobs:
             --case-id "${{ inputs.case_id }}" \
             --status "redriven" \
             --increment-redrive \
-            --flags-json '{"redriven": true}' \
-            --metadata-json "{\"last_redrive_target_topic\": \"${{ inputs.target_topic }}\", \"last_redrive_dlq_topic\": \"${{ inputs.dlq_topic }}\", \"last_redrive_bypassed\": true, \"last_redrive_bypass_reason\": \"workflow shortcut\", \"redrive_job_namespace\": \"${{ inputs.namespace }}\"}" \
+            --flags-json "{\"redriven\": true}" \
+            --metadata-json "{\"last_redrive_target_topic\": \"${{ inputs.target_topic }}\", \"last_redrive_original_order_id\": \"${{ steps.logs.outputs.order_id }}\", \"last_redrive_source\": \"${{ steps.payload.outputs.artifact_path }}\", \"redrive_job_name\": \"${{ steps.render.outputs.job_name }}\", \"redrive_job_namespace\": \"${{ inputs.namespace }}\"}" \
             --note "${{ inputs.note }}"
 
       - name: Configure git
@@ -123,27 +357,10 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore(case): bypass redrive for ${{ inputs.case_id }}"
+          git commit -m "chore(case): redrive stored payload for ${{ inputs.case_id }}"
 
       - name: Push jy branch
         shell: bash
         run: |
           set -euo pipefail
-
-          BRANCH="${{ env.RECORD_BRANCH }}"
-
-          for attempt in 1 2 3 4 5; do
-            git fetch origin "$BRANCH"
-            if ! git rebase "origin/$BRANCH"; then
-              git rebase --abort || true
-              exit 1
-            fi
-
-            if git push origin "HEAD:${BRANCH}"; then
-              exit 0
-            fi
-
-            sleep $((attempt * 2))
-          done
-
-          exit 1
+          git push origin "HEAD:jy"
