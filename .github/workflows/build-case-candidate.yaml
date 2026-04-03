@@ -52,6 +52,15 @@ jobs:
           echo "case_branch=$REF_NAME" >> "$GITHUB_OUTPUT"
           echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
+      - name: Normalize image repository
+        id: image_repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "image_name=ghcr.io/${OWNER_LC}/worker-consumer" >> "$GITHUB_OUTPUT"
+
+
       - name: Configure git in case source
         working-directory: case-src
         shell: bash
@@ -75,7 +84,7 @@ jobs:
           push: true
           provenance: false
           tags: |
-            ${{ env.IMAGE_NAME }}:case-${{ steps.parse.outputs.case_id }}-${{ steps.parse.outputs.short_sha }}
+            ${{ steps.image_repo.outputs.image_name }}:case-${{ steps.parse.outputs.case_id }}-${{ steps.parse.outputs.short_sha }}
 
       - name: Resolve digest-pinned image ref
         id: digest
@@ -89,7 +98,7 @@ jobs:
             exit 1
           fi
 
-          IMAGE_REF="${{ env.IMAGE_NAME }}@${DIGEST}"
+          IMAGE_REF="${{ steps.image_repo.outputs.image_name }}@${DIGEST}"
           echo "image_ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
 
       - name: Checkout jy record branch
