@@ -45,7 +45,7 @@ jobs:
       - name: Validate inputs
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           CASE_ID="${{ inputs.case_id }}"
           if [[ ! "$CASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
@@ -62,6 +62,7 @@ jobs:
       - name: Configure git
         shell: bash
         run: |
+          set -euo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -69,15 +70,17 @@ jobs:
         id: render
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
-          SAFE="$(echo "${{ inputs.case_id }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-40)"
-          if [[ -z "$SAFE" ]]; then
-            SAFE="case"
+          SAFE_PREFIX="$(echo "${{ inputs.case_id }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-28)"
+          if [[ -z "$SAFE_PREFIX" ]]; then
+            SAFE_PREFIX="case"
           fi
 
+          CASE_HASH="$(printf '%s' "${{ inputs.case_id }}" | sha256sum | cut -c1-8)"
+          JOB_NAME="forensic-reproduce-${SAFE_PREFIX}-${CASE_HASH}"
+
           OUTPUT_PATH="${{ env.OUTPUT_DIR }}/reproduce-case-${{ inputs.case_id }}.yaml"
-          JOB_NAME="forensic-reproduce-${SAFE}"
 
           mkdir -p "$(dirname "$OUTPUT_PATH")"
 
@@ -92,6 +95,7 @@ jobs:
               forensic-case-id: ${{ inputs.case_id }}
               forensic-validation-mode: reproduce
               forensic-revalidation-generation: "0"
+              forensic-job-hash: "${CASE_HASH}"
           spec:
             backoffLimit: 0
             ttlSecondsAfterFinished: 86400
@@ -102,6 +106,7 @@ jobs:
                   forensic-case-id: ${{ inputs.case_id }}
                   forensic-validation-mode: reproduce
                   forensic-revalidation-generation: "0"
+                  forensic-job-hash: "${CASE_HASH}"
               spec:
                 restartPolicy: Never
                 initContainers:
@@ -182,18 +187,22 @@ jobs:
 
           echo "output_path=$OUTPUT_PATH" >> "$GITHUB_OUTPUT"
           echo "job_name=$JOB_NAME" >> "$GITHUB_OUTPUT"
+          echo "case_hash=$CASE_HASH" >> "$GITHUB_OUTPUT"
 
       - name: Update jy case record metadata
         shell: bash
         run: |
+          set -euo
           python3 scripts/update_case_record.py update \
             --case-id "${{ inputs.case_id }}" \
-            --metadata-json "{\"reproduce_job_manifest_path\": \"${{ steps.render.outputs.output_path }}\"}" \
+            --metadata-json "{\"reproduce_job_manifest_path\": \"${{ steps.render.outputs.output_path }}\", \"reproduce_job_name\": \"${{ steps.render.outputs.job_name }}\"}" \
             --note "initial reproduce launcher manifest created"
 
       - name: Commit reproduce launcher manifest and record
         shell: bash
         run: |
+          set -euo
+
           git add "${{ steps.render.outputs.output_path }}"
           git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
 
@@ -207,7 +216,7 @@ jobs:
       - name: Push jy branch
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           BRANCH="${{ env.RECORD_BRANCH }}"
 
@@ -215,7 +224,11 @@ jobs:
             echo "[INFO] push attempt ${attempt}"
 
             git fetch origin "$BRANCH"
-            git rebase "origin/$BRANCH"
+            if ! git rebase "origin/$BRANCH"; then
+              echo "[WARN] rebase conflict detected, aborting rebase"
+              git rebase --abort || true
+              exit 1
+            fi
 
             if git push origin "HEAD:${BRANCH}"; then
               echo "[OK] push succeeded"
@@ -243,6 +256,7 @@ jobs:
       - name: Configure git
         shell: bash
         run: |
+          set -euo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -256,7 +270,7 @@ jobs:
         env:
           KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
         run: |
-          set -euo pipefail
+          set -euo
           mkdir -p "${HOME}/.kube"
 
           if [[ -z "${KUBECONFIG_B64_VALUE:-}" ]]; then
@@ -267,11 +281,29 @@ jobs:
           echo "${KUBECONFIG_B64_VALUE}" | base64 -di > "${HOME}/.kube/config"
           chmod 600 "${HOME}/.kube/config"
 
-      - name: Resolve reproduce pod
+      - name: Wait for reproduce app to sync
+        shell: bash
+        run: |
+          set -euo
+
+          for i in $(seq 1 90); do
+            SYNC_STATUS="$(kubectl get application forensic-sandbox-reproduce -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
+            HEALTH_STATUS="$(kubectl get application forensic-sandbox-reproduce -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
+
+            echo "[INFO] reproduce app sync=${SYNC_STATUS} health=${HEALTH_STATUS} (${i}/90)"
+
+            if [[ "$SYNC_STATUS" == "Synced" || "$HEALTH_STATUS" == "Progressing" || "$HEALTH_STATUS" == "Healthy" || "$HEALTH_STATUS" == "Degraded" ]]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+      - name: Resolve reproduce pod by case_id label only
         id: pod
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           NS="${{ inputs.namespace }}"
           CASE_ID="${{ inputs.case_id }}"
@@ -279,29 +311,32 @@ jobs:
 
           SELECTOR="forensic-case-id=${CASE_ID},forensic-validation-mode=reproduce,forensic-revalidation-generation=${GEN}"
 
-          for i in $(seq 1 60); do
+          for i in $(seq 1 90); do
             POD_NAME="$(kubectl get pods -n "$NS" -l "$SELECTOR" \
               --sort-by=.metadata.creationTimestamp \
               -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null || true)"
 
             if [[ -n "${POD_NAME:-}" ]]; then
               echo "pod_name=$POD_NAME" >> "$GITHUB_OUTPUT"
-              echo "[OK] reproduce pod found: $POD_NAME"
+              echo "selector=$SELECTOR" >> "$GITHUB_OUTPUT"
+              echo "[OK] reproduce pod found by case_id label: $POD_NAME"
               exit 0
             fi
 
-            echo "[INFO] reproduce pod not found yet (${i}/60)"
+            echo "[INFO] reproduce pod not found yet for selector=${SELECTOR} (${i}/90)"
             sleep 5
           done
 
-          echo "[ERROR] reproduce pod not found"
+          echo "[ERROR] reproduce pod not found for selector=${SELECTOR}"
           kubectl get pods -n "$NS" --show-labels || true
+          kubectl get jobs -n "$NS" || true
+          kubectl describe application forensic-sandbox-reproduce -n argocd || true
           exit 1
 
       - name: Wait for verdict file
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           NS="${{ inputs.namespace }}"
           POD="${{ steps.pod.outputs.pod_name }}"
@@ -332,7 +367,7 @@ jobs:
       - name: Fetch verdict.json from reproduce pod
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           NS="${{ inputs.namespace }}"
           POD="${{ steps.pod.outputs.pod_name }}"
@@ -345,7 +380,7 @@ jobs:
       - name: Export verdict snapshot into repo path on jy
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           python3 scripts/export_verdict_snapshot.py \
             --case-id "${{ inputs.case_id }}" \
@@ -355,7 +390,7 @@ jobs:
       - name: Collect reproduce verdict into jy case record
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           CASE_ID="${{ inputs.case_id }}"
           VERDICT_PATH="gitops/apps/forensic-sandbox/cases/verdicts/${CASE_ID}.json"
@@ -417,7 +452,7 @@ jobs:
       - name: Commit verdict snapshot and updated record on jy
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           git add "gitops/apps/forensic-sandbox/cases/verdicts/${{ inputs.case_id }}.json"
           git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
@@ -432,7 +467,7 @@ jobs:
       - name: Push jy branch
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           BRANCH="${{ env.RECORD_BRANCH }}"
 
@@ -440,7 +475,11 @@ jobs:
             echo "[INFO] push attempt ${attempt}"
 
             git fetch origin "$BRANCH"
-            git rebase "origin/$BRANCH"
+            if ! git rebase "origin/$BRANCH"; then
+              echo "[WARN] rebase conflict detected, aborting rebase"
+              git rebase --abort || true
+              exit 1
+            fi
 
             if git push origin "HEAD:${BRANCH}"; then
               echo "[OK] push succeeded"

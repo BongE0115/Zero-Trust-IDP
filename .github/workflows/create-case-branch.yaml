@@ -41,7 +41,7 @@ jobs:
       - name: Validate inputs
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           CASE_ID="${{ inputs.case_id }}"
           BASE_REF="${{ inputs.base_ref }}"
@@ -65,13 +65,14 @@ jobs:
       - name: Configure git
         shell: bash
         run: |
+          set -euo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Ensure case branch does not already exist remotely
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
           CASE_BRANCH="case/${{ inputs.case_id }}"
 
           if git ls-remote --exit-code --heads origin "$CASE_BRANCH" >/dev/null 2>&1; then
@@ -82,87 +83,16 @@ jobs:
       - name: Create and push case branch
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
           CASE_BRANCH="case/${{ inputs.case_id }}"
 
           git checkout -b "$CASE_BRANCH"
           git push -u origin "$CASE_BRANCH"
 
-      - name: Switch back to base branch
+      - name: Summary
         shell: bash
         run: |
-          set -euo pipefail
-          git checkout "${{ inputs.base_ref }}"
-          git pull --ff-only origin "${{ inputs.base_ref }}"
-
-      - name: Wait until persistent case record exists on jy
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
-
-          for i in $(seq 1 12); do
-            if [[ -f "$RECORD_PATH" ]]; then
-              echo "[OK] case record found: $RECORD_PATH"
-              exit 0
-            fi
-
-            echo "[INFO] case record not found yet (${i}/12), refreshing from origin/${{ inputs.base_ref }}"
-            git fetch origin "${{ inputs.base_ref }}"
-            git reset --hard "origin/${{ inputs.base_ref }}"
-            sleep 5
-          done
-
-          echo "[ERROR] case record must already exist before create-case-branch updates it"
-          exit 1
-
-      - name: Update persistent case record on jy
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          CASE_ID="${{ inputs.case_id }}"
-          CASE_BRANCH="case/${CASE_ID}"
-
-          python3 scripts/update_case_record.py update \
-            --case-id "$CASE_ID" \
-            --service "${{ inputs.service }}" \
-            --branch-name "$CASE_BRANCH" \
-            --status "sandbox_created" \
-            --source-image-ref "${{ inputs.source_image_ref }}" \
-            --sandbox-manifest-path "${{ inputs.sandbox_manifest_path }}" \
-            --metadata-json "{\"case_branch_created\": true, \"case_branch_ref\": \"$CASE_BRANCH\"}" \
-            --note "${{ inputs.note }}"
-
-      - name: Commit updated case record on jy
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
-          git commit -m "chore(case): mark case branch created for ${{ inputs.case_id }}" || echo "No changes to commit"
-
-      - name: Push updated record on jy
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          BRANCH="${{ inputs.base_ref }}"
-
-          for attempt in 1 2 3 4 5; do
-            echo "[INFO] push attempt ${attempt}"
-
-            git fetch origin "$BRANCH"
-            git rebase "origin/$BRANCH"
-
-            if git push origin "HEAD:${BRANCH}"; then
-              echo "[OK] push succeeded"
-              exit 0
-            fi
-
-            echo "[WARN] push rejected, retrying..."
-            sleep $((attempt * 2))
-          done
-
-          echo "[ERROR] failed to push after multiple attempts"
-          exit 1
+          set -euo
+          echo "case_id=${{ inputs.case_id }}"
+          echo "case_branch=case/${{ inputs.case_id }}"
+          echo "base_ref=${{ inputs.base_ref }}"

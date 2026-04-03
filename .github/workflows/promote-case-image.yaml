@@ -114,7 +114,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python3 scriptspromote_verified_image.py \
+          python3 scripts/promote_verified_image.py \
             --verified-image-ref "${{ needs.read-case-record.outputs.verified_image_ref }}" \
             --manifest-path "gitops/apps/kafka-poc/manifests/21-consumer.yaml" \
             --deployment-name "${{ inputs.deployment_name }}" \
@@ -164,7 +164,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python3 scriptsupdate_case_record.py update \
+          python3 scripts/update_case_record.py update \
             --case-id "${{ inputs.case_id }}" \
             --status "promoted" \
             --promoted-image-ref "${{ needs.read-case-record.outputs.verified_image_ref }}" \

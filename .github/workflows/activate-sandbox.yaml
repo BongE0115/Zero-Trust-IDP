@@ -41,7 +41,7 @@ jobs:
       - name: Prepare sandbox inputs
         shell: bash
         run: |
-          set -euo 
+          set -euo
           mkdir -p /tmp/sandbox-spec
           printf '%s' '${{ inputs.spec_json }}' > "${SPEC_PATH}"
           printf '%s' '${{ inputs.failure_artifact_json }}' > "${FAILURE_ARTIFACT_PATH}"
@@ -152,10 +152,17 @@ jobs:
           print(f"[OK] deployment_name={deployment_name}")
           PY
 
+      - name: Refresh jy before record write
+        shell: bash
+        run: |
+          set -euo
+          git fetch origin "${{ env.RECORD_BRANCH }}"
+          git reset --hard "origin/${{ env.RECORD_BRANCH }}"
+
       - name: Create or refresh case record on jy
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           CASE_ID="${{ steps.case_meta.outputs.case_id }}"
           RECORD_PATH="${{ steps.case_meta.outputs.record_path }}"
@@ -164,7 +171,6 @@ jobs:
           SOURCE_IMAGE_REF="${{ steps.case_meta.outputs.source_image_ref }}"
           SANDBOX_MANIFEST_PATH="${{ steps.case_meta.outputs.output_yaml }}"
 
-          # activate-sandbox is the single writer responsible for initial record creation
           if [[ -f "$RECORD_PATH" ]]; then
             python3 scripts/update_case_record.py update \
               --case-id "$CASE_ID" \
@@ -187,17 +193,10 @@ jobs:
               --note "sandbox manifest created on jy"
           fi
 
-      - name: Refresh jy before commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin "${{ env.RECORD_BRANCH }}"
-          git reset --hard "origin/${{ env.RECORD_BRANCH }}"
-
-
       - name: Commit generated case manifest and record
         shell: bash
         run: |
+          set -euo
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
 
@@ -209,7 +208,7 @@ jobs:
       - name: Push manifest and record changes
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo
 
           BRANCH="${{ env.RECORD_BRANCH }}"
 
@@ -217,7 +216,11 @@ jobs:
             echo "[INFO] push attempt ${attempt}"
 
             git fetch origin "$BRANCH"
-            git rebase "origin/$BRANCH"
+            if ! git rebase "origin/$BRANCH"; then
+              echo "[WARN] rebase conflict detected, aborting rebase"
+              git rebase --abort || true
+              exit 1
+            fi
 
             if git push origin "HEAD:${BRANCH}"; then
               echo "[OK] push succeeded"
@@ -241,7 +244,7 @@ jobs:
         env:
           KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
         run: |
-          set -euo 
+          set -euo
           mkdir -p "${HOME}/.kube"
 
           if [[ -z "${KUBECONFIG_B64_VALUE:-}" ]]; then
@@ -258,7 +261,7 @@ jobs:
       - name: Verify cluster access
         shell: bash
         run: |
-          set -euo 
+          set -euo
           echo "[INFO] current-context:"
           kubectl config current-context
           echo "[INFO] namespaces:"
@@ -269,7 +272,7 @@ jobs:
       - name: Wait for consumer deployment creation and rollout
         shell: bash
         run: |
-          set -euo 
+          set -euo
 
           NS="forensic-sandbox"
           DEPLOY="${{ steps.deploy_meta.outputs.deployment_name }}"
@@ -324,7 +327,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
-          set -euo 
+          set -euo
 
           if [[ -z "${GH_TOKEN:-}" ]]; then
             echo "WORKFLOW_PAT secret is empty or missing"
@@ -363,6 +366,7 @@ jobs:
       - name: Summary
         shell: bash
         run: |
+          set -euo
           echo "case_id=${{ steps.case_meta.outputs.case_id }}"
           echo "case_branch=${{ steps.case_meta.outputs.case_branch }}"
           echo "manifest=${{ steps.case_meta.outputs.output_yaml }}"
