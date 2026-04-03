@@ -554,8 +554,11 @@ jobs:
           flags = record.get("flags", {})
           passed_by_record = flags.get("revalidation_passed") is True
 
-          # 디버깅용: 실제 verdict 구조 확인
           print("[DEBUG] verdict keys:", sorted(verdict.keys()))
+          print("[DEBUG] overall_passed raw:", repr(verdict.get("overall_passed")))
+          print("[DEBUG] failure_replay:", json.dumps(verdict.get("failure_replay"), ensure_ascii=False))
+          print("[DEBUG] normal_validation:", json.dumps(verdict.get("normal_validation"), ensure_ascii=False))
+          print("[DEBUG] error:", json.dumps(verdict.get("error"), ensure_ascii=False))
 
           def truthy_pass(v):
               if isinstance(v, bool):
@@ -564,8 +567,11 @@ jobs:
                   return v.lower() in ("passed", "pass", "success", "succeeded", "ok", "true", "promote")
               return False
 
+          overall_passed = verdict.get("overall_passed")
+
           passed_by_verdict = (
-              verdict.get("overall_passed") is True
+              overall_passed is True
+              or str(overall_passed).lower() in ("true", "passed", "success", "succeeded", "ok")
               or any([
                   truthy_pass(verdict.get("passed")),
                   truthy_pass(verdict.get("success")),
@@ -580,7 +586,7 @@ jobs:
           if not (passed_by_record or passed_by_verdict):
               raise SystemExit(
                   "revalidation did not pass; finalize workflow will not be dispatched "
-                  f"(record={passed_by_record}, verdict_keys={sorted(verdict.keys())})"
+                  f"(record={passed_by_record}, overall_passed={overall_passed}, verdict_keys={sorted(verdict.keys())})"
               )
 
           print(f"[OK] finalize allowed record={passed_by_record} verdict={passed_by_verdict}")
