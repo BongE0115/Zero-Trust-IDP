@@ -75,9 +75,9 @@ spec:
         - name: KAFKA_BOOTSTRAP
           value: kafka.kafka-poc.svc.cluster.local:9092
         - name: REPLAY_TOPIC
-          value: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
+          value: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
         - name: RESULT_TOPIC
-          value: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
+          value: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
         - name: TOPIC_PARTITIONS
           value: '1'
         - name: TOPIC_REPLICATION_FACTOR
@@ -106,17 +106,17 @@ spec:
           mountPath: /artifacts
       containers:
       - name: consumer-app
-        image: ghcr.io/bonge0115/worker-consumer@sha256:dec63e248be4c2b4471ce12b25d32e68292baedbc9b6bf6fbebafb250f51422b
+        image: ghcr.io/bonge0115/worker-consumer@sha256:8df42de3c97bb7c875767dab4ddd68e635887ccbbcda0ac0a828354d48046490
         imagePullPolicy: IfNotPresent
         env:
         - name: KAFKA_BOOTSTRAP
           value: kafka.kafka-poc.svc.cluster.local:9092
         - name: SOURCE_TOPIC
-          value: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
+          value: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
         - name: DLQ_TOPIC
           value: orders-dlq
         - name: GROUP_ID
-          value: orders-consumer-sandbox-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
+          value: orders-consumer-sandbox-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
         - name: SERVICE_NAME
           value: forensic-sandbox-app-worker-consumer-order-fa
         - name: NAMESPACE
@@ -124,7 +124,7 @@ spec:
         - name: DEPLOYMENT_NAME
           value: forensic-sandbox-app-worker-consumer-order-fa
         - name: IMAGE_REF
-          value: ghcr.io/bonge0115/worker-consumer@sha256:dec63e248be4c2b4471ce12b25d32e68292baedbc9b6bf6fbebafb250f51422b
+          value: ghcr.io/bonge0115/worker-consumer@sha256:8df42de3c97bb7c875767dab4ddd68e635887ccbbcda0ac0a828354d48046490
         - name: CONFIG_VERSION
           value: v1
         - name: DEPENDENCY_PROFILE
@@ -150,7 +150,7 @@ spec:
         - name: CASE_ID
           value: worker-consumer-order-fail-2233-20260403T133847Z-4c057332
         - name: RESULT_TOPIC
-          value: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
+          value: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
         - name: EMIT_RESULT_EVENT
           value: 'true'
         - name: READY_FILE_PATH
@@ -158,15 +158,15 @@ spec:
         - name: ISOLATION_MODE
           value: sandbox_strict
         - name: ALLOWED_REPLAY_TOPIC
-          value: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
+          value: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
         - name: ALLOWED_RESULT_TOPIC
-          value: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
+          value: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
         - name: VALIDATION_MODE
           value: fix-verify
         - name: VALIDATION_RUN_ID
-          value: worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g14
+          value: worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g15
         - name: REVALIDATION_GENERATION
-          value: '14'
+          value: '15'
         - name: EXPECTED_FAILURE_STATUS
           value: success
         - name: EXPECTED_NORMAL_STATUS
@@ -206,10 +206,10 @@ data:
   source_deployment: worker-consumer
   error_type: ValueError
   error_message: intentional failure for POC
-  consumer_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:dec63e248be4c2b4471ce12b25d32e68292baedbc9b6bf6fbebafb250f51422b
+  consumer_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:8df42de3c97bb7c875767dab4ddd68e635887ccbbcda0ac0a828354d48046490
   deployment_name: forensic-sandbox-app-worker-consumer-order-fa
-  replay_topic: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
-  result_topic: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
+  replay_topic: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
+  result_topic: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
   config_version: v1
   dependency_profile: sandbox
   requested_at: '2026-04-03T13:38:47.843932+00:00'
@@ -223,13 +223,13 @@ data:
   normal_validation_enabled: 'false'
   replay_publish_strategy: launcher_after_sandbox_ready
   isolation_mode: sandbox_strict
-  allowed_replay_topic: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
-  allowed_result_topic: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
+  allowed_replay_topic: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
+  allowed_result_topic: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
   mongo_host: mongodb-temp-worker-consumer-order-fa.forensic-sandbox.svc.cluster.local
   expected_failure_status: failed
   expected_normal_status: success
-  candidate_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:dec63e248be4c2b4471ce12b25d32e68292baedbc9b6bf6fbebafb250f51422b
+  candidate_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:8df42de3c97bb7c875767dab4ddd68e635887ccbbcda0ac0a828354d48046490
   validation_mode: fix-verify
-  revalidation_generation: '14'
-  validation_run_id: worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g14
-  group_id: orders-consumer-sandbox-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g14
+  revalidation_generation: '15'
+  validation_run_id: worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g15
+  group_id: orders-consumer-sandbox-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g15
