@@ -16,7 +16,7 @@ output "alb_dns_name" {
 }
 
 output "rds_address" {
-  description = "PostgreSQL RDS 순수 도메인 주소 (포트 제외)"
+  description = "MySQL RDS 순수 도메인 주소 (포트 제외)"
   value       = aws_db_instance.aiops_rds.address
 }
 
