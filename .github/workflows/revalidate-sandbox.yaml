@@ -172,13 +172,17 @@ jobs:
             exit 1
           fi
 
-          SCOPED_RESULT_TOPIC="${RESULT_TOPIC_BASE}-g${GEN}"
+          # 이미 -gN 이 붙어 있으면 제거 후 현재 generation으로 재부여
+          RESULT_TOPIC_BASE_CLEAN="$(echo "$RESULT_TOPIC_BASE" | sed -E 's/-g[0-9]+$//')"
+          SCOPED_RESULT_TOPIC="${RESULT_TOPIC_BASE_CLEAN}-g${GEN}"
 
-          echo "replay_topic=${REPLAY_TOPIC}" >> "$GITHUB_OUTPUT"
-          echo "result_topic=${SCOPED_RESULT_TOPIC}" >> "$GITHUB_OUTPUT"
+          echo "replay_topic=$REPLAY_TOPIC" >> "$GITHUB_OUTPUT"
+          echo "result_topic=$SCOPED_RESULT_TOPIC" >> "$GITHUB_OUTPUT"
 
-          echo "[INFO] replay_topic=${REPLAY_TOPIC}"
-          echo "[INFO] scoped_result_topic=${SCOPED_RESULT_TOPIC}"
+          echo "[INFO] replay_topic=$REPLAY_TOPIC"
+          echo "[INFO] result_topic_input=$RESULT_TOPIC_BASE"
+          echo "[INFO] result_topic_clean=$RESULT_TOPIC_BASE_CLEAN"
+          echo "[INFO] scoped_result_topic=$SCOPED_RESULT_TOPIC"
 
       - name: Render revalidation job manifest on jy
         id: render
