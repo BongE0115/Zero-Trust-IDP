@@ -2,21 +2,21 @@
   "case_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
-  "status": "promoted",
+  "status": "candidate_built",
   "created_at": "2026-04-03T13:39:00Z",
-  "updated_at": "2026-04-03T18:14:38Z",
+  "updated_at": "2026-04-03T18:22:19Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:6976091",
-  "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:8df42de3c97bb7c875767dab4ddd68e635887ccbbcda0ac0a828354d48046490",
-  "verified_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:8df42de3c97bb7c875767dab4ddd68e635887ccbbcda0ac0a828354d48046490",
-  "promoted_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:8df42de3c97bb7c875767dab4ddd68e635887ccbbcda0ac0a828354d48046490",
+  "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:2f7930e128e993d2d53f86106ec8d6676f777bb9d15c79fa5bd8487aa0dc0818",
+  "verified_image_ref": "",
+  "promoted_image_ref": "",
   "previous_production_image_ref": null,
   "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-order-fail-2233-20260403t133847z.yaml",
-  "revalidation_generation": 15,
-  "validation_run_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g15",
+  "revalidation_generation": 16,
+  "validation_run_id": "",
   "redrive_count": 0,
   "flags": {
-    "revalidation_passed": true,
-    "promoted": true,
+    "revalidation_passed": false,
+    "promoted": false,
     "redriven": false,
     "resolved": false,
     "cleanup_completed": false,
@@ -34,7 +34,7 @@
     "last_reproduce_validation_run_id": "reproduce-worker-consumer-order-fail-2233-20260403T133847Z-4c057332-0",
     "last_reproduce_generation": 0,
     "candidate_build_branch": "case/worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
-    "candidate_build_generation": 15,
+    "candidate_build_generation": 16,
     "revalidation_job_manifest_path": "/home/runner/work/Zero-Trust-IDP/Zero-Trust-IDP/gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-worker-consumer-order-fail-2233-20260403T133847Z-4c057332.yaml",
     "revalidation_expected_failure_status": "success",
     "revalidation_expected_normal_status": "success",
@@ -898,6 +898,26 @@
       "extra": {
         "from_status": "revalidation_passed",
         "to_status": "promoted"
+      }
+    },
+    {
+      "at": "2026-04-03T18:22:19Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "candidate image built from case branch case/worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
+      "extra": {
+        "from_status": "promoted",
+        "to_status": "candidate_built"
+      }
+    },
+    {
+      "at": "2026-04-03T18:22:19Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "force-synced record after candidate patch",
+      "extra": {
+        "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:2f7930e128e993d2d53f86106ec8d6676f777bb9d15c79fa5bd8487aa0dc0818",
+        "revalidation_generation": 16
       }
     }
   ]
