@@ -41,6 +41,9 @@ on:
 permissions:
   contents: write
 
+env:
+  RECORD_BRANCH: jy
+
 jobs:
   redrive-dlq:
     runs-on: [self-hosted, linux, monitoring-node]
@@ -62,10 +65,10 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout case branch
+      - name: Checkout jy branch
         uses: actions/checkout@v4
         with:
-          ref: case/${{ inputs.case_id }}
+          ref: ${{ env.RECORD_BRANCH }}
           fetch-depth: 0
 
       - name: Ensure case is eligible for redrive
@@ -262,7 +265,6 @@ jobs:
           JOB="${{ steps.render.outputs.job_name }}"
 
           if ! kubectl wait --for=condition=Complete -n "$NS" "job/$JOB" --timeout=300s; then
-            echo "Job did not complete successfully"
             kubectl describe job -n "$NS" "$JOB" || true
             kubectl logs -n "$NS" "job/$JOB" || true
             exit 1
@@ -303,7 +305,7 @@ jobs:
               f.write(f"order_id={parsed.get('order_id', '')}\n")
           PY
 
-      - name: Update case record locally
+      - name: Update case record locally on jy
         shell: bash
         run: |
           set -euo pipefail
@@ -336,8 +338,8 @@ jobs:
 
           git commit -m "chore(case): redrive dlq messages for ${{ inputs.case_id }}"
 
-      - name: Push case branch
+      - name: Push jy branch
         shell: bash
         run: |
           set -euo pipefail
-          git push origin "HEAD:case/${{ inputs.case_id }}"
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"

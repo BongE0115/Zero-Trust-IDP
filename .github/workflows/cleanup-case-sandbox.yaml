@@ -144,3 +144,9 @@ jobs:
         run: |
           set -euo pipefail
           git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+
+      - name: Delete case branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin --delete "case/${{ inputs.case_id }}" || true

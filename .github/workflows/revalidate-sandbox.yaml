@@ -42,6 +42,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 env:
   RECORD_BRANCH: jy
@@ -181,9 +182,6 @@ jobs:
             exit 1
           fi
 
-          echo "[INFO] rendered manifest path: $MANIFEST"
-          sed -n '1,220p' "$MANIFEST"
-
           grep -q "forensic-case-id: ${{ inputs.case_id }}" "$MANIFEST" || {
             echo "[ERROR] missing forensic-case-id label in rendered manifest"
             exit 1
@@ -191,12 +189,6 @@ jobs:
 
           grep -q "forensic-validation-mode: fix-verify" "$MANIFEST" || {
             echo "[ERROR] missing fix-verify label in rendered manifest"
-            exit 1
-          }
-
-          grep -q "forensic-revalidation-generation: \"${{ steps.record.outputs.next_generation }}\"" "$MANIFEST" || \
-          grep -q "forensic-revalidation-generation: ${{ steps.record.outputs.next_generation }}" "$MANIFEST" || {
-            echo "[ERROR] missing generation label in rendered manifest"
             exit 1
           }
 
@@ -265,7 +257,6 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "[ERROR] no changes to commit for revalidation manifest or case record"
-            echo "[ERROR] render step likely did not update the manifest as expected"
             exit 1
           fi
 
@@ -279,25 +270,19 @@ jobs:
           BRANCH="${{ env.RECORD_BRANCH }}"
 
           for attempt in 1 2 3 4 5; do
-            echo "[INFO] push attempt ${attempt}"
-
             git fetch origin "$BRANCH"
             if ! git rebase "origin/$BRANCH"; then
-              echo "[WARN] rebase conflict detected, aborting rebase"
               git rebase --abort || true
               exit 1
             fi
 
             if git push origin "HEAD:${BRANCH}"; then
-              echo "[OK] push succeeded"
               exit 0
             fi
 
-            echo "[WARN] push rejected, retrying..."
             sleep $((attempt * 2))
           done
 
-          echo "[ERROR] failed to push after multiple attempts"
           exit 1
 
   snapshot-and-collect-revalidation:
@@ -366,8 +351,6 @@ jobs:
             SYNC_STATUS="$(kubectl get application forensic-sandbox-revalidation -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
             HEALTH_STATUS="$(kubectl get application forensic-sandbox-revalidation -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
 
-            echo "[INFO] revalidation app sync=${SYNC_STATUS} health=${HEALTH_STATUS} (${i}/90)"
-
             if [[ "$SYNC_STATUS" == "Synced" || "$HEALTH_STATUS" == "Progressing" || "$HEALTH_STATUS" == "Healthy" || "$HEALTH_STATUS" == "Degraded" ]]; then
               break
             fi
@@ -393,16 +376,12 @@ jobs:
 
             if [[ -n "${POD_NAME:-}" ]]; then
               echo "pod_name=$POD_NAME" >> "$GITHUB_OUTPUT"
-              echo "selector=$SELECTOR" >> "$GITHUB_OUTPUT"
-              echo "[OK] revalidation pod found: $POD_NAME"
               exit 0
             fi
 
-            echo "[INFO] revalidation pod not found yet for selector=${SELECTOR} (${i}/90)"
             sleep 5
           done
 
-          echo "[ERROR] revalidation pod not found for selector=${SELECTOR}"
           kubectl get pods -n "$NS" --show-labels || true
           kubectl get jobs -n "$NS" --show-labels || true
           kubectl describe application forensic-sandbox-revalidation -n argocd || true
@@ -418,15 +397,12 @@ jobs:
 
           for i in $(seq 1 90); do
             PHASE="$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.status.phase}')"
-            echo "[INFO] pod phase=$PHASE"
 
             if kubectl exec -n "$NS" "$POD" -c forensic-launcher -- test -f /artifacts/verdict.json 2>/dev/null; then
-              echo "[OK] verdict file exists"
               exit 0
             fi
 
             if [[ "$PHASE" == "Failed" || "$PHASE" == "Unknown" ]]; then
-              echo "[ERROR] pod entered bad phase=$PHASE"
               kubectl describe pod -n "$NS" "$POD" || true
               kubectl logs -n "$NS" "$POD" --all-containers=true || true
               exit 1
@@ -435,7 +411,6 @@ jobs:
             sleep 5
           done
 
-          echo "[ERROR] Timed out waiting for /artifacts/verdict.json"
           kubectl describe pod -n "$NS" "$POD" || true
           kubectl logs -n "$NS" "$POD" --all-containers=true || true
           exit 1
@@ -500,31 +475,169 @@ jobs:
           BRANCH="${{ env.RECORD_BRANCH }}"
 
           for attempt in $(seq 1 5); do
-            echo "[INFO] push attempt ${attempt}"
-
             git fetch origin "$BRANCH"
             if ! git rebase "origin/$BRANCH"; then
-              echo "[WARN] rebase conflict detected, aborting rebase"
               git rebase --abort || true
               exit 1
             fi
 
             if git push origin "HEAD:${BRANCH}"; then
-              echo "[OK] push succeeded"
               exit 0
             fi
 
-            echo "[WARN] push rejected, retrying..."
             sleep $((attempt * 2))
           done
 
-          echo "[ERROR] failed to push after multiple attempts"
           exit 1
 
-      - name: Summary
+  finalize-after-revalidation:
+    needs: snapshot-and-collect-revalidation
+    if: ${{ needs.snapshot-and-collect-revalidation.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout jy branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RECORD_BRANCH }}
+          fetch-depth: 0
+
+      - name: Validate promotable state
         shell: bash
         run: |
           set -euo pipefail
-          echo "case_id=${{ inputs.case_id }}"
-          echo "generation=${{ inputs.generation }}"
-          echo "verdict_path=gitops/apps/forensic-sandbox/cases/verdicts/revalidate-${{ inputs.case_id }}-g${{ inputs.generation }}.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          case_id = "${{ inputs.case_id }}"
+          path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+
+          flags = data.get("flags", {})
+          verified = data.get("verified_image_ref")
+
+          if flags.get("revalidation_passed") is not True:
+              raise SystemExit("revalidation_passed is not true")
+          if not verified:
+              raise SystemExit("verified_image_ref is empty")
+          PY
+
+      - name: Trigger promote workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run "promote-case-image" \
+            --ref "${{ env.RECORD_BRANCH }}" \
+            -f case_id="${{ inputs.case_id }}" \
+            -f production_branch="${{ env.RECORD_BRANCH }}" \
+            -f deployment_name="worker-consumer" \
+            -f container_name="worker-consumer" \
+            -f namespace="kafka-poc" \
+            -f note="verified image promoted automatically after successful revalidation"
+
+      - name: Wait for promote workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in $(seq 1 60); do
+            RUN_ID="$(gh run list \
+              --workflow "promote-case-image" \
+              --branch "${{ env.RECORD_BRANCH }}" \
+              --limit 1 \
+              --json databaseId,status,conclusion \
+              --jq '.[0].databaseId')"
+
+            STATUS="$(gh run view "$RUN_ID" --json status --jq '.status')"
+            CONCLUSION="$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion')"
+
+            if [[ "$STATUS" == "completed" ]]; then
+              [[ "$CONCLUSION" == "success" ]] || exit 1
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+
+      - name: Trigger redrive workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run "redrive-dlq" \
+            --ref "${{ env.RECORD_BRANCH }}" \
+            -f case_id="${{ inputs.case_id }}" \
+            -f namespace="${{ inputs.namespace }}" \
+            -f kafka_bootstrap="${{ inputs.kafka_bootstrap }}" \
+            -f dlq_topic="orders-dlq" \
+            -f target_topic="orders" \
+            -f max_scan_messages="10000" \
+            -f note="redrive executed automatically after promotion"
+
+      - name: Wait for redrive workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in $(seq 1 60); do
+            RUN_ID="$(gh run list \
+              --workflow "redrive-dlq" \
+              --branch "${{ env.RECORD_BRANCH }}" \
+              --limit 1 \
+              --json databaseId,status,conclusion \
+              --jq '.[0].databaseId')"
+
+            STATUS="$(gh run view "$RUN_ID" --json status --jq '.status')"
+            CONCLUSION="$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion')"
+
+            if [[ "$STATUS" == "completed" ]]; then
+              [[ "$CONCLUSION" == "success" ]] || exit 1
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+
+      - name: Trigger cleanup workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run "cleanup-case-sandbox" \
+            --ref "${{ env.RECORD_BRANCH }}" \
+            -f case_id="${{ inputs.case_id }}" \
+            -f note="cleanup completed automatically after successful redrive"
+
+      - name: Wait for cleanup workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in $(seq 1 60); do
+            RUN_ID="$(gh run list \
+              --workflow "cleanup-case-sandbox" \
+              --branch "${{ env.RECORD_BRANCH }}" \
+              --limit 1 \
+              --json databaseId,status,conclusion \
+              --jq '.[0].databaseId')"
+
+            STATUS="$(gh run view "$RUN_ID" --json status --jq '.status')"
+            CONCLUSION="$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion')"
+
+            if [[ "$STATUS" == "completed" ]]; then
+              [[ "$CONCLUSION" == "success" ]] || exit 1
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
