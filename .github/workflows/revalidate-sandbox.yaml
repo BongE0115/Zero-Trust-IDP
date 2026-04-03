@@ -101,16 +101,16 @@ jobs:
             if [[ -f "$REPRO_MANIFEST" ]]; then
               export REPRO_MANIFEST
               RESOLVED_REF="$(
-                python3 - <<'PY'
-                import os
-                import re
-                from pathlib import Path
+                python3 -c '
+import os
+import re
+from pathlib import Path
 
-                path = Path(os.environ["REPRO_MANIFEST"])
-                text = path.read_text(encoding="utf-8")
-                m = re.search(r'-\s*name:\s*forensic-launcher\s+image:\s*(\S+)', text, re.MULTILINE)
-                print(m.group(1).strip().strip('"').strip("'") if m else "")
-                PY
+path = Path(os.environ["REPRO_MANIFEST"])
+text = path.read_text(encoding="utf-8")
+m = re.search(r"-\s*name:\s*forensic-launcher\s+image:\s*(\S+)", text, re.MULTILINE)
+print(m.group(1).strip().strip("\"").strip("\x27") if m else "")
+'
               )"
             fi
           fi
@@ -121,15 +121,15 @@ jobs:
             if [[ -f "$RECORD_PATH" ]]; then
               export RECORD_PATH
               RESOLVED_REF="$(
-                python3 - <<'PY'
-                import json
-                import os
-                from pathlib import Path
+                python3 -c '
+import json
+import os
+from pathlib import Path
 
-                path = Path(os.environ["RECORD_PATH"])
-                data = json.loads(path.read_text(encoding="utf-8"))
-                print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))
-                PY
+path = Path(os.environ["RECORD_PATH"])
+data = json.loads(path.read_text(encoding="utf-8"))
+print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))
+'
               )"
             fi
           fi
