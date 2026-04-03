@@ -32,14 +32,14 @@ spec:
             - |
               mkdir -p /artifacts
               cat > /artifacts/failure.json <<'EOF'
-__FAILURE_ARTIFACT_JSON__
-EOF
+              __FAILURE_ARTIFACT_JSON__
+              EOF
               cat > /artifacts/normal.json <<'EOF'
-__NORMAL_ARTIFACT_JSON__
-EOF
+              __NORMAL_ARTIFACT_JSON__
+              EOF
               cat > /artifacts/consumer-ready.json <<'EOF'
-__READY_FILE_JSON__
-EOF
+              __READY_FILE_JSON__
+              EOF
           volumeMounts:
             - name: artifacts
               mountPath: /artifacts

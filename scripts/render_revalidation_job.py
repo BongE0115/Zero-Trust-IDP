@@ -441,9 +441,9 @@ def main() -> int:
             "EXPECTED_FAILURE_STATUS": args.expected_failure_status,
             "EXPECTED_NORMAL_STATUS": args.expected_normal_status,
             "LAUNCHER_IMAGE_REF": args.launcher_image_ref,
-            "FAILURE_ARTIFACT_JSON": failure_json,
-            "NORMAL_ARTIFACT_JSON": normal_json,
-            "READY_FILE_JSON": ready_json,
+            "FAILURE_ARTIFACT_JSON": indent_for_block_scalar(failure_json, 14),
+            "NORMAL_ARTIFACT_JSON": indent_for_block_scalar(normal_json, 14),
+            "READY_FILE_JSON": indent_for_block_scalar(ready_json, 14),
         }
 
         template = load_text(template_path)
