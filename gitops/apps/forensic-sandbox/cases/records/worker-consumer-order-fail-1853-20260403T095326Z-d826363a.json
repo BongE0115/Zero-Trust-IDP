@@ -4,7 +4,7 @@
   "branch_name": "case/worker-consumer-order-fail-1853-20260403T095326Z-d826363a",
   "status": "failed",
   "created_at": "2026-04-03T09:53:40Z",
-  "updated_at": "2026-04-03T11:29:56Z",
+  "updated_at": "2026-04-03T11:33:30Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:6976091",
   "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:8954e833d8dd4d757ac53adf2a86beae8fc16ca5489b6c1b2f57579c242fe613",
   "verified_image_ref": "",
@@ -385,6 +385,12 @@
         "from_status": "revalidation_requested",
         "to_status": "failed"
       }
+    },
+    {
+      "at": "2026-04-03T11:33:30Z",
+      "action": "update",
+      "status": "failed",
+      "note": "revalidation verdict collected by unified workflow"
     }
   ]
 }
