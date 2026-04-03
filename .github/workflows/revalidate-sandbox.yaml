@@ -521,6 +521,66 @@ jobs:
           echo "[ERROR] failed to push after multiple attempts"
           exit 1
 
+      - name: Dispatch finalize workflow after successful revalidation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "WORKFLOW_PAT secret is empty or missing"
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          case_id = "${{ inputs.case_id }}"
+          record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          if not record_path.exists():
+              raise SystemExit(f"case record not found: {record_path}")
+
+          data = json.loads(record_path.read_text(encoding="utf-8"))
+          flags = data.get("flags", {})
+
+          if flags.get("revalidation_passed") is not True:
+              raise SystemExit("revalidation_passed is not true; finalize workflow will not be dispatched")
+          print("[OK] revalidation_passed=true")
+          PY
+
+          cat > /tmp/finalize_dispatch_payload.json <<'JSON'
+          {
+            "ref": "${{ env.RECORD_BRANCH }}",
+            "inputs": {
+              "case_id": "${{ inputs.case_id }}",
+              "production_branch": "jy",
+              "deployment_name": "worker-consumer",
+              "container_name": "worker-consumer",
+              "namespace": "kafka-poc",
+              "promote_note": "verified image promoted automatically after second verdict",
+              "cleanup_note": "cleanup completed automatically after promotion"
+            }
+          }
+          JSON
+
+          http_code=$(curl -sS -o /tmp/finalize_dispatch_response.json -w "%{http_code}" \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/finalize-case-after-revalidation.yaml/dispatches" \
+            --data @/tmp/finalize_dispatch_payload.json)
+
+          if [[ "$http_code" != "204" ]]; then
+            echo "Failed to dispatch finalize workflow (HTTP $http_code)"
+            cat /tmp/finalize_dispatch_response.json || true
+            exit 1
+          fi
+
+          echo "[OK] finalize workflow dispatched"
+
+
       - name: Summary
         shell: bash
         run: |
