@@ -97,46 +97,34 @@ jobs:
 
           if [[ -z "$RESOLVED_REF" ]]; then
             REPRO_MANIFEST="gitops/apps/forensic-sandbox/cases/reproduce/reproduce-case-${CASE_ID}.yaml"
-            export REPRO_MANIFEST
 
             if [[ -f "$REPRO_MANIFEST" ]]; then
-              RESOLVED_REF="$(
-              python3 - <<'PY'
-              import os
-              import re
-              from pathlib import Path
+              RESOLVED_REF=$(python3 -c '
+import re
+import sys
+from pathlib import Path
 
-              path = Path(os.environ["REPRO_MANIFEST"])
-              text = path.read_text(encoding="utf-8")
-
-              m = re.search(
-                  r'-\s*name:\s*forensic-launcher\s+image:\s*(\S+)',
-                  text,
-                  re.MULTILINE
-              )
-              if m:
-                  print(m.group(1).strip().strip('"').strip("'"))
-              PY
-              )"
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+m = re.search(r"-\s*name:\s*forensic-launcher\s+image:\s*(\S+)", text, re.MULTILINE)
+print(m.group(1).strip().strip("\"").strip("'"'"'") if m else "")
+' "$REPRO_MANIFEST")
             fi
           fi
 
           if [[ -z "$RESOLVED_REF" ]]; then
             RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
-            export RECORD_PATH
 
             if [[ -f "$RECORD_PATH" ]]; then
-              RESOLVED_REF="$(
-              python3 - <<'PY'
-              import json
-              import os
-              from pathlib import Path
+              RESOLVED_REF=$(python3 -c '
+import json
+import sys
+from pathlib import Path
 
-              path = Path(os.environ["RECORD_PATH"])
-              data = json.loads(path.read_text(encoding="utf-8"))
-              print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))
-              PY
-              )"
+path = Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))
+' "$RECORD_PATH")
             fi
           fi
 
