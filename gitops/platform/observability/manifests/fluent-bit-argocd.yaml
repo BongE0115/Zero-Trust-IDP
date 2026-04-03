@@ -53,7 +53,7 @@ spec:
             [FILTER]
                 Name    grep
                 Match   kube.*
-                Exclude $kubernetes['namespace_name'] ^(logging|kafka-poc|kube-system)$
+                Exclude $kubernetes['namespace_name'] ^(logging|kafka-poc|kube-system|argocd|istio-system|forensic-sandbox)$
         
           outputs: |
             [OUTPUT]
