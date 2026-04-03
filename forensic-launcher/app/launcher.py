@@ -1,4 +1,5 @@
 from kafka import KafkaProducer, KafkaConsumer
+from kafka.errors import KafkaTimeoutError
 import json
 import os
 import sys
@@ -44,6 +45,10 @@ EXPECTED_NORMAL_STATUS = getenv("EXPECTED_NORMAL_STATUS", "success")
 
 # verdict 수집용 시간창 확보
 POST_VERDICT_SLEEP_SECONDS = int(getenv("POST_VERDICT_SLEEP_SECONDS", "0"))
+
+TOPIC_METADATA_WAIT_SECONDS = int(getenv("TOPIC_METADATA_WAIT_SECONDS", "30"))
+PUBLISH_RETRY_COUNT = int(getenv("PUBLISH_RETRY_COUNT", "10"))
+PUBLISH_RETRY_INTERVAL_SECONDS = int(getenv("PUBLISH_RETRY_INTERVAL_SECONDS", "3"))
 
 
 def load_json_file(path: str) -> Dict[str, Any]:
@@ -100,6 +105,62 @@ def get_result_consumer() -> KafkaConsumer:
     raise RuntimeError(f"Result consumer init failed after retries: {last_error}")
 
 
+def wait_for_topic_metadata(producer: KafkaProducer, topic: str):
+    deadline = time.time() + TOPIC_METADATA_WAIT_SECONDS
+    last_seen = None
+
+    while time.time() < deadline:
+        try:
+            parts = producer.partitions_for(topic)
+            last_seen = parts
+            if parts:
+                print(f"[LAUNCHER] topic metadata ready topic={topic} partitions={sorted(parts)}")
+                return
+            print(f"[LAUNCHER][WARN] topic metadata not ready yet topic={topic} partitions={parts}")
+        except Exception as e:
+            print(f"[LAUNCHER][WARN] topic metadata fetch failed topic={topic}: {e}")
+
+        time.sleep(1)
+
+    raise TimeoutError(
+        f"topic metadata timeout topic={topic} wait_seconds={TOPIC_METADATA_WAIT_SECONDS} last_partitions={last_seen}"
+    )
+
+
+def send_with_retry(producer: KafkaProducer, topic: str, payload: Dict[str, Any], label: str):
+    last_error = None
+
+    for attempt in range(1, PUBLISH_RETRY_COUNT + 1):
+        try:
+            future = producer.send(topic, payload)
+            record_metadata = future.get(timeout=RESULT_WAIT_SECONDS)
+            producer.flush()
+            print(
+                f"[LAUNCHER] published label={label} topic={topic} "
+                f"partition={record_metadata.partition} offset={record_metadata.offset} attempt={attempt}"
+            )
+            return
+
+        except KafkaTimeoutError as e:
+            last_error = e
+            print(
+                f"[LAUNCHER][WARN] publish timeout label={label} topic={topic} "
+                f"attempt={attempt}/{PUBLISH_RETRY_COUNT}: {e}"
+            )
+        except Exception as e:
+            last_error = e
+            print(
+                f"[LAUNCHER][WARN] publish failed label={label} topic={topic} "
+                f"attempt={attempt}/{PUBLISH_RETRY_COUNT}: {e}"
+            )
+
+        time.sleep(PUBLISH_RETRY_INTERVAL_SECONDS)
+        wait_for_topic_metadata(producer, topic)
+
+    raise RuntimeError(
+        f"publish failed after retries label={label} topic={topic}: {last_error}"
+    )
+
 def validate_artifact_common(artifact: Dict[str, Any], expected_type: str):
     if artifact.get("artifact_type") != expected_type:
         raise ValueError(
@@ -125,9 +186,9 @@ def publish_payload(producer: KafkaProducer, topic: str, payload: Dict[str, Any]
             )
 
     print(f"[LAUNCHER] publishing label={label} topic={topic} payload={json.dumps(payload, ensure_ascii=False)}")
-    producer.send(topic, payload)
-    producer.flush()
-    print(f"[LAUNCHER] published label={label} topic={topic}")
+
+    wait_for_topic_metadata(producer, topic)
+    send_with_retry(producer, topic, payload, label)
 
 
 def wait_for_phase_result(result_consumer: KafkaConsumer, phase: str) -> Dict[str, Any]:
