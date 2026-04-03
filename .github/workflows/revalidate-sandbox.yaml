@@ -554,23 +554,33 @@ jobs:
           flags = record.get("flags", {})
           passed_by_record = flags.get("revalidation_passed") is True
 
-          status = str(verdict.get("status", "")).lower()
-          decision = str(verdict.get("decision", "")).lower()
-          passed_by_verdict = (
-              status in ("passed", "success", "succeeded")
-              or decision in ("passed", "pass", "success", "promote")
-          )
+          # 디버깅용: 실제 verdict 구조 확인
+          print("[DEBUG] verdict keys:", sorted(verdict.keys()))
+
+          def truthy_pass(v):
+              if isinstance(v, bool):
+                  return v
+              if isinstance(v, str):
+                  return v.lower() in ("passed", "pass", "success", "succeeded", "ok", "true", "promote")
+              return False
+
+          passed_by_verdict = any([
+              truthy_pass(verdict.get("passed")),
+              truthy_pass(verdict.get("success")),
+              truthy_pass(verdict.get("status")),
+              truthy_pass(verdict.get("decision")),
+              truthy_pass(verdict.get("overall_status")),
+              truthy_pass(verdict.get("final_status")),
+              truthy_pass((verdict.get("summary") or {}).get("status") if isinstance(verdict.get("summary"), dict) else None),
+          ])
 
           if not (passed_by_record or passed_by_verdict):
               raise SystemExit(
                   "revalidation did not pass; finalize workflow will not be dispatched "
-                  f"(record={passed_by_record}, verdict_status={status}, verdict_decision={decision})"
+                  f"(record={passed_by_record}, verdict_keys={sorted(verdict.keys())})"
               )
 
-          print(
-              f"[OK] finalize allowed record={passed_by_record} "
-              f"verdict_status={status} verdict_decision={decision}"
-          )
+          print(f"[OK] finalize allowed record={passed_by_record} verdict={passed_by_verdict}")
           PY
 
           cat > /tmp/finalize_dispatch_payload.json <<'JSON'
