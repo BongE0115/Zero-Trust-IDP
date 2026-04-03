@@ -86,8 +86,8 @@ jobs:
               metadata.get("revalidation_job_manifest_path")
               or f"gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-{case_id}.yaml"
           )
-
-          out = Path("${GITHUB_OUTPUT}")
+          import os
+          out = Path(os.environ["GITHUB_OUTPUT"])
           with out.open("a", encoding="utf-8") as f:
               f.write(f"sandbox_manifest_path={sandbox_manifest_path}\n")
               f.write(f"revalidation_manifest_path={revalidation_manifest_path}\n")

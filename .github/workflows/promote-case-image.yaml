@@ -70,6 +70,7 @@ jobs:
 
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           case_id = "${{ inputs.case_id }}"
@@ -87,7 +88,7 @@ jobs:
           if not verified:
               raise SystemExit("verified_image_ref is empty in jy case record")
 
-          out = Path("${GITHUB_OUTPUT}")
+          out = Path(os.environ["GITHUB_OUTPUT"])
           with out.open("a", encoding="utf-8") as f:
               f.write(f"verified_image_ref={verified}\n")
               f.write(f"branch_name={branch_name}\n")
