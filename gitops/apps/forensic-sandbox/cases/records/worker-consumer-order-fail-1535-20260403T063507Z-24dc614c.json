@@ -4,14 +4,14 @@
   "branch_name": "case/worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
   "status": "candidate_built",
   "created_at": "2026-04-03T06:35:20Z",
-  "updated_at": "2026-04-03T08:05:08Z",
+  "updated_at": "2026-04-03T08:10:01Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:6976091",
-  "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:fe1e77ca8765263df171907266227df2218e778400d3c040481daa1d8f2e743d",
+  "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:c301e3246999d2746409cf85bf55a8bd65aa30c060c1ad7ab5bee17762ff6c3c",
   "verified_image_ref": "",
   "promoted_image_ref": "",
   "previous_production_image_ref": null,
   "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-order-fail-1535-20260403t063507z.yaml",
-  "revalidation_generation": 15,
+  "revalidation_generation": 16,
   "validation_run_id": "",
   "redrive_count": 0,
   "flags": {
@@ -34,7 +34,7 @@
     "last_reproduce_validation_run_id": "reproduce-worker-consumer-order-fail-1535-20260403T063507Z-24dc614c-0",
     "last_reproduce_generation": 0,
     "candidate_build_branch": "case/worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
-    "candidate_build_generation": 15
+    "candidate_build_generation": 16
   },
   "history": [
     {
@@ -300,6 +300,22 @@
       "extra": {
         "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:fe1e77ca8765263df171907266227df2218e778400d3c040481daa1d8f2e743d",
         "revalidation_generation": 15
+      }
+    },
+    {
+      "at": "2026-04-03T08:10:01Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "candidate image built from case branch case/worker-consumer-order-fail-1535-20260403T063507Z-24dc614c"
+    },
+    {
+      "at": "2026-04-03T08:10:01Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "force-synced record after candidate patch",
+      "extra": {
+        "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:c301e3246999d2746409cf85bf55a8bd65aa30c060c1ad7ab5bee17762ff6c3c",
+        "revalidation_generation": 16
       }
     }
   ]
