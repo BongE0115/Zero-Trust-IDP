@@ -61,7 +61,7 @@ if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
 fi
 
 # ---------------------------------------------------------
-# 5. K3s readiness 대기
+# 5. K3s readiness 대기 및 k3s.yaml IP 치환
 # ---------------------------------------------------------
 for i in {1..40}; do
   if [ -f /etc/rancher/k3s/k3s.yaml ]; then
@@ -69,6 +69,10 @@ for i in {1..40}; do
   fi
   sleep 10
 done
+
+# 🔥 [핵심 추가] 127.0.0.1을 마스터 노드의 Tailscale IP로 덮어쓰기
+MASTER_TS_IP=$(tailscale ip -4 | head -n 1)
+sed -i "s/127.0.0.1/$MASTER_TS_IP/g" /etc/rancher/k3s/k3s.yaml
 
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
@@ -79,13 +83,6 @@ for i in {1..40}; do
   fi
   echo "[INFO] Waiting for Kubernetes API... ($i/40)"
   sleep 15
-done
-
-kubectl get nodes || true
-
-echo "기다리는 중... K3s API가 준비될 때까지"
-until /usr/local/bin/kubectl get nodes; do
-  sleep 5
 done
 
 # ---------------------------------------------------------

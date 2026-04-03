@@ -20,6 +20,7 @@ resource "local_file" "local_node_setup_script" {
     fi
     sudo tailscale up --authkey=${var.tailscale_auth_key} --hostname=aiops-local-worker --accept-routes
 
+    # 🔥 수정 1: 로컬 PC의 Tailscale IP를 명확하게 변수로 추출
     LOCAL_TS_IP=$(tailscale ip -4 | head -n 1)
     echo "✅ Tailscale 연동 완료! (현재 IP: $LOCAL_TS_IP)"
 
@@ -47,20 +48,27 @@ resource "local_file" "local_node_setup_script" {
     sleep 5
 
     echo "[3/6] 네임스페이스 및 환경 설정 중..."
-    # K3s 설정 파일은 root 소유이므로 sudo와 함께 실행
     sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create namespace boutique-local --dry-run=client -o yaml | sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
 
     echo "[4/6] AWS 리소스 정보 주입 (ConfigMap)..."
+    
+    # 🔥 수정 2: 빈칸이었던 LOCAL_TAILSCALE_IP에 $LOCAL_TS_IP 동적 주입 (boutique-local NS)
     sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create configmap aws-global-env -n boutique-local \
       --from-literal=AWS_REGION="ap-northeast-2" \
       --from-literal=PROJECT_NAME="Zero-Trust-IDP" \
-      --from-literal=LOCAL_TAILSCALE_IP="${var.local_tailscale_ip}" \
+      --from-literal=LOCAL_TAILSCALE_IP="$LOCAL_TS_IP" \
       --from-literal=AWS_IP="${aws_instance.k3s_server.private_ip}" \
       --from-literal=FRONTEND_ADDR="${aws_lb.aiops_alb.dns_name}:8080" \
       --from-literal=PRODUCT_CATALOG_SERVICE_ADDR="productcatalogservice:3550" \
       --from-literal=DISABLE_PROFILER="1" \
       --from-literal=DISABLE_TRACING="1" \
       --dry-run=client -o yaml | sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
+    
+    # 🔥 수정 3: default 네임스페이스 파드들의 에러 방지를 위해 똑같이 복사본 주입
+    sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create configmap aws-global-env -n default \
+      --from-literal=LOCAL_TAILSCALE_IP="$LOCAL_TS_IP" \
+      --dry-run=client -o yaml | sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
+      
     echo "✅ 글로벌 환경변수 주입 완료!"
 
     echo "[5/6] 로컬 전용 마이크로서비스 배포..."
@@ -74,30 +82,36 @@ resource "local_file" "local_node_setup_script" {
 
     echo "[6/6] 🤖 AWS SSM을 통해 마스터 노드의 ArgoCD 자동 연동을 시작합니다..."
     
-    # Kubeconfig 읽을 때 sudo 사용
     LOCAL_KUBECONFIG_B64=$(sudo cat /etc/rancher/k3s/k3s.yaml | sed "s/127.0.0.1/$LOCAL_TS_IP/g" | base64 -w 0)
     MASTER_INSTANCE_ID="${aws_instance.k3s_server.id}"
     AWS_REGION="ap-northeast-2"
 
-    # aws ssm 명령어는 sudo 없이 현재 사용자 권한으로 실행 (인증 유지)
+    # 🔥 수정 4: SSM 명령어가 화면을 멈추지 않도록 --no-cli-pager 추가 및 무한 대기(until/while) 로직 완벽 이식!
     aws ssm send-command \
       --region "$AWS_REGION" \
       --instance-ids "$MASTER_INSTANCE_ID" \
       --document-name "AWS-RunShellScript" \
+      --no-cli-pager \
       --parameters commands='[
         "#!/bin/bash",
         "set -e",
-        "echo \"ArgoCD 서버 준비 대기 중...\"",
-        "sleep 30",
-        "echo '"$LOCAL_KUBECONFIG_B64"' | base64 -d > /tmp/local-cluster.yaml",
+        "echo \"[SSM] 마스터 노드의 k3s.yaml IP 치환 작업을 시작합니다...\"",
+        "MASTER_TS_IP=\$(tailscale ip -4 | head -n 1)",
+        "sudo sed -i \"s/127.0.0.1/\$MASTER_TS_IP/g\" /etc/rancher/k3s/k3s.yaml",
+        "echo \"[SSM] 마스터 IP 치환 완료: \$MASTER_TS_IP\"",
         "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
+        "echo \"[SSM] ArgoCD 파드가 완전히 뜰 때까지 대기 중... (될 때까지 기다립니다)\"",
+        "while ! kubectl get pods -n argocd | grep argocd-server | grep Running; do sleep 5; done",
+        "echo \"[SSM] ArgoCD 준비 완료!\"",
+        "echo '"$LOCAL_KUBECONFIG_B64"' | base64 -d > /tmp/local-cluster.yaml",
         "ARGOCD_PW=\$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath=\"{.data.password}\" | base64 -d)",
-        "argocd login localhost:30080 --username admin --password \$ARGOCD_PW --plaintext",
+        "echo \"[SSM] ArgoCD 로그인 시도 중...\"",
+        "until argocd login localhost:30080 --username admin --password \$ARGOCD_PW --plaintext; do echo \"재시도 중...\"; sleep 5; done",
         "argocd cluster add default --name boutique-local-cluster --kubeconfig /tmp/local-cluster.yaml --yes || true",
         "kubectl patch application boutique-local -n argocd --type=\"json\" -p=\"[{\\\"op\\\": \\\"replace\\\", \\\"path\\\": \\\"/spec/destination\\\", \\\"value\\\": {\\\"name\\\": \\\"boutique-local-cluster\\\", \\\"namespace\\\": \\\"boutique-local\\\"}}]\"",
         "argocd app set boutique-local --sync-policy automated --auto-prune --self-heal --sync-option CreateNamespace=true",
         "argocd app sync boutique-local || true",
-        "echo \"ArgoCD 연동 및 패치 완료!\""
+        "echo \"🎉 ArgoCD 연동 및 패치 완료!\""
       ]'
 
     echo "=================================================="
@@ -110,7 +124,6 @@ resource "null_resource" "auto_run_setup" {
   depends_on = [local_file.local_node_setup_script]
 
   provisioner "local-exec" {
-    # 파일에 실행 권한이 없어도 bash가 텍스트로 읽어서 강제로 실행해 줍니다.
     command = "bash ./setup_local_env.sh" 
   }
 }
