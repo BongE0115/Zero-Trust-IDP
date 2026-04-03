@@ -345,7 +345,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          gh workflow run "revalidate-sandbox" \
+          gh workflow run ".github/workflows/revalidate-sandbox.yaml" \
             --ref "${{ env.RECORD_BRANCH }}" \
             -f case_id="${{ steps.parse.outputs.case_id }}" \
             -f generation="${{ steps.record.outputs.next_generation }}" \
