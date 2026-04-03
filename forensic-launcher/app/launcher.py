@@ -1,3 +1,4 @@
+# 트리거
 from kafka import KafkaProducer, KafkaConsumer
 from kafka.errors import KafkaTimeoutError
 import json
