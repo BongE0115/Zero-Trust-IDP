@@ -564,15 +564,18 @@ jobs:
                   return v.lower() in ("passed", "pass", "success", "succeeded", "ok", "true", "promote")
               return False
 
-          passed_by_verdict = any([
-              truthy_pass(verdict.get("passed")),
-              truthy_pass(verdict.get("success")),
-              truthy_pass(verdict.get("status")),
-              truthy_pass(verdict.get("decision")),
-              truthy_pass(verdict.get("overall_status")),
-              truthy_pass(verdict.get("final_status")),
-              truthy_pass((verdict.get("summary") or {}).get("status") if isinstance(verdict.get("summary"), dict) else None),
-          ])
+          passed_by_verdict = (
+              verdict.get("overall_passed") is True
+              or any([
+                  truthy_pass(verdict.get("passed")),
+                  truthy_pass(verdict.get("success")),
+                  truthy_pass(verdict.get("status")),
+                  truthy_pass(verdict.get("decision")),
+                  truthy_pass(verdict.get("overall_status")),
+                  truthy_pass(verdict.get("final_status")),
+                  truthy_pass((verdict.get("summary") or {}).get("status") if isinstance(verdict.get("summary"), dict) else None),
+              ])
+          )
 
           if not (passed_by_record or passed_by_verdict):
               raise SystemExit(
