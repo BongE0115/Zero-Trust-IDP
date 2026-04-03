@@ -327,9 +327,11 @@ jobs:
           gh --version
 
       - name: Dispatch unified revalidate-sandbox workflow
+        working-directory: record-repo
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
