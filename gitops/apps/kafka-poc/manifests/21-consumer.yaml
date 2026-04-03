@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: worker-consumer
-        image: ghcr.io/bonge0115/worker-consumer@sha256:dec63e248be4c2b4471ce12b25d32e68292baedbc9b6bf6fbebafb250f51422b
+        image: ghcr.io/bonge0115/worker-consumer@sha256:8df42de3c97bb7c875767dab4ddd68e635887ccbbcda0ac0a828354d48046490
         imagePullPolicy: Always
         env:
         - name: KAFKA_BOOTSTRAP
@@ -35,7 +35,7 @@ spec:
         - name: DEPLOYMENT_NAME
           value: worker-consumer
         - name: IMAGE_REF
-          value: ghcr.io/bonge0115/worker-consumer@sha256:dec63e248be4c2b4471ce12b25d32e68292baedbc9b6bf6fbebafb250f51422b
+          value: ghcr.io/bonge0115/worker-consumer@sha256:8df42de3c97bb7c875767dab4ddd68e635887ccbbcda0ac0a828354d48046490
         - name: CONFIG_VERSION
           value: v1
         - name: DEPENDENCY_PROFILE
