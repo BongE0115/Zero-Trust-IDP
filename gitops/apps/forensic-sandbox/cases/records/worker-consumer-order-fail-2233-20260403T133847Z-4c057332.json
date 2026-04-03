@@ -2,17 +2,17 @@
   "case_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
-  "status": "failed",
+  "status": "candidate_built",
   "created_at": "2026-04-03T13:39:00Z",
-  "updated_at": "2026-04-03T16:07:47Z",
+  "updated_at": "2026-04-03T16:11:30Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:6976091",
-  "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:6d7c850ce0cbd99c986894e3148a09e597b1248bda0d6926a986a436089459ca",
+  "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:8a681a11722f412990abcebc50efe447ad219bee522977812fddbc41b3a74cef",
   "verified_image_ref": "",
   "promoted_image_ref": "",
   "previous_production_image_ref": null,
   "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-order-fail-2233-20260403t133847z.yaml",
-  "revalidation_generation": 8,
-  "validation_run_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g8",
+  "revalidation_generation": 9,
+  "validation_run_id": "",
   "redrive_count": 0,
   "flags": {
     "revalidation_passed": false,
@@ -34,7 +34,7 @@
     "last_reproduce_validation_run_id": "reproduce-worker-consumer-order-fail-2233-20260403T133847Z-4c057332-0",
     "last_reproduce_generation": 0,
     "candidate_build_branch": "case/worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
-    "candidate_build_generation": 8,
+    "candidate_build_generation": 9,
     "revalidation_job_manifest_path": "/home/runner/work/Zero-Trust-IDP/Zero-Trust-IDP/gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-worker-consumer-order-fail-2233-20260403T133847Z-4c057332.yaml",
     "revalidation_expected_failure_status": "success",
     "revalidation_expected_normal_status": "success",
@@ -460,6 +460,26 @@
       "extra": {
         "from_status": "revalidation_requested",
         "to_status": "failed"
+      }
+    },
+    {
+      "at": "2026-04-03T16:11:30Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "candidate image built from case branch case/worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
+      "extra": {
+        "from_status": "failed",
+        "to_status": "candidate_built"
+      }
+    },
+    {
+      "at": "2026-04-03T16:11:30Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "force-synced record after candidate patch",
+      "extra": {
+        "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:8a681a11722f412990abcebc50efe447ad219bee522977812fddbc41b3a74cef",
+        "revalidation_generation": 9
       }
     }
   ]
