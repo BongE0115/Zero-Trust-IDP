@@ -2,9 +2,9 @@
   "case_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
-  "status": "revalidation_requested",
+  "status": "failed",
   "created_at": "2026-04-03T13:39:00Z",
-  "updated_at": "2026-04-03T15:10:39Z",
+  "updated_at": "2026-04-03T15:12:00Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:6976091",
   "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:e7f362d84f0be894204339c69744d683e5bd7b06dfe963939d207ffc6723c86b",
   "verified_image_ref": "",
@@ -40,11 +40,11 @@
     "revalidation_expected_normal_status": "success",
     "last_requested_revalidation_generation": 5,
     "last_requested_launcher_image_ref": "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc",
-    "last_revalidation_verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/revalidate-worker-consumer-order-fail-2233-20260403T133847Z-4c057332-g4.json",
+    "last_revalidation_verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/revalidate-worker-consumer-order-fail-2233-20260403T133847Z-4c057332-g5.json",
     "last_revalidation_overall_passed": false,
     "last_revalidation_mode": "fix-verify",
     "last_revalidation_launcher_image_ref": "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc",
-    "last_revalidation_generation": 4,
+    "last_revalidation_generation": 5,
     "last_revalidation_error": {
       "type": "TimeoutError",
       "message": "result timeout phase=failure_replay wait_seconds=60"
@@ -310,6 +310,16 @@
       "extra": {
         "revalidation_generation": 5,
         "launcher_image_ref": "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc"
+      }
+    },
+    {
+      "at": "2026-04-03T15:12:00Z",
+      "action": "update",
+      "status": "failed",
+      "note": "revalidation verdict collected by unified workflow",
+      "extra": {
+        "from_status": "revalidation_requested",
+        "to_status": "failed"
       }
     }
   ]
