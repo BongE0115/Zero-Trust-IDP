@@ -2,17 +2,17 @@
   "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
-  "status": "reproduce_failed",
+  "status": "candidate_built",
   "created_at": "2026-04-03T06:35:20Z",
-  "updated_at": "2026-04-03T06:35:32Z",
+  "updated_at": "2026-04-03T06:41:43Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:6976091",
-  "candidate_image_ref": null,
-  "verified_image_ref": null,
-  "promoted_image_ref": null,
+  "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:6a4af8a2eaaf92566027da2ce54ec77b7424bdc365c751873d67141d8bd2b094",
+  "verified_image_ref": "",
+  "promoted_image_ref": "",
   "previous_production_image_ref": null,
   "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-order-fail-1535-20260403t063507z.yaml",
-  "revalidation_generation": 0,
-  "validation_run_id": null,
+  "revalidation_generation": 1,
+  "validation_run_id": "",
   "redrive_count": 0,
   "flags": {
     "revalidation_passed": false,
@@ -32,7 +32,9 @@
     "last_reproduce_overall_passed": false,
     "last_reproduce_validation_mode": "reproduce",
     "last_reproduce_validation_run_id": "reproduce-worker-consumer-order-fail-1535-20260403T063507Z-24dc614c-0",
-    "last_reproduce_generation": 0
+    "last_reproduce_generation": 0,
+    "candidate_build_branch": "case/worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
+    "candidate_build_generation": 1
   },
   "history": [
     {
@@ -55,6 +57,26 @@
       "validation_run_id": "reproduce-worker-consumer-order-fail-1535-20260403T063507Z-24dc614c-0",
       "generation": 0,
       "verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/worker-consumer-order-fail-1535-20260403T063507Z-24dc614c.json"
+    },
+    {
+      "at": "2026-04-03T06:41:43Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "candidate image built from case branch case/worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
+      "extra": {
+        "from_status": "reproduce_failed",
+        "to_status": "candidate_built"
+      }
+    },
+    {
+      "at": "2026-04-03T06:41:43Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "force-synced record after candidate patch",
+      "extra": {
+        "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:6a4af8a2eaaf92566027da2ce54ec77b7424bdc365c751873d67141d8bd2b094",
+        "revalidation_generation": 1
+      }
     }
   ]
 }
