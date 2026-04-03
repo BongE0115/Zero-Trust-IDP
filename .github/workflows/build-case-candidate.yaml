@@ -326,6 +326,16 @@ jobs:
           set -euo pipefail
           gh --version
 
+      - name: Debug workflow registry
+        working-directory: record-repo
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh workflow list
+
       - name: Dispatch unified revalidate-sandbox workflow
         working-directory: record-repo
         shell: bash
@@ -335,7 +345,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          gh workflow run "${{ env.REVALIDATION_WORKFLOW_FILE }}" \
+          gh workflow run "revalidate-sandbox" \
             --ref "${{ env.RECORD_BRANCH }}" \
             -f case_id="${{ steps.parse.outputs.case_id }}" \
             -f generation="${{ steps.record.outputs.next_generation }}" \
