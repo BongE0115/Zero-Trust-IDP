@@ -106,7 +106,7 @@ spec:
           mountPath: /artifacts
       containers:
       - name: consumer-app
-        image: ghcr.io/bonge0115/worker-consumer@sha256:384b6d393c87282658b44fd3b54e85721ed716d66205d20e6ce9344d4346ce03
+        image: ghcr.io/bonge0115/worker-consumer@sha256:3f2dba2ef0155681108afa564740c611ecc3c60c9d962140a49f60328633ebef
         imagePullPolicy: IfNotPresent
         env:
         - name: KAFKA_BOOTSTRAP
@@ -124,7 +124,7 @@ spec:
         - name: DEPLOYMENT_NAME
           value: forensic-sandbox-app-worker-consumer-order-fa
         - name: IMAGE_REF
-          value: ghcr.io/bonge0115/worker-consumer@sha256:384b6d393c87282658b44fd3b54e85721ed716d66205d20e6ce9344d4346ce03
+          value: ghcr.io/bonge0115/worker-consumer@sha256:3f2dba2ef0155681108afa564740c611ecc3c60c9d962140a49f60328633ebef
         - name: CONFIG_VERSION
           value: v1
         - name: DEPENDENCY_PROFILE
@@ -164,9 +164,9 @@ spec:
         - name: VALIDATION_MODE
           value: fix-verify
         - name: VALIDATION_RUN_ID
-          value: worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g2
+          value: worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g3
         - name: REVALIDATION_GENERATION
-          value: '2'
+          value: '3'
         - name: EXPECTED_FAILURE_STATUS
           value: success
         - name: EXPECTED_NORMAL_STATUS
@@ -206,7 +206,7 @@ data:
   source_deployment: worker-consumer
   error_type: ValueError
   error_message: intentional failure for POC
-  consumer_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:384b6d393c87282658b44fd3b54e85721ed716d66205d20e6ce9344d4346ce03
+  consumer_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:3f2dba2ef0155681108afa564740c611ecc3c60c9d962140a49f60328633ebef
   deployment_name: forensic-sandbox-app-worker-consumer-order-fa
   replay_topic: orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332
   result_topic: orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332
@@ -228,7 +228,7 @@ data:
   mongo_host: mongodb-temp-worker-consumer-order-fa.forensic-sandbox.svc.cluster.local
   expected_failure_status: failed
   expected_normal_status: success
-  candidate_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:384b6d393c87282658b44fd3b54e85721ed716d66205d20e6ce9344d4346ce03
+  candidate_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:3f2dba2ef0155681108afa564740c611ecc3c60c9d962140a49f60328633ebef
   validation_mode: fix-verify
-  revalidation_generation: '2'
-  validation_run_id: worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g2
+  revalidation_generation: '3'
+  validation_run_id: worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g3
