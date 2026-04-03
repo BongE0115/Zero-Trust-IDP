@@ -32,51 +32,51 @@ spec:
             - |
               mkdir -p /artifacts
               cat > /artifacts/failure.json <<'EOF'
-{
-  "artifact_type": "failure_replay",
-  "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
-  "target_topic": "orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c",
-  "payload_hash": "24dc614c2af99927a351607b4907903142f87a2508a02ca41da63aaf56f3ca7a",
-  "created_at": "2026-04-03T06:35:07.492207+00:00",
-  "source_service": "worker-consumer",
-  "payload": {
-    "order_id": "order-fail-1535",
-    "should_fail": true,
-    "payload": {
-      "item": "book",
-      "qty": 1
-    }
-  }
-}
-EOF
+              {
+                "artifact_type": "failure_replay",
+                "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
+                "target_topic": "orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c",
+                "payload_hash": "24dc614c2af99927a351607b4907903142f87a2508a02ca41da63aaf56f3ca7a",
+                "created_at": "2026-04-03T06:35:07.492207+00:00",
+                "source_service": "worker-consumer",
+                "payload": {
+                  "order_id": "order-fail-1535",
+                  "should_fail": true,
+                  "payload": {
+                    "item": "book",
+                    "qty": 1
+                  }
+                }
+              }
+              EOF
               cat > /artifacts/normal.json <<'EOF'
-{
-  "artifact_type": "normal_validation",
-  "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
-  "target_topic": "orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c",
-  "payload_hash": "",
-  "created_at": "2026-04-03T06:35:07.492515+00:00",
-  "enabled": false,
-  "source_service": "worker-consumer",
-  "payload": {}
-}
-EOF
+              {
+                "artifact_type": "normal_validation",
+                "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
+                "target_topic": "orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c",
+                "payload_hash": "",
+                "created_at": "2026-04-03T06:35:07.492515+00:00",
+                "enabled": false,
+                "source_service": "worker-consumer",
+                "payload": {}
+              }
+              EOF
               cat > /artifacts/consumer-ready.json <<'EOF'
-{
-  "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
-  "source_topic": "orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c",
-  "group_id": "forensic-revalidate-ready-worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
-  "service": "worker-consumer",
-  "namespace": "forensic-sandbox",
-  "deployment": "sandbox-consumer-rollout",
-  "image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:953b6a695337b429a0aa9529eb9fafc8017dc5972db64d7bb6ec2a6ac1df29c4",
-  "ready_at": "1970-01-01T00:00:00Z",
-  "validation_mode": "fix-verify",
-  "validation_run_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c-reval-g17",
-  "revalidation_generation": 17,
-  "synthetic": true
-}
-EOF
+              {
+                "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
+                "source_topic": "orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c",
+                "group_id": "forensic-revalidate-ready-worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
+                "service": "worker-consumer",
+                "namespace": "forensic-sandbox",
+                "deployment": "sandbox-consumer-rollout",
+                "image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:953b6a695337b429a0aa9529eb9fafc8017dc5972db64d7bb6ec2a6ac1df29c4",
+                "ready_at": "1970-01-01T00:00:00Z",
+                "validation_mode": "fix-verify",
+                "validation_run_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c-reval-g17",
+                "revalidation_generation": 17,
+                "synthetic": true
+              }
+              EOF
           volumeMounts:
             - name: artifacts
               mountPath: /artifacts
