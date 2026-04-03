@@ -152,6 +152,34 @@ jobs:
               f.write(f"next_generation={input_gen}\n")
           PY
 
+      - name: Resolve generation-scoped topics
+        id: scoped_topics
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REPLAY_TOPIC="${{ inputs.replay_topic }}"
+          RESULT_TOPIC_BASE="${{ inputs.result_topic }}"
+          GEN="${{ steps.record.outputs.next_generation }}"
+
+          if [[ -z "$REPLAY_TOPIC" ]]; then
+            echo "[ERROR] replay_topic is empty"
+            exit 1
+          fi
+
+          if [[ -z "$RESULT_TOPIC_BASE" ]]; then
+            echo "[ERROR] result_topic is empty"
+            exit 1
+          fi
+
+          SCOPED_RESULT_TOPIC="${RESULT_TOPIC_BASE}-g${GEN}"
+
+          echo "replay_topic=${REPLAY_TOPIC}" >> "$GITHUB_OUTPUT"
+          echo "result_topic=${SCOPED_RESULT_TOPIC}" >> "$GITHUB_OUTPUT"
+
+          echo "[INFO] replay_topic=${REPLAY_TOPIC}"
+          echo "[INFO] scoped_result_topic=${SCOPED_RESULT_TOPIC}"
+
       - name: Render revalidation job manifest on jy
         id: render
         shell: bash
@@ -164,8 +192,8 @@ jobs:
             --namespace "${{ inputs.namespace }}" \
             --validation-mode "fix-verify" \
             --kafka-bootstrap "${{ inputs.kafka_bootstrap }}" \
-            --replay-topic "${{ inputs.replay_topic }}" \
-            --result-topic "${{ inputs.result_topic }}" \
+            --replay-topic "${{ steps.scoped_topics.outputs.replay_topic }}" \
+            --result-topic "${{ steps.scoped_topics.outputs.result_topic }}" \
             --launcher-image-ref "${{ steps.launcher.outputs.launcher_image_ref }}" \
             --update-record \
             --note "${{ inputs.note }}"
