@@ -289,7 +289,9 @@ def maybe_update_case_record(
     ]
     subprocess.run(cmd, check=True)
 
-
+def indent_for_block_scalar(text: str, spaces: int) -> str:
+    prefix = " " * spaces
+    return textwrap.indent(text, prefix)
 
 
 def validate_rendered_manifest_yaml(rendered: str) -> List[Dict[str, Any]]:
