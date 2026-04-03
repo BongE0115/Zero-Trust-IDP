@@ -4,7 +4,7 @@ metadata:
   name: mongodb-temp-worker-consumer-order-fa
   namespace: forensic-sandbox
   labels:
-    forensic-case-id: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+    forensic-case-id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
 spec:
   selector:
     app: mongodb-temp-worker-consumer-order-fa
@@ -19,7 +19,7 @@ metadata:
   name: mongodb-temp-worker-consumer-order-fa
   namespace: forensic-sandbox
   labels:
-    forensic-case-id: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+    forensic-case-id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
 spec:
   replicas: 1
   selector:
@@ -29,7 +29,7 @@ spec:
     metadata:
       labels:
         app: mongodb-temp-worker-consumer-order-fa
-        forensic-case-id: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+        forensic-case-id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
     spec:
       containers:
       - name: mongodb-temp
@@ -44,7 +44,7 @@ metadata:
   name: forensic-sandbox-app-worker-consumer-order-fa
   namespace: forensic-sandbox
   labels:
-    forensic-case-id: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+    forensic-case-id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
 spec:
   replicas: 1
   selector:
@@ -54,7 +54,7 @@ spec:
     metadata:
       labels:
         app: forensic-sandbox-app-worker-consumer-order-fa
-        forensic-case-id: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+        forensic-case-id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
     spec:
       initContainers:
       - name: topic-init
@@ -75,9 +75,9 @@ spec:
         - name: KAFKA_BOOTSTRAP
           value: kafka.kafka-poc.svc.cluster.local:9092
         - name: REPLAY_TOPIC
-          value: orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+          value: orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a
         - name: RESULT_TOPIC
-          value: orders-result-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+          value: orders-result-worker-consumer-order-fail-1853-20260403t095326z-d826363a
         - name: TOPIC_PARTITIONS
           value: '1'
         - name: TOPIC_REPLICATION_FACTOR
@@ -89,16 +89,16 @@ spec:
         - /bin/sh
         - -c
         - "mkdir -p /artifacts\ncat > /artifacts/failure.json <<'EOF'\n{\n  \"artifact_type\"\
-          : \"failure_replay\",\n  \"case_id\": \"worker-consumer-order-fail-1535-20260403T063507Z-24dc614c\"\
-          ,\n  \"target_topic\": \"orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c\"\
-          ,\n  \"payload_hash\": \"24dc614c2af99927a351607b4907903142f87a2508a02ca41da63aaf56f3ca7a\"\
-          ,\n  \"created_at\": \"2026-04-03T06:35:07.492207+00:00\",\n  \"source_service\"\
-          : \"worker-consumer\",\n  \"payload\": {\n    \"order_id\": \"order-fail-1535\"\
+          : \"failure_replay\",\n  \"case_id\": \"worker-consumer-order-fail-1853-20260403T095326Z-d826363a\"\
+          ,\n  \"target_topic\": \"orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a\"\
+          ,\n  \"payload_hash\": \"d826363a77b0f4ab0f99525088e46d5cb35fbc67dd34dbafa15432c2c268c1e7\"\
+          ,\n  \"created_at\": \"2026-04-03T09:53:26.633754+00:00\",\n  \"source_service\"\
+          : \"worker-consumer\",\n  \"payload\": {\n    \"order_id\": \"order-fail-1853\"\
           ,\n    \"should_fail\": true,\n    \"payload\": {\n      \"item\": \"book\"\
           ,\n      \"qty\": 1\n    }\n  }\n}\nEOF\ncat > /artifacts/normal.json <<'EOF'\n\
-          {\n  \"artifact_type\": \"normal_validation\",\n  \"case_id\": \"worker-consumer-order-fail-1535-20260403T063507Z-24dc614c\"\
-          ,\n  \"target_topic\": \"orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c\"\
-          ,\n  \"payload_hash\": \"\",\n  \"created_at\": \"2026-04-03T06:35:07.492515+00:00\"\
+          {\n  \"artifact_type\": \"normal_validation\",\n  \"case_id\": \"worker-consumer-order-fail-1853-20260403T095326Z-d826363a\"\
+          ,\n  \"target_topic\": \"orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a\"\
+          ,\n  \"payload_hash\": \"\",\n  \"created_at\": \"2026-04-03T09:53:26.636342+00:00\"\
           ,\n  \"enabled\": false,\n  \"source_service\": \"worker-consumer\",\n \
           \ \"payload\": {}\n}\nEOF\n"
         volumeMounts:
@@ -106,17 +106,17 @@ spec:
           mountPath: /artifacts
       containers:
       - name: consumer-app
-        image: ghcr.io/bonge0115/worker-consumer@sha256:6a4af8a2eaaf92566027da2ce54ec77b7424bdc365c751873d67141d8bd2b094
+        image: ghcr.io/bonge0115/worker-consumer@sha256:1c9f8b80ef5d8246d7da441721f76cfa216334a6ae12fa6cf554c25129f3ce43
         imagePullPolicy: IfNotPresent
         env:
         - name: KAFKA_BOOTSTRAP
           value: kafka.kafka-poc.svc.cluster.local:9092
         - name: SOURCE_TOPIC
-          value: orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+          value: orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a
         - name: DLQ_TOPIC
           value: orders-dlq
         - name: GROUP_ID
-          value: orders-consumer-sandbox-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+          value: orders-consumer-sandbox-worker-consumer-order-fail-1853-20260403t095326z-d826363a
         - name: SERVICE_NAME
           value: forensic-sandbox-app-worker-consumer-order-fa
         - name: NAMESPACE
@@ -124,7 +124,7 @@ spec:
         - name: DEPLOYMENT_NAME
           value: forensic-sandbox-app-worker-consumer-order-fa
         - name: IMAGE_REF
-          value: ghcr.io/bonge0115/worker-consumer@sha256:6a4af8a2eaaf92566027da2ce54ec77b7424bdc365c751873d67141d8bd2b094
+          value: ghcr.io/bonge0115/worker-consumer@sha256:1c9f8b80ef5d8246d7da441721f76cfa216334a6ae12fa6cf554c25129f3ce43
         - name: CONFIG_VERSION
           value: v1
         - name: DEPENDENCY_PROFILE
@@ -148,9 +148,9 @@ spec:
         - name: RUN_MODE
           value: sandbox
         - name: CASE_ID
-          value: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+          value: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
         - name: RESULT_TOPIC
-          value: orders-result-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+          value: orders-result-worker-consumer-order-fail-1853-20260403t095326z-d826363a
         - name: EMIT_RESULT_EVENT
           value: 'true'
         - name: READY_FILE_PATH
@@ -158,13 +158,13 @@ spec:
         - name: ISOLATION_MODE
           value: sandbox_strict
         - name: ALLOWED_REPLAY_TOPIC
-          value: orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+          value: orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a
         - name: ALLOWED_RESULT_TOPIC
-          value: orders-result-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+          value: orders-result-worker-consumer-order-fail-1853-20260403t095326z-d826363a
         - name: VALIDATION_MODE
           value: fix-verify
         - name: VALIDATION_RUN_ID
-          value: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c-reval-g1
+          value: worker-consumer-order-fail-1853-20260403T095326Z-d826363a-reval-g1
         - name: REVALIDATION_GENERATION
           value: '1'
         - name: EXPECTED_FAILURE_STATUS
@@ -176,9 +176,9 @@ spec:
         - name: FAILURE_ERROR_MESSAGE
           value: intentional failure for POC
         - name: REPLAY_PAYLOAD_HASH
-          value: 24dc614c2af99927a351607b4907903142f87a2508a02ca41da63aaf56f3ca7a
+          value: d826363a77b0f4ab0f99525088e46d5cb35fbc67dd34dbafa15432c2c268c1e7
         - name: REPLAY_ORDER_ID
-          value: order-fail-1535
+          value: order-fail-1853
         - name: NORMAL_PAYLOAD_HASH
           value: ''
         volumeMounts:
@@ -195,40 +195,40 @@ metadata:
   namespace: forensic-sandbox
   labels:
     app: forensic-sandbox-app-worker-consumer-order-fa
-    forensic-case-id: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+    forensic-case-id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
   annotations:
     argocd.argoproj.io/sync-wave: '2'
 data:
-  case_id: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+  case_id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
   requested_by: manual-or-workflow
   source_service: worker-consumer
   source_namespace: kafka-poc
   source_deployment: worker-consumer
   error_type: ValueError
   error_message: intentional failure for POC
-  consumer_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:6a4af8a2eaaf92566027da2ce54ec77b7424bdc365c751873d67141d8bd2b094
+  consumer_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:1c9f8b80ef5d8246d7da441721f76cfa216334a6ae12fa6cf554c25129f3ce43
   deployment_name: forensic-sandbox-app-worker-consumer-order-fa
-  replay_topic: orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
-  result_topic: orders-result-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+  replay_topic: orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a
+  result_topic: orders-result-worker-consumer-order-fail-1853-20260403t095326z-d826363a
   config_version: v1
   dependency_profile: sandbox
-  requested_at: '2026-04-03T06:35:07.492675+00:00'
-  failure_payload_hash: 24dc614c2af99927a351607b4907903142f87a2508a02ca41da63aaf56f3ca7a
+  requested_at: '2026-04-03T09:53:26.636635+00:00'
+  failure_payload_hash: d826363a77b0f4ab0f99525088e46d5cb35fbc67dd34dbafa15432c2c268c1e7
   normal_payload_hash: ''
-  order_id: order-fail-1535
+  order_id: order-fail-1853
   failure_artifact_type: failure_replay
-  failure_artifact_payload_hash: 24dc614c2af99927a351607b4907903142f87a2508a02ca41da63aaf56f3ca7a
+  failure_artifact_payload_hash: d826363a77b0f4ab0f99525088e46d5cb35fbc67dd34dbafa15432c2c268c1e7
   normal_artifact_type: normal_validation
   normal_artifact_payload_hash: ''
   normal_validation_enabled: 'false'
   replay_publish_strategy: launcher_after_sandbox_ready
   isolation_mode: sandbox_strict
-  allowed_replay_topic: orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
-  allowed_result_topic: orders-result-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+  allowed_replay_topic: orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a
+  allowed_result_topic: orders-result-worker-consumer-order-fail-1853-20260403t095326z-d826363a
   mongo_host: mongodb-temp-worker-consumer-order-fa.forensic-sandbox.svc.cluster.local
   expected_failure_status: failed
   expected_normal_status: success
-  candidate_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:6a4af8a2eaaf92566027da2ce54ec77b7424bdc365c751873d67141d8bd2b094
+  candidate_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:1c9f8b80ef5d8246d7da441721f76cfa216334a6ae12fa6cf554c25129f3ce43
   validation_mode: fix-verify
   revalidation_generation: '1'
-  validation_run_id: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c-reval-g1
+  validation_run_id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a-reval-g1

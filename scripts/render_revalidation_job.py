@@ -6,8 +6,9 @@ import json
 import re
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import yaml
 
@@ -289,6 +290,11 @@ def maybe_update_case_record(
     subprocess.run(cmd, check=True)
 
 
+def indent_for_block_scalar(text: str, spaces: int) -> str:
+    prefix = " " * spaces
+    return textwrap.indent(text, prefix)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Render a case-specific revalidation launcher Job manifest from a template."
@@ -348,8 +354,16 @@ def main() -> int:
         output_dir = Path(args.output_dir)
         validation_run_id = args.validation_run_id or deterministic_validation_run_id(args.case_id, args.generation)
 
-        safe_suffix = sanitize_name(args.case_id, max_len=40)
-        job_name = f"forensic-revalidate-{safe_suffix}-g{args.generation}"
+        job_prefix = "forensic-revalidate-"
+        job_suffix = f"-g{args.generation}"
+        max_job_name_len = 63
+        max_suffix_len = max_job_name_len - len(job_prefix) - len(job_suffix)
+
+        if max_suffix_len <= 0:
+            raise ValueError("generation suffix is too long to build a valid Job name")
+
+        safe_suffix = sanitize_name(args.case_id, max_len=max_suffix_len)
+        job_name = f"{job_prefix}{safe_suffix}{job_suffix}"
         output_path = (
             Path(args.output_path)
             if args.output_path
@@ -371,6 +385,10 @@ def main() -> int:
             "synthetic": True,
         }
 
+        failure_json = json.dumps(failure_artifact, ensure_ascii=False, indent=2)
+        normal_json = json.dumps(normal_artifact, ensure_ascii=False, indent=2)
+        ready_json = json.dumps(ready_stub, ensure_ascii=False, indent=2)
+
         mapping = {
             "JOB_NAME": job_name,
             "NAMESPACE": args.namespace,
@@ -387,9 +405,9 @@ def main() -> int:
             "EXPECTED_FAILURE_STATUS": args.expected_failure_status,
             "EXPECTED_NORMAL_STATUS": args.expected_normal_status,
             "LAUNCHER_IMAGE_REF": args.launcher_image_ref,
-            "FAILURE_ARTIFACT_JSON": json.dumps(failure_artifact, ensure_ascii=False, indent=2),
-            "NORMAL_ARTIFACT_JSON": json.dumps(normal_artifact, ensure_ascii=False, indent=2),
-            "READY_FILE_JSON": json.dumps(ready_stub, ensure_ascii=False, indent=2),
+            "FAILURE_ARTIFACT_JSON": indent_for_block_scalar(failure_json, 14),
+            "NORMAL_ARTIFACT_JSON": indent_for_block_scalar(normal_json, 14),
+            "READY_FILE_JSON": indent_for_block_scalar(ready_json, 14),
         }
 
         template = load_text(template_path)

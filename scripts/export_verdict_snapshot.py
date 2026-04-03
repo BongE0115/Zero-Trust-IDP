@@ -39,6 +39,28 @@ def dump_json(path: Path, data: Dict[str, Any]) -> None:
         f.write("\n")
 
 
+def build_default_output_path(
+    *,
+    verdicts_dir: Path,
+    case_id: str,
+    generation: int | None,
+    validation_mode: str,
+) -> Path:
+    mode = (validation_mode or "").strip().lower()
+
+    if mode == "revalidate":
+        if generation is None:
+            raise ValueError("generation is required when validation_mode=revalidate")
+        return verdicts_dir / f"revalidate-{case_id}-g{generation}.json"
+
+    if mode == "reproduce":
+        if generation is None:
+            raise ValueError("generation is required when validation_mode=reproduce")
+        return verdicts_dir / f"reproduce-{case_id}-g{generation}.json"
+
+    return verdicts_dir / f"{case_id}.json"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Export a launcher verdict JSON into a repo-managed verdict snapshot path."
@@ -51,8 +73,21 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Directory containing verdict snapshots (default: {DEFAULT_VERDICTS_DIR})",
     )
     parser.add_argument(
+        "--generation",
+        type=int,
+        help="Optional generation number used when building a default output filename",
+    )
+    parser.add_argument(
+        "--validation-mode",
+        default="",
+        help="Optional validation mode used when building a default output filename "
+             "(e.g. revalidate, reproduce)",
+    )
+    parser.add_argument(
         "--output-path",
-        help="Optional explicit output path. Defaults to <verdicts-dir>/<case-id>.json",
+        help="Optional explicit output path. "
+             "If omitted, defaults are mode-aware, e.g. "
+             "revalidate-<case-id>-g<generation>.json",
     )
     parser.add_argument(
         "--annotate-source-path",
@@ -71,7 +106,17 @@ def main() -> int:
 
         input_path = Path(args.input_verdict)
         verdicts_dir = Path(args.verdicts_dir)
-        output_path = Path(args.output_path) if args.output_path else verdicts_dir / f"{args.case_id}.json"
+
+        output_path = (
+            Path(args.output_path)
+            if args.output_path
+            else build_default_output_path(
+                verdicts_dir=verdicts_dir,
+                case_id=args.case_id,
+                generation=args.generation,
+                validation_mode=args.validation_mode,
+            )
+        )
 
         verdict = load_json(input_path)
 
@@ -85,6 +130,8 @@ def main() -> int:
             verdict["_snapshot"] = {
                 "source_verdict_path": str(input_path),
                 "snapshot_path": str(output_path),
+                "validation_mode": args.validation_mode,
+                "generation": args.generation,
             }
 
         dump_json(output_path, verdict)
@@ -95,6 +142,8 @@ def main() -> int:
                     "case_id": args.case_id,
                     "input_verdict": str(input_path),
                     "output_path": str(output_path),
+                    "validation_mode": args.validation_mode,
+                    "generation": args.generation,
                 },
                 ensure_ascii=False,
                 indent=2,

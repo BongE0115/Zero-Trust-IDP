@@ -1,25 +1,25 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: forensic-reproduce-worker-consumer-order-fail-1-d8226e03
+  name: forensic-reproduce-worker-consumer-order-fail-1-aff23df6
   namespace: forensic-sandbox
   labels:
-    app: forensic-reproduce-worker-consumer-order-fail-1-d8226e03
-    forensic-case-id: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+    app: forensic-reproduce-worker-consumer-order-fail-1-aff23df6
+    forensic-case-id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
     forensic-validation-mode: reproduce
     forensic-revalidation-generation: "0"
-    forensic-job-hash: "d8226e03"
+    forensic-job-hash: "aff23df6"
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 86400
   template:
     metadata:
       labels:
-        app: forensic-reproduce-worker-consumer-order-fail-1-d8226e03
-        forensic-case-id: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+        app: forensic-reproduce-worker-consumer-order-fail-1-aff23df6
+        forensic-case-id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
         forensic-validation-mode: reproduce
         forensic-revalidation-generation: "0"
-        forensic-job-hash: "d8226e03"
+        forensic-job-hash: "aff23df6"
     spec:
       restartPolicy: Never
       initContainers:
@@ -31,9 +31,9 @@ spec:
             - -c
             - |
               mkdir -p /artifacts
-              printf '%s' '{"artifact_type": "failure_replay", "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c", "target_topic": "orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c", "payload_hash": "24dc614c2af99927a351607b4907903142f87a2508a02ca41da63aaf56f3ca7a", "created_at": "2026-04-03T06:35:07.492207+00:00", "source_service": "worker-consumer", "payload": {"order_id": "order-fail-1535", "should_fail": true, "payload": {"item": "book", "qty": 1}}}' > /artifacts/failure.json
-              printf '%s' '{"artifact_type": "normal_validation", "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c", "target_topic": "orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c", "payload_hash": "", "created_at": "2026-04-03T06:35:07.492515+00:00", "enabled": false, "source_service": "worker-consumer", "payload": {}}' > /artifacts/normal.json
-              printf '%s' '{"ready": true, "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c", "source_topic": "orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c", "source": "workflow_wait"}' > /artifacts/consumer-ready.json
+              printf '%s' '{"artifact_type": "failure_replay", "case_id": "worker-consumer-order-fail-1853-20260403T095326Z-d826363a", "target_topic": "orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a", "payload_hash": "d826363a77b0f4ab0f99525088e46d5cb35fbc67dd34dbafa15432c2c268c1e7", "created_at": "2026-04-03T09:53:26.633754+00:00", "source_service": "worker-consumer", "payload": {"order_id": "order-fail-1853", "should_fail": true, "payload": {"item": "book", "qty": 1}}}' > /artifacts/failure.json
+              printf '%s' '{"artifact_type": "normal_validation", "case_id": "worker-consumer-order-fail-1853-20260403T095326Z-d826363a", "target_topic": "orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a", "payload_hash": "", "created_at": "2026-04-03T09:53:26.636342+00:00", "enabled": false, "source_service": "worker-consumer", "payload": {}}' > /artifacts/normal.json
+              printf '%s' '{"ready": true, "case_id": "worker-consumer-order-fail-1853-20260403T095326Z-d826363a", "source_topic": "orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a", "source": "workflow_wait"}' > /artifacts/consumer-ready.json
           volumeMounts:
             - name: artifacts
               mountPath: /artifacts
@@ -45,11 +45,11 @@ spec:
             - name: KAFKA_BOOTSTRAP
               value: kafka.kafka-poc.svc.cluster.local:9092
             - name: CASE_ID
-              value: worker-consumer-order-fail-1535-20260403T063507Z-24dc614c
+              value: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
             - name: REPLAY_TOPIC
-              value: orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+              value: orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a
             - name: RESULT_TOPIC
-              value: orders-result-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+              value: orders-result-worker-consumer-order-fail-1853-20260403t095326z-d826363a
             - name: RESULT_GROUP_ID
               value: forensic-launcher-reproduce
             - name: FAILURE_ARTIFACT_PATH
@@ -73,13 +73,13 @@ spec:
             - name: ISOLATION_MODE
               value: sandbox_strict
             - name: ALLOWED_REPLAY_TOPIC
-              value: orders-replay-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+              value: orders-replay-worker-consumer-order-fail-1853-20260403t095326z-d826363a
             - name: ALLOWED_RESULT_TOPIC
-              value: orders-result-worker-consumer-order-fail-1535-20260403t063507z-24dc614c
+              value: orders-result-worker-consumer-order-fail-1853-20260403t095326z-d826363a
             - name: VALIDATION_MODE
               value: reproduce
             - name: VALIDATION_RUN_ID
-              value: reproduce-worker-consumer-order-fail-1535-20260403T063507Z-24dc614c-0
+              value: reproduce-worker-consumer-order-fail-1853-20260403T095326Z-d826363a-0
             - name: REVALIDATION_GENERATION
               value: "0"
             - name: EXPECTED_FAILURE_STATUS

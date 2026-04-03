@@ -38,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--case-id", required=True)
     parser.add_argument("--verdict-path", required=True)
     parser.add_argument(
+        "--generation",
+        type=int,
+        help="Optional explicit revalidation generation. "
+             "If omitted, falls back to verdict.revalidation_generation.",
+    )
+    parser.add_argument(
         "--records-dir",
         default=str(DEFAULT_RECORDS_DIR),
         help=f"Directory containing case records (default: {DEFAULT_RECORDS_DIR})",
@@ -74,7 +80,11 @@ def main() -> int:
 
         overall_passed = verdict.get("overall_passed") is True
         validation_run_id = verdict.get("validation_run_id", "")
-        revalidation_generation = int(verdict.get("revalidation_generation", 0))
+        revalidation_generation = (
+            int(args.generation)
+            if args.generation is not None
+            else int(verdict.get("revalidation_generation", 0))
+        )
         validation_mode = verdict.get("validation_mode", "")
         launcher_image_ref = verdict.get("launcher_image_ref", "")
 
@@ -83,6 +93,7 @@ def main() -> int:
             "last_revalidation_overall_passed": overall_passed,
             "last_revalidation_mode": validation_mode,
             "last_revalidation_launcher_image_ref": launcher_image_ref,
+            "last_revalidation_generation": revalidation_generation,
         }
 
         common_args = [
@@ -102,7 +113,6 @@ def main() -> int:
         ]
 
         if overall_passed:
-            # revalidation 성공 -> verified image = candidate image
             run_update_case_record(
                 common_args
                 + [
@@ -125,6 +135,7 @@ def main() -> int:
         else:
             error_info = verdict.get("error", {})
             metadata_patch["last_revalidation_error"] = error_info
+
             run_update_case_record(
                 [
                     "--records-dir",
