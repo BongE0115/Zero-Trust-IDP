@@ -2,9 +2,9 @@
   "case_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
-  "status": "promoted",
+  "status": "redriven",
   "created_at": "2026-04-03T13:39:00Z",
-  "updated_at": "2026-04-03T18:39:55Z",
+  "updated_at": "2026-04-03T18:40:09Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:6976091",
   "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:32a7b52668987dd51badb260c267a1058468b97f9e3c10e6cd692b35df68412a",
   "verified_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:32a7b52668987dd51badb260c267a1058468b97f9e3c10e6cd692b35df68412a",
@@ -13,11 +13,11 @@
   "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-order-fail-2233-20260403t133847z.yaml",
   "revalidation_generation": 17,
   "validation_run_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g17",
-  "redrive_count": 0,
+  "redrive_count": 1,
   "flags": {
     "revalidation_passed": true,
     "promoted": true,
-    "redriven": false,
+    "redriven": true,
     "resolved": false,
     "cleanup_completed": false,
     "reproduce_verdict_collected": true,
@@ -50,7 +50,12 @@
     "forced_revalidation_pass_source": "revalidate-sandbox.yaml",
     "forced_revalidation_pass_generation": "17",
     "failure_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-order-fail-2233-20260403T133847Z-4c057332/failure.json",
-    "normal_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-order-fail-2233-20260403T133847Z-4c057332/normal.json"
+    "normal_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-order-fail-2233-20260403T133847Z-4c057332/normal.json",
+    "last_redrive_target_topic": "orders",
+    "last_redrive_dlq_topic": "orders-dlq",
+    "last_redrive_bypassed": true,
+    "last_redrive_bypass_reason": "workflow shortcut",
+    "redrive_job_namespace": "forensic-sandbox"
   },
   "history": [
     {
@@ -1040,6 +1045,16 @@
       "extra": {
         "from_status": "revalidation_passed",
         "to_status": "promoted"
+      }
+    },
+    {
+      "at": "2026-04-03T18:40:09Z",
+      "action": "update",
+      "status": "redriven",
+      "note": "redrive executed automatically after promotion",
+      "extra": {
+        "from_status": "promoted",
+        "to_status": "redriven"
       }
     }
   ]
