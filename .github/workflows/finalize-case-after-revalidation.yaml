@@ -1,4 +1,4 @@
-name: promote-case-image
+name: finalize-case-after-revalidation
 
 on:
   workflow_dispatch:
@@ -27,10 +27,15 @@ on:
         required: false
         default: "kafka-poc"
         type: string
-      note:
-        description: "Optional note"
+      promote_note:
+        description: "Optional note for promotion"
         required: false
-        default: "verified image promoted by workflow"
+        default: "verified image promoted automatically after revalidation"
+        type: string
+      cleanup_note:
+        description: "Optional note for cleanup"
+        required: false
+        default: "cleanup completed automatically after promotion"
         type: string
 
 permissions:
@@ -45,6 +50,9 @@ jobs:
     outputs:
       verified_image_ref: ${{ steps.record.outputs.verified_image_ref }}
       branch_name: ${{ steps.record.outputs.branch_name }}
+      sandbox_manifest_path: ${{ steps.record.outputs.sandbox_manifest_path }}
+      revalidation_manifest_path: ${{ steps.record.outputs.revalidation_manifest_path }}
+      cleanup_eligible: ${{ steps.record.outputs.cleanup_eligible }}
     steps:
       - name: Validate inputs
         shell: bash
@@ -62,7 +70,7 @@ jobs:
           ref: ${{ env.RECORD_BRANCH }}
           fetch-depth: 0
 
-      - name: Read verified image from jy case record
+      - name: Read verified image and cleanup eligibility from jy case record
         id: record
         shell: bash
         run: |
@@ -70,6 +78,7 @@ jobs:
 
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           case_id = "${{ inputs.case_id }}"
@@ -79,6 +88,8 @@ jobs:
 
           data = json.loads(path.read_text(encoding="utf-8"))
           flags = data.get("flags", {})
+          metadata = data.get("metadata", {})
+
           verified = data.get("verified_image_ref")
           branch_name = data.get("branch_name") or f"case/{case_id}"
 
@@ -87,10 +98,29 @@ jobs:
           if not verified:
               raise SystemExit("verified_image_ref is empty in jy case record")
 
-          out = Path("${GITHUB_OUTPUT}")
+          promoted = flags.get("promoted") is True
+          cleanup_completed = flags.get("cleanup_completed") is True
+          redriven = flags.get("redriven") is True
+          closed_without_redrive = metadata.get("closed_without_redrive") is True
+
+          sandbox_manifest_path = data.get("sandbox_manifest_path") or ""
+          revalidation_manifest_path = (
+              metadata.get("revalidation_job_manifest_path")
+              or f"gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-{case_id}.yaml"
+          )
+
+          cleanup_eligible = (
+              (not cleanup_completed)
+              and (redriven or closed_without_redrive)
+          )
+
+          out = Path(os.environ["GITHUB_OUTPUT"])
           with out.open("a", encoding="utf-8") as f:
               f.write(f"verified_image_ref={verified}\n")
               f.write(f"branch_name={branch_name}\n")
+              f.write(f"sandbox_manifest_path={sandbox_manifest_path}\n")
+              f.write(f"revalidation_manifest_path={revalidation_manifest_path}\n")
+              f.write(f"cleanup_eligible={'true' if cleanup_eligible else 'false'}\n")
           PY
 
   promote-production-manifest:
@@ -141,7 +171,7 @@ jobs:
           set -euo pipefail
           git push origin "HEAD:${{ inputs.production_branch }}"
 
-  update-case-record:
+  update-case-record-promoted:
     needs:
       - read-case-record
       - promote-production-manifest
@@ -169,7 +199,7 @@ jobs:
             --status "promoted" \
             --promoted-image-ref "${{ needs.read-case-record.outputs.verified_image_ref }}" \
             --flags-json '{"promoted": true}' \
-            --note "${{ inputs.note }}"
+            --note "${{ inputs.promote_note }}"
 
       - name: Commit jy case record update
         shell: bash
@@ -190,3 +220,91 @@ jobs:
         run: |
           set -euo pipefail
           git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+
+  cleanup-case-sandbox:
+    needs:
+      - read-case-record
+      - update-case-record-promoted
+    if: ${{ needs.read-case-record.outputs.cleanup_eligible == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout jy record branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RECORD_BRANCH }}
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Remove case manifests if present on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SANDBOX="${{ needs.read-case-record.outputs.sandbox_manifest_path }}"
+          REVAL="${{ needs.read-case-record.outputs.revalidation_manifest_path }}"
+
+          if [[ -n "$SANDBOX" && -f "$SANDBOX" ]]; then
+            git rm -f "$SANDBOX"
+          else
+            echo "Sandbox manifest already absent or not set"
+          fi
+
+          if [[ -n "$REVAL" && -f "$REVAL" ]]; then
+            git rm -f "$REVAL"
+          else
+            echo "Revalidation manifest already absent or not set"
+          fi
+
+      - name: Update jy case record as cleanup completed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 scripts/update_case_record.py update \
+            --case-id "${{ inputs.case_id }}" \
+            --status "cleanup_completed" \
+            --flags-json '{"cleanup_completed": true, "resolved": true}' \
+            --metadata-json '{"cleanup_manifest_deleted": true}' \
+            --note "${{ inputs.cleanup_note }}"
+
+      - name: Commit cleanup changes on jy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
+
+          if git diff --cached --quiet; then
+            echo "No cleanup changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(case): cleanup sandbox for ${{ inputs.case_id }}"
+
+      - name: Push jy updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:${{ env.RECORD_BRANCH }}"
+
+  summary:
+    needs:
+      - read-case-record
+      - promote-production-manifest
+      - update-case-record-promoted
+      - cleanup-case-sandbox
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "case_id=${{ inputs.case_id }}"
+          echo "verified_image_ref=${{ needs.read-case-record.outputs.verified_image_ref }}"
+          echo "cleanup_eligible=${{ needs.read-case-record.outputs.cleanup_eligible }}"
