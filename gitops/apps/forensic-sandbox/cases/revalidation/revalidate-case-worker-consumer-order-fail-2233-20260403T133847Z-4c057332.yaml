@@ -1,14 +1,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: forensic-revalidate-worker-consumer-order-fail-2233-20260403-g7
+  name: forensic-revalidate-worker-consumer-order-fail-2233-20260403-g8
   namespace: forensic-sandbox
   labels:
     app.kubernetes.io/name: forensic-revalidation
     app.kubernetes.io/component: launcher
     forensic-case-id: worker-consumer-order-fail-2233-20260403T133847Z-4c057332
     forensic-validation-mode: fix-verify
-    forensic-revalidation-generation: "7"
+    forensic-revalidation-generation: "8"
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 86400
@@ -19,7 +19,7 @@ spec:
         app.kubernetes.io/component: launcher
         forensic-case-id: worker-consumer-order-fail-2233-20260403T133847Z-4c057332
         forensic-validation-mode: fix-verify
-        forensic-revalidation-generation: "7"
+        forensic-revalidation-generation: "8"
     spec:
       restartPolicy: Never
       initContainers:
@@ -35,7 +35,7 @@ spec:
                             {
                 "artifact_type": "failure_replay",
                 "case_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
-                "target_topic": "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g7",
+                "target_topic": "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g8",
                 "payload_hash": "4c057332183b8add7fc51e1c1116d2bc29882bf7941a0c020fe83d5f9e57c5c1",
                 "created_at": "2026-04-03T13:38:47.843238+00:00",
                 "source_service": "worker-consumer",
@@ -53,7 +53,7 @@ spec:
                             {
                 "artifact_type": "normal_validation",
                 "case_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
-                "target_topic": "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g7",
+                "target_topic": "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g8",
                 "payload_hash": "",
                 "created_at": "2026-04-03T13:38:47.843835+00:00",
                 "enabled": true,
@@ -64,16 +64,16 @@ spec:
               cat > /artifacts/consumer-ready.json <<'EOF'
                             {
                 "case_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
-                "source_topic": "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g7",
+                "source_topic": "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g8",
                 "group_id": "forensic-revalidate-ready-worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
                 "service": "worker-consumer",
                 "namespace": "forensic-sandbox",
                 "deployment": "sandbox-consumer-rollout",
-                "image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:6479ff0c1103ea6f9541eece4d5a1fcace53e70a73eff798f5a6d4a5d33dbed1",
+                "image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:6d7c850ce0cbd99c986894e3148a09e597b1248bda0d6926a986a436089459ca",
                 "ready_at": "1970-01-01T00:00:00Z",
                 "validation_mode": "fix-verify",
-                "validation_run_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g7",
-                "revalidation_generation": 7,
+                "validation_run_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g8",
+                "revalidation_generation": 8,
                 "synthetic": true
               }
               EOF
@@ -91,16 +91,16 @@ spec:
             - name: VALIDATION_MODE
               value: "fix-verify"
             - name: VALIDATION_RUN_ID
-              value: "worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g7"
+              value: "worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g8"
             - name: REVALIDATION_GENERATION
-              value: "7"
+              value: "8"
 
             - name: KAFKA_BOOTSTRAP
               value: "kafka.kafka-poc.svc.cluster.local:9092"
             - name: REPLAY_TOPIC
-              value: "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g7"
+              value: "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g8"
             - name: RESULT_TOPIC
-              value: "orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g7"
+              value: "orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g8"
             - name: RESULT_GROUP_ID
               value: "forensic-launcher-revalidation"
 
@@ -131,9 +131,9 @@ spec:
             - name: ISOLATION_MODE
               value: "sandbox_strict"
             - name: ALLOWED_REPLAY_TOPIC
-              value: "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g7"
+              value: "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g8"
             - name: ALLOWED_RESULT_TOPIC
-              value: "orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g7"
+              value: "orders-result-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g8"
 
             - name: IMAGE_REF
               value: "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc"
