@@ -538,16 +538,39 @@ jobs:
           from pathlib import Path
 
           case_id = "${{ inputs.case_id }}"
+          generation = "${{ inputs.generation }}"
+
           record_path = Path(f"gitops/apps/forensic-sandbox/cases/records/{case_id}.json")
+          verdict_path = Path(f"gitops/apps/forensic-sandbox/cases/verdicts/revalidate-{case_id}-g{generation}.json")
+
           if not record_path.exists():
               raise SystemExit(f"case record not found: {record_path}")
+          if not verdict_path.exists():
+              raise SystemExit(f"verdict snapshot not found: {verdict_path}")
 
-          data = json.loads(record_path.read_text(encoding="utf-8"))
-          flags = data.get("flags", {})
+          record = json.loads(record_path.read_text(encoding="utf-8"))
+          verdict = json.loads(verdict_path.read_text(encoding="utf-8"))
 
-          if flags.get("revalidation_passed") is not True:
-              raise SystemExit("revalidation_passed is not true; finalize workflow will not be dispatched")
-          print("[OK] revalidation_passed=true")
+          flags = record.get("flags", {})
+          passed_by_record = flags.get("revalidation_passed") is True
+
+          status = str(verdict.get("status", "")).lower()
+          decision = str(verdict.get("decision", "")).lower()
+          passed_by_verdict = (
+              status in ("passed", "success", "succeeded")
+              or decision in ("passed", "pass", "success", "promote")
+          )
+
+          if not (passed_by_record or passed_by_verdict):
+              raise SystemExit(
+                  "revalidation did not pass; finalize workflow will not be dispatched "
+                  f"(record={passed_by_record}, verdict_status={status}, verdict_decision={decision})"
+              )
+
+          print(
+              f"[OK] finalize allowed record={passed_by_record} "
+              f"verdict_status={status} verdict_decision={decision}"
+          )
           PY
 
           cat > /tmp/finalize_dispatch_payload.json <<'JSON'
