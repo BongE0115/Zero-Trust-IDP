@@ -1,0 +1,63 @@
+{
+  "case_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
+  "validation_mode": "fix-verify",
+  "validation_run_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g13",
+  "revalidation_generation": 13,
+  "launcher_image_ref": "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc",
+  "failure_replay": {
+    "passed": true,
+    "result": {
+      "event_type": "sandbox_result",
+      "case_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
+      "phase": "failure_replay",
+      "status": "success",
+      "payload_hash": "4c057332183b8add7fc51e1c1116d2bc29882bf7941a0c020fe83d5f9e57c5c1",
+      "order_id": "order-fail-2233",
+      "source_topic": "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g13",
+      "service": "forensic-sandbox-app-worker-consumer-order-fa",
+      "namespace": "forensic-sandbox",
+      "deployment": "forensic-sandbox-app-worker-consumer-order-fa",
+      "image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:416b412e18df6175b88b0bcc48d30c0c93fe24360299d89ef9d3fe34adc278bf",
+      "processed_at": "2026-04-03T17:14:39.960394+00:00",
+      "validation_mode": "fix-verify",
+      "validation_run_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g13",
+      "revalidation_generation": 13,
+      "expected_failure_status": "success",
+      "expected_normal_status": "success",
+      "observed_error_type": "",
+      "observed_error_message": ""
+    }
+  },
+  "normal_validation": {
+    "enabled": true,
+    "passed": true,
+    "result": {
+      "event_type": "sandbox_result",
+      "case_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332",
+      "phase": "normal_validation",
+      "status": "success",
+      "payload_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "order_id": "",
+      "source_topic": "orders-replay-worker-consumer-order-fail-2233-20260403t133847z-4c057332-g13",
+      "service": "forensic-sandbox-app-worker-consumer-order-fa",
+      "namespace": "forensic-sandbox",
+      "deployment": "forensic-sandbox-app-worker-consumer-order-fa",
+      "image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:416b412e18df6175b88b0bcc48d30c0c93fe24360299d89ef9d3fe34adc278bf",
+      "processed_at": "2026-04-03T17:14:45.477902+00:00",
+      "validation_mode": "fix-verify",
+      "validation_run_id": "worker-consumer-order-fail-2233-20260403T133847Z-4c057332-reval-g13",
+      "revalidation_generation": 13,
+      "expected_failure_status": "success",
+      "expected_normal_status": "success",
+      "observed_error_type": "",
+      "observed_error_message": ""
+    }
+  },
+  "overall_passed": true,
+  "_snapshot": {
+    "source_verdict_path": "/tmp/revalidation-verdict/verdict.json",
+    "snapshot_path": "gitops/apps/forensic-sandbox/cases/verdicts/revalidate-worker-consumer-order-fail-2233-20260403T133847Z-4c057332-g13.json",
+    "validation_mode": "revalidate",
+    "generation": 13
+  }
+}
