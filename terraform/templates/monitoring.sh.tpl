@@ -9,6 +9,7 @@ MASTER_PRIVATE_IP="${k3s_server_private_ip}"
 WORKER_PRIVATE_IP="${k3s_agent_private_ip}"
 GITOPS_REPO_URL="${gitops_repo_url}"
 GITOPS_TARGET_REVISION="${gitops_target_revision}"
+TAILSCALE_AUTH_KEY="${tailscale_auth_key}"
 
 ENABLE_MONITORING_GITHUB_RUNNER="${enable_monitoring_github_runner}"
 GITHUB_RUNNER_SCOPE="${github_runner_scope}"
@@ -25,6 +26,24 @@ apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   curl unzip gnupg lsb-release apt-transport-https ca-certificates \
   software-properties-common jq awscli
+
+
+# ---------------------------------------------------------
+# 1.5 Tailscale 설치 및 연결
+# ---------------------------------------------------------
+if ! command -v tailscale >/dev/null 2>&1; then
+  curl -fsSL https://tailscale.com/install.sh | sh
+fi
+
+systemctl enable tailscaled
+systemctl restart tailscaled
+
+if [[ -n "${TAILSCALE_AUTH_KEY:-}" ]]; then
+  tailscale up --authkey "${TAILSCALE_AUTH_KEY}" --ssh
+else
+  echo "[WARN] TAILSCALE_AUTH_KEY is empty, skipping tailscale up"
+fi
+
 
 # ---------------------------------------------------------
 # 2. kubectl 설치

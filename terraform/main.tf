@@ -904,6 +904,8 @@ data "cloudinit_config" "monitoring_config" {
       github_runner_labels_csv             = join(",", var.github_runner_labels)
       github_runner_version                = var.github_runner_version
       github_runner_token_ssm_parameter    = var.github_runner_token_ssm_parameter_name
+
+      tailscale_auth_key = var.tailscale_auth_key
     })
   }
 }
