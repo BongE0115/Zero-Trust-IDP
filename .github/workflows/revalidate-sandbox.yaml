@@ -169,6 +169,37 @@ jobs:
             --update-record \
             --note "${{ inputs.note }}"
 
+      - name: Verify rendered revalidation manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          MANIFEST="gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-${{ inputs.case_id }}.yaml"
+
+          if [[ ! -f "$MANIFEST" ]]; then
+            echo "[ERROR] rendered manifest not found: $MANIFEST"
+            exit 1
+          fi
+
+          echo "[INFO] rendered manifest path: $MANIFEST"
+          sed -n '1,220p' "$MANIFEST"
+
+          grep -q "forensic-case-id: ${{ inputs.case_id }}" "$MANIFEST" || {
+            echo "[ERROR] missing forensic-case-id label in rendered manifest"
+            exit 1
+          }
+
+          grep -q "forensic-validation-mode: fix-verify" "$MANIFEST" || {
+            echo "[ERROR] missing fix-verify label in rendered manifest"
+            exit 1
+          }
+
+          grep -q "forensic-revalidation-generation: \"${{ steps.record.outputs.next_generation }}\"" "$MANIFEST" || \
+          grep -q "forensic-revalidation-generation: ${{ steps.record.outputs.next_generation }}" "$MANIFEST" || {
+            echo "[ERROR] missing generation label in rendered manifest"
+            exit 1
+          }
+
       - name: Force-sync record generation after render
         shell: bash
         env:
@@ -233,8 +264,9 @@ jobs:
           git add "gitops/apps/forensic-sandbox/cases/records/${{ inputs.case_id }}.json"
 
           if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
+            echo "[ERROR] no changes to commit for revalidation manifest or case record"
+            echo "[ERROR] render step likely did not update the manifest as expected"
+            exit 1
           fi
 
           git commit -m "chore(case): request revalidation for ${{ inputs.case_id }}"
