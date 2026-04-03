@@ -89,7 +89,6 @@ jobs:
         env:
           CASE_ID: ${{ inputs.case_id }}
           INPUT_REF: ${{ inputs.launcher_image_ref }}
-          DEFAULT_REF: ${{ env.DEFAULT_LAUNCHER_IMAGE_REF }}
         run: |
           set -euo pipefail
 
@@ -97,7 +96,6 @@ jobs:
 
           if [[ -z "$RESOLVED_REF" ]]; then
             REPRO_MANIFEST="gitops/apps/forensic-sandbox/cases/reproduce/reproduce-case-${CASE_ID}.yaml"
-
             if [[ -f "$REPRO_MANIFEST" ]]; then
               RESOLVED_REF="$(
                 python3 -c 'import re, sys; from pathlib import Path; text = Path(sys.argv[1]).read_text(encoding="utf-8"); m = re.search(r"-\s*name:\s*forensic-launcher\s+image:\s*(\S+)", text, re.MULTILINE); print(m.group(1).strip().strip("\"").strip("'"'"'") if m else "")' "$REPRO_MANIFEST"
@@ -107,7 +105,6 @@ jobs:
 
           if [[ -z "$RESOLVED_REF" ]]; then
             RECORD_PATH="gitops/apps/forensic-sandbox/cases/records/${CASE_ID}.json"
-
             if [[ -f "$RECORD_PATH" ]]; then
               RESOLVED_REF="$(
                 python3 -c 'import json, sys; from pathlib import Path; data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")); print(data.get("metadata", {}).get("last_requested_launcher_image_ref", ""))' "$RECORD_PATH"
@@ -116,8 +113,13 @@ jobs:
           fi
 
           if [[ -z "$RESOLVED_REF" ]]; then
-            RESOLVED_REF="$DEFAULT_REF"
-            echo "[WARN] launcher image not found from input/reproduce manifest/record, fallback to latest"
+            echo "[ERROR] launcher image ref not found; digest-pinned launcher image is required"
+            exit 1
+          fi
+
+          if [[ ! "$RESOLVED_REF" =~ ^.+@sha256:[a-f0-9]{64}$ ]]; then
+            echo "[ERROR] launcher image ref must be digest-pinned: $RESOLVED_REF"
+            exit 1
           fi
 
           echo "launcher_image_ref=$RESOLVED_REF" >> "$GITHUB_OUTPUT"
