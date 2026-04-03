@@ -1,14 +1,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: forensic-revalidate-worker-consumer-order-fail-1853-20260403-g7
+  name: forensic-revalidate-worker-consumer-order-fail-1853-20260403-g8
   namespace: forensic-sandbox
   labels:
     app.kubernetes.io/name: forensic-revalidation
     app.kubernetes.io/component: launcher
     forensic-case-id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
     forensic-validation-mode: fix-verify
-    forensic-revalidation-generation: "7"
+    forensic-revalidation-generation: "8"
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 86400
@@ -19,7 +19,7 @@ spec:
         app.kubernetes.io/component: launcher
         forensic-case-id: worker-consumer-order-fail-1853-20260403T095326Z-d826363a
         forensic-validation-mode: fix-verify
-        forensic-revalidation-generation: "7"
+        forensic-revalidation-generation: "8"
     spec:
       restartPolicy: Never
       initContainers:
@@ -69,11 +69,11 @@ spec:
                 "service": "worker-consumer",
                 "namespace": "forensic-sandbox",
                 "deployment": "sandbox-consumer-rollout",
-                "image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:2cae708e1e8e2971fbee257c796625d61543826b1a064074bf5d09daf4af1c0d",
+                "image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:8954e833d8dd4d757ac53adf2a86beae8fc16ca5489b6c1b2f57579c242fe613",
                 "ready_at": "1970-01-01T00:00:00Z",
                 "validation_mode": "fix-verify",
-                "validation_run_id": "worker-consumer-order-fail-1853-20260403T095326Z-d826363a-reval-g7",
-                "revalidation_generation": 7,
+                "validation_run_id": "worker-consumer-order-fail-1853-20260403T095326Z-d826363a-reval-g8",
+                "revalidation_generation": 8,
                 "synthetic": true
               }
               EOF
@@ -91,9 +91,9 @@ spec:
             - name: VALIDATION_MODE
               value: "fix-verify"
             - name: VALIDATION_RUN_ID
-              value: "worker-consumer-order-fail-1853-20260403T095326Z-d826363a-reval-g7"
+              value: "worker-consumer-order-fail-1853-20260403T095326Z-d826363a-reval-g8"
             - name: REVALIDATION_GENERATION
-              value: "7"
+              value: "8"
 
             - name: KAFKA_BOOTSTRAP
               value: "kafka.kafka-poc.svc.cluster.local:9092"
