@@ -54,6 +54,12 @@ spec:
                 Name    grep
                 Match   kube.*
                 Exclude $kubernetes['namespace_name'] ^(logging|kafka-poc|kube-system|argocd|istio-system|forensic-sandbox)$
+
+            [FILTER]
+                Name    grep
+                Match   kube.*
+                # 대소문자 구분 없이 error, exception, fail 단어가 포함된 로그만 잡습니다.
+                Regex   log .*([Ee][Rr][Rr][Oo][Rr]|[Ee][Xx][Cc][Ee][Pp][Tt][Ii][Oo][Nn]|[Ff][Aa][Ii][Ll]).*
         
           outputs: |
             [OUTPUT]
