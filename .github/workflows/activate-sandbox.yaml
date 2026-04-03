@@ -41,14 +41,14 @@ jobs:
       - name: Refresh jy before any local changes
         shell: bash
         run: |
-          set -eu
+          set -euo pipefail
           git fetch origin "${{ env.RECORD_BRANCH }}"
           git reset --hard "origin/${{ env.RECORD_BRANCH }}"
 
       - name: Prepare sandbox inputs
         shell: bash
         run: |
-          set -eu
+          set -euo pipefail
           mkdir -p /tmp/sandbox-spec
           printf '%s' '${{ inputs.spec_json }}' > "${SPEC_PATH}"
           printf '%s' '${{ inputs.failure_artifact_json }}' > "${FAILURE_ARTIFACT_PATH}"
@@ -162,7 +162,7 @@ jobs:
       - name: Create or refresh case record on jy
         shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
           CASE_ID="${{ steps.case_meta.outputs.case_id }}"
           RECORD_PATH="${{ steps.case_meta.outputs.record_path }}"
@@ -196,7 +196,7 @@ jobs:
       - name: Commit generated case manifest and record
         shell: bash
         run: |
-          set -eu
+          set -euo pipefail
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
 
@@ -208,7 +208,7 @@ jobs:
       - name: Push manifest and record changes
         shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
           BRANCH="${{ env.RECORD_BRANCH }}"
 
@@ -234,75 +234,6 @@ jobs:
           echo "[ERROR] failed to push after multiple attempts"
           exit 1
 
-
-      - name: Wait for forensic-sandbox-cases revision to be observed by Argo CD
-              shell: bash
-              run: |
-                set -euo pipefail
-
-                APP="forensic-sandbox-cases"
-                NS="argocd"
-                TARGET_REV="$(git rev-parse HEAD)"
-
-                echo "[INFO] waiting for Argo app ${APP} to observe revision ${TARGET_REV}"
-
-                observed="false"
-                for i in $(seq 1 36); do
-                  current_rev="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.sync.revision}' 2>/dev/null || true)"
-                  sync_status="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
-                  health_status="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
-
-                  echo "[INFO] attempt=${i} revision=${current_rev:-<none>} sync=${sync_status:-<none>} health=${health_status:-<none>}"
-
-                  if [[ "${current_rev:-}" == "$TARGET_REV" ]]; then
-                    observed="true"
-                    echo "[INFO] Argo observed latest revision"
-                    break
-                  fi
-
-                  sleep 10
-                done
-
-                if [[ "$observed" != "true" ]]; then
-                  echo "[ERROR] Argo did not observe latest revision in time"
-                  kubectl get application "$APP" -n "$NS" -o wide || true
-                  kubectl describe application "$APP" -n "$NS" || true
-                  kubectl get events -n "$NS" --sort-by=.lastTimestamp | tail -n 50 || true
-                  exit 1
-                fi
-
-            - name: Wait for forensic-sandbox-cases app to sync
-              shell: bash
-              run: |
-                set -euo pipefail
-
-                APP="forensic-sandbox-cases"
-                NS="argocd"
-
-                synced="false"
-                for i in $(seq 1 30); do
-                  sync_status="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
-                  health_status="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
-
-                  echo "[INFO] attempt=${i} sync=${sync_status:-<none>} health=${health_status:-<none>}"
-
-                  if [[ "${sync_status:-}" == "Synced" ]]; then
-                    synced="true"
-                    echo "[INFO] Argo app is synced"
-                    break
-                  fi
-
-                  sleep 10
-                done
-
-                if [[ "$synced" != "true" ]]; then
-                  echo "[ERROR] forensic-sandbox-cases app did not become Synced in time"
-                  kubectl get application "$APP" -n "$NS" -o wide || true
-                  kubectl describe application "$APP" -n "$NS" || true
-                  kubectl get events -n "$NS" --sort-by=.lastTimestamp | tail -n 50 || true
-                  exit 1
-                fi
-
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
         with:
@@ -313,7 +244,7 @@ jobs:
         env:
           KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
         run: |
-          set -eu
+          set -euo pipefail
           mkdir -p "${HOME}/.kube"
 
           if [[ -z "${KUBECONFIG_B64_VALUE:-}" ]]; then
@@ -330,7 +261,7 @@ jobs:
       - name: Verify cluster access
         shell: bash
         run: |
-          set -eu
+          set -euo pipefail
           echo "[INFO] current-context:"
           kubectl config current-context
           echo "[INFO] namespaces:"
@@ -338,10 +269,79 @@ jobs:
           echo "[INFO] forensic-sandbox namespace check:"
           kubectl get ns forensic-sandbox
 
+      - name: Wait for forensic-sandbox-cases revision to be observed by Argo CD
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP="forensic-sandbox-cases"
+          NS="argocd"
+          TARGET_REV="$(git rev-parse HEAD)"
+
+          echo "[INFO] waiting for Argo app ${APP} to observe revision ${TARGET_REV}"
+
+          observed="false"
+          for i in $(seq 1 36); do
+            current_rev="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.sync.revision}' 2>/dev/null || true)"
+            sync_status="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
+            health_status="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
+
+            echo "[INFO] attempt=${i} revision=${current_rev:-<none>} sync=${sync_status:-<none>} health=${health_status:-<none>}"
+
+            if [[ "${current_rev:-}" == "$TARGET_REV" ]]; then
+              observed="true"
+              echo "[INFO] Argo observed latest revision"
+              break
+            fi
+
+            sleep 10
+          done
+
+          if [[ "$observed" != "true" ]]; then
+            echo "[ERROR] Argo did not observe latest revision in time"
+            kubectl get application "$APP" -n "$NS" -o wide || true
+            kubectl describe application "$APP" -n "$NS" || true
+            kubectl get events -n "$NS" --sort-by=.lastTimestamp | tail -n 50 || true
+            exit 1
+          fi
+
+      - name: Wait for forensic-sandbox-cases app to sync
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP="forensic-sandbox-cases"
+          NS="argocd"
+
+          synced="false"
+          for i in $(seq 1 30); do
+            sync_status="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
+            health_status="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
+
+            echo "[INFO] attempt=${i} sync=${sync_status:-<none>} health=${health_status:-<none>}"
+
+            if [[ "${sync_status:-}" == "Synced" ]]; then
+              synced="true"
+              echo "[INFO] Argo app is synced"
+              break
+            fi
+
+            sleep 10
+          done
+
+          if [[ "$synced" != "true" ]]; then
+            echo "[ERROR] forensic-sandbox-cases app did not become Synced in time"
+            kubectl get application "$APP" -n "$NS" -o wide || true
+            kubectl describe application "$APP" -n "$NS" || true
+            kubectl get events -n "$NS" --sort-by=.lastTimestamp | tail -n 50 || true
+            exit 1
+          fi
+
       - name: Wait for consumer deployment creation and rollout
         shell: bash
         run: |
           set -euo pipefail
+
           NS="forensic-sandbox"
           DEPLOY="${{ steps.deploy_meta.outputs.deployment_name }}"
 
@@ -374,13 +374,13 @@ jobs:
           fi
 
           kubectl rollout status deployment/"$DEPLOY" -n "$NS" --timeout=300s
-          
+
       - name: Dispatch reproduce launcher workflow
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
-          set -eu
+          set -euo pipefail
 
           if [[ -z "${GH_TOKEN:-}" ]]; then
             echo "WORKFLOW_PAT secret is empty or missing"
@@ -419,7 +419,7 @@ jobs:
       - name: Summary
         shell: bash
         run: |
-          set -eu
+          set -euo pipefail
           echo "case_id=${{ steps.case_meta.outputs.case_id }}"
           echo "case_branch=${{ steps.case_meta.outputs.case_branch }}"
           echo "manifest=${{ steps.case_meta.outputs.output_yaml }}"
