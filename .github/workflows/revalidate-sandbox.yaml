@@ -610,7 +610,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh workflow run "promote-case-image" \
+          gh workflow run "promote-case-image.yaml" \
             --ref "${{ env.RECORD_BRANCH }}" \
             -f case_id="${{ inputs.case_id }}" \
             -f production_branch="${{ env.RECORD_BRANCH }}" \
@@ -628,7 +628,7 @@ jobs:
 
           for i in $(seq 1 60); do
             RUN_ID="$(gh run list \
-              --workflow "promote-case-image" \
+              --workflow "promote-case-image.yaml" \
               --branch "${{ env.RECORD_BRANCH }}" \
               --limit 1 \
               --json databaseId,status,conclusion \
@@ -651,7 +651,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh workflow run "redrive-dlq" \
+          gh workflow run "redrive-dlq.yaml" \
             --ref "${{ env.RECORD_BRANCH }}" \
             -f case_id="${{ inputs.case_id }}" \
             -f namespace="${{ inputs.namespace }}" \
@@ -670,7 +670,7 @@ jobs:
 
           for i in $(seq 1 60); do
             RUN_ID="$(gh run list \
-              --workflow "redrive-dlq" \
+              --workflow "redrive-dlq.yaml" \
               --branch "${{ env.RECORD_BRANCH }}" \
               --limit 1 \
               --json databaseId,status,conclusion \
@@ -693,7 +693,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh workflow run "cleanup-case-sandbox" \
+          gh workflow run "cleanup-case-sandbox.yaml" \
             --ref "${{ env.RECORD_BRANCH }}" \
             -f case_id="${{ inputs.case_id }}" \
             -f note="cleanup completed automatically after successful redrive"
@@ -707,7 +707,7 @@ jobs:
 
           for i in $(seq 1 60); do
             RUN_ID="$(gh run list \
-              --workflow "cleanup-case-sandbox" \
+              --workflow "cleanup-case-sandbox.yaml" \
               --branch "${{ env.RECORD_BRANCH }}" \
               --limit 1 \
               --json databaseId,status,conclusion \
