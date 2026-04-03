@@ -65,9 +65,9 @@ spec:
           - name: CURRENCY_SERVICE_ADDR
             value: "$(LOCAL_IP):30001"
           - name: CART_SERVICE_ADDR
-            value: "$(LOCAL_IP):30002"
+            value: "$(LOCAL_IP):9999"
           - name: RECOMMENDATION_SERVICE_ADDR
-            value: "$(LOCAL_IP):30033"
+            value: "$(LOCAL_IP):30003"
           - name: AD_SERVICE_ADDR
             value: "$(LOCAL_IP):30005"
           - name: SHIPPING_SERVICE_ADDR
