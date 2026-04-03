@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: revalidate-worker-consumer-order-fail-1535
+  name: forensic-revalidate-worker-consumer-order-fail-1535-2026040-g17
   namespace: forensic-sandbox
   labels:
     app.kubernetes.io/name: forensic-revalidation
@@ -48,7 +48,7 @@ spec:
                   }
                 }
               }
-              EOF
+EOF
               cat > /artifacts/normal.json <<'EOF'
               {
                 "artifact_type": "normal_validation",
@@ -60,7 +60,7 @@ spec:
                 "source_service": "worker-consumer",
                 "payload": {}
               }
-              EOF
+EOF
               cat > /artifacts/consumer-ready.json <<'EOF'
               {
                 "case_id": "worker-consumer-order-fail-1535-20260403T063507Z-24dc614c",
@@ -76,7 +76,7 @@ spec:
                 "revalidation_generation": 17,
                 "synthetic": true
               }
-              EOF
+EOF
           volumeMounts:
             - name: artifacts
               mountPath: /artifacts
