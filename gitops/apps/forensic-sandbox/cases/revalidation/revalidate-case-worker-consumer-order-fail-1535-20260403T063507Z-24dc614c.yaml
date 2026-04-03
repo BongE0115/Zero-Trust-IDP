@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: forensic-revalidate-worker-consumer-order-fail-1535-20260403-g17
+  name: revalidate-worker-consumer-order-fail-1535
   namespace: forensic-sandbox
   labels:
     app.kubernetes.io/name: forensic-revalidation

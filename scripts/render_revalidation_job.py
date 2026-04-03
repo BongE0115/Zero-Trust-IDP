@@ -354,8 +354,16 @@ def main() -> int:
         output_dir = Path(args.output_dir)
         validation_run_id = args.validation_run_id or deterministic_validation_run_id(args.case_id, args.generation)
 
-        safe_suffix = sanitize_name(args.case_id, max_len=40)
-        job_name = f"forensic-revalidate-{safe_suffix}-g{args.generation}"
+        job_prefix = "forensic-revalidate-"
+        job_suffix = f"-g{args.generation}"
+        max_job_name_len = 63
+        max_suffix_len = max_job_name_len - len(job_prefix) - len(job_suffix)
+
+        if max_suffix_len <= 0:
+            raise ValueError("generation suffix is too long to build a valid Job name")
+
+        safe_suffix = sanitize_name(args.case_id, max_len=max_suffix_len)
+        job_name = f"{job_prefix}{safe_suffix}{job_suffix}"
         output_path = (
             Path(args.output_path)
             if args.output_path
