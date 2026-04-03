@@ -39,16 +39,22 @@ def deterministic_validation_run_id(case_id: str, generation: int) -> str:
     return f"{case_id}-reval-g{generation}"
 
 
-def generation_scoped_result_topic(base_topic: str, generation: int) -> str:
+def generation_scoped_topic(base_topic: str, generation: int) -> str:
     if generation < 1:
         raise ValueError("generation must be >= 1")
-
     base_topic = (base_topic or "").strip()
     if not base_topic:
-        raise ValueError("base result topic is empty")
-
-    # 이미 -gN 이 붙어 있으면 현재 generation으로 덮어씀
+        raise ValueError("base topic is empty")
     return re.sub(r"-g\d+$", "", base_topic) + f"-g{generation}"
+
+
+def generation_scoped_group(base_group: str, generation: int) -> str:
+    if generation < 1:
+        raise ValueError("generation must be >= 1")
+    base_group = (base_group or "").strip()
+    if not base_group:
+        raise ValueError("base group is empty")
+    return re.sub(r"-g\d+$", "", base_group) + f"-g{generation}"
 
 
 def load_yaml_all(path: Path) -> List[Dict[str, Any]]:
@@ -240,7 +246,7 @@ def patch_manifest(
     candidate_image_ref: str,
     generation: int,
     set_case_configmap: bool,
-) -> Tuple[str, str, str, str, str]:
+) -> Tuple[str, str, str, str, str, str, str]:
     docs = load_yaml_all(manifest_path)
 
     deployment = find_sandbox_deployment(docs)
@@ -255,37 +261,47 @@ def patch_manifest(
 
     validation_run_id = deterministic_validation_run_id(case_id, generation)
 
+    current_replay_topic = get_env_value(consumer, "SOURCE_TOPIC")
     current_result_topic = get_env_value(consumer, "RESULT_TOPIC")
+    current_group_id = get_env_value(consumer, "GROUP_ID")
+
+    if not current_replay_topic:
+        raise ValueError("consumer-app SOURCE_TOPIC is missing")
     if not current_result_topic:
         raise ValueError("consumer-app RESULT_TOPIC is missing")
+    if not current_group_id:
+        raise ValueError("consumer-app GROUP_ID is missing")
 
-    scoped_result_topic = generation_scoped_result_topic(current_result_topic, generation)
+    scoped_replay_topic = generation_scoped_topic(current_replay_topic, generation)
+    scoped_result_topic = generation_scoped_topic(current_result_topic, generation)
+    scoped_group_id = generation_scoped_group(current_group_id, generation)
 
-    # 1) consumer 이미지와 기본 검증 정보
     consumer["image"] = candidate_image_ref
     upsert_env(consumer, "IMAGE_REF", candidate_image_ref)
+
     upsert_env(consumer, "VALIDATION_MODE", "fix-verify")
     upsert_env(consumer, "REVALIDATION_GENERATION", str(generation))
     upsert_env(consumer, "VALIDATION_RUN_ID", validation_run_id)
     upsert_env(consumer, "CASE_ID", case_id)
 
-    # 2) sandbox strict + 기대 상태
     upsert_env(consumer, "ISOLATION_MODE", "sandbox_strict")
     upsert_env(consumer, "EXPECTED_FAILURE_STATUS", "success")
     upsert_env(consumer, "EXPECTED_NORMAL_STATUS", "success")
 
-    # 3) generation-scoped result topic 적용
+    # generation-scoped replay/result/group
+    upsert_env(consumer, "SOURCE_TOPIC", scoped_replay_topic)
+    upsert_env(consumer, "ALLOWED_REPLAY_TOPIC", scoped_replay_topic)
     upsert_env(consumer, "RESULT_TOPIC", scoped_result_topic)
     upsert_env(consumer, "ALLOWED_RESULT_TOPIC", scoped_result_topic)
+    upsert_env(consumer, "GROUP_ID", scoped_group_id)
 
-    # 4) topic-init initContainer에도 같은 result topic 적용
     topic_init_candidates = [c for c in init_containers if c.get("name") == "topic-init"]
     if len(topic_init_candidates) != 1:
         raise ValueError("expected exactly one topic-init initContainer")
     topic_init = topic_init_candidates[0]
+    upsert_env(topic_init, "REPLAY_TOPIC", scoped_replay_topic)
     upsert_env(topic_init, "RESULT_TOPIC", scoped_result_topic)
 
-    # 5) case ConfigMap 있으면 같이 반영
     if set_case_configmap:
         configmap = find_configmap_for_case(docs, case_id)
         if configmap is not None:
@@ -297,11 +313,22 @@ def patch_manifest(
             data["revalidation_generation"] = str(generation)
             data["validation_run_id"] = validation_run_id
             data["deployment_name"] = deployment_name
+            data["replay_topic"] = scoped_replay_topic
+            data["allowed_replay_topic"] = scoped_replay_topic
             data["result_topic"] = scoped_result_topic
             data["allowed_result_topic"] = scoped_result_topic
+            data["group_id"] = scoped_group_id
 
     dump_yaml_all(manifest_path, docs)
-    return previous_image_ref, candidate_image_ref, deployment_name, validation_run_id, scoped_result_topic
+    return (
+        previous_image_ref,
+        candidate_image_ref,
+        deployment_name,
+        validation_run_id,
+        scoped_replay_topic,
+        scoped_result_topic,
+        scoped_group_id,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -342,7 +369,15 @@ def main() -> int:
         manifest_path = Path(args.manifest_path)
         records_dir = Path(args.records_dir)
 
-        old_ref, new_ref, deployment_name, validation_run_id, scoped_result_topic = patch_manifest(
+        (
+            old_ref,
+            new_ref,
+            deployment_name,
+            validation_run_id,
+            scoped_replay_topic,
+            scoped_result_topic,
+            scoped_group_id,
+        ) = patch_manifest(
             manifest_path=manifest_path,
             case_id=args.case_id,
             candidate_image_ref=args.candidate_image_ref,
@@ -367,7 +402,9 @@ def main() -> int:
             "candidate_image_ref": new_ref,
             "revalidation_generation_prepared": args.generation,
             "validation_run_id_prepared": validation_run_id,
+            "scoped_replay_topic_prepared": scoped_replay_topic,
             "scoped_result_topic_prepared": scoped_result_topic,
+            "scoped_group_id_prepared": scoped_group_id,
             "record_updated": bool(args.update_record),
         }
         print(json.dumps(result, ensure_ascii=False, indent=2))
