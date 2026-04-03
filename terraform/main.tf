@@ -495,7 +495,7 @@ resource "aws_security_group" "k3s_server_sg" {
     from_port   = 8472
     to_port     = 8472
     protocol    = "udp"
-    self        = true
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   ingress {
