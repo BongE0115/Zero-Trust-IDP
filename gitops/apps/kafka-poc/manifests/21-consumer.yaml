@@ -45,7 +45,7 @@ spec:
             - name: DB_MODE
               value: mysql
             - name: DB_HOST
-              value: mysql.kafka-poc.svc.cluster.local
+              value: rds.internal.aiops.example.internal
             - name: CACHE_MODE
               value: disabled
             - name: CACHE_HOST

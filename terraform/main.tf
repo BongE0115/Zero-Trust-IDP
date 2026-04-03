@@ -562,6 +562,14 @@ resource "aws_security_group" "k3s_agent_sg" {
   }
 
   ingress {
+    description = "Kafka Broker from Tailscale"
+    from_port   = 9092
+    to_port     = 9092
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block,"100.64.0.0/10"] # Tailscale 망 전체 허용
+  }
+
+  ingress {
     description     = "Node Exporter metrics"
     from_port       = 9100
     to_port         = 9100
