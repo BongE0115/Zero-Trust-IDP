@@ -48,7 +48,9 @@
     "last_revalidation_error": null,
     "forced_revalidation_pass": true,
     "forced_revalidation_pass_source": "revalidate-sandbox.yaml",
-    "forced_revalidation_pass_generation": "14"
+    "forced_revalidation_pass_generation": "14",
+    "failure_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-order-fail-2233-20260403T133847Z-4c057332/failure.json",
+    "normal_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-order-fail-2233-20260403T133847Z-4c057332/normal.json"
   },
   "history": [
     {
