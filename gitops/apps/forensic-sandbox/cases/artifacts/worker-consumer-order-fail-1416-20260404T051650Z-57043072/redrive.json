@@ -1,0 +1,11 @@
+{
+  "case_id": "worker-consumer-order-fail-1416-20260404T051650Z-57043072",
+  "payload": {
+    "order_id": "order-fail-1416",
+    "should_fail": false,
+    "payload": {
+      "item": "book",
+      "qty": 1
+    }
+  }
+}
