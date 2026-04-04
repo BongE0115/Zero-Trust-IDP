@@ -4,7 +4,7 @@
   "branch_name": "case/worker-consumer-order-fail-1432-20260404T053303Z-481db273",
   "status": "sandbox_created",
   "created_at": "2026-04-04T05:33:15Z",
-  "updated_at": "2026-04-04T05:33:15Z",
+  "updated_at": "2026-04-04T05:35:06Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:aee9b65",
   "candidate_image_ref": null,
   "verified_image_ref": null,
@@ -26,7 +26,9 @@
     "case_branch_ref": "case/worker-consumer-order-fail-1432-20260404T053303Z-481db273",
     "failure_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-order-fail-1432-20260404T053303Z-481db273/failure.json",
     "normal_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-order-fail-1432-20260404T053303Z-481db273/normal.json",
-    "redrive_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-order-fail-1432-20260404T053303Z-481db273/redrive.json"
+    "redrive_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-order-fail-1432-20260404T053303Z-481db273/redrive.json",
+    "reproduce_job_manifest_path": "gitops/apps/forensic-sandbox/cases/reproduce/reproduce-case-worker-consumer-order-fail-1432-20260404T053303Z-481db273.yaml",
+    "reproduce_job_name": "forensic-reproduce-worker-consumer-order-fail-1-6fd3629d"
   },
   "history": [
     {
@@ -34,6 +36,12 @@
       "action": "create",
       "status": "sandbox_created",
       "note": "sandbox manifest created on jy"
+    },
+    {
+      "at": "2026-04-04T05:35:06Z",
+      "action": "update",
+      "status": "sandbox_created",
+      "note": "initial reproduce launcher manifest created"
     }
   ]
 }
