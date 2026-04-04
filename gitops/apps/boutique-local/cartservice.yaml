@@ -30,8 +30,7 @@ spec:
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/cartservice:v0.10.5
         env:
         - name: REDIS_ADDR
-          value: "wrong-redis-address:6379"
-          #value: "redis-cart:6379"
+          value: "redis-cart:6379"
 ---
 # (redis-cart는 로컬 cartservice만 호출하므로 ClusterIP 유지)
 apiVersion: v1
