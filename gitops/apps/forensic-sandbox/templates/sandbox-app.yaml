@@ -10,9 +10,7 @@ spec:
     - name: mongo
       port: 27017
       targetPort: 27017
-  template:
-    spec:
-      containers: []
+
 ---
 apiVersion: apps/v1
 kind: Deployment
