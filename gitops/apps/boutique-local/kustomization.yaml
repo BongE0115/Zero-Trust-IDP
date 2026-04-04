@@ -5,24 +5,4 @@ resources:
   - loadgenerator.yaml
   - hpa.yaml
 
-patches:
-  - target:
-      kind: Deployment
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/livenessProbe
-        value:
-          httpGet:
-            path: /_healthz
-            port: 8080
-          initialDelaySeconds: 40 # 로컬은 구동이 느릴 수 있으므로 40초 대기
-          periodSeconds: 20
-          failureThreshold: 3
-      - op: add
-        path: /spec/template/spec/containers/0/readinessProbe
-        value:
-          httpGet:
-            path: /_healthz
-            port: 8080
-          initialDelaySeconds: 20
-          periodSeconds: 10
+
