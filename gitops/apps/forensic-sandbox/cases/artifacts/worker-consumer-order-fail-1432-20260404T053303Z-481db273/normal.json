@@ -1,0 +1,1 @@
+{"artifact_type": "normal_validation", "case_id": "worker-consumer-order-fail-1432-20260404T053303Z-481db273", "target_topic": "orders-replay-worker-consumer-order-fail-1432-20260404t053303z-481db273", "payload_hash": "", "created_at": "2026-04-04T05:33:03.864129+00:00", "enabled": false, "source_service": "worker-consumer", "payload": {}}
