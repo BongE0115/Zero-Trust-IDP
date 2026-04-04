@@ -3,6 +3,5 @@ resources:
   - cartservice.yaml            # (cartservice + redis-cart 합본)
   - currencyservice.yaml         # (currency + recommend + ad + email 합본)
   - loadgenerator.yaml
-  - configmap.yaml
 
 
