@@ -157,7 +157,7 @@ EOF
 
     echo "✅ 마스터 토큰 확보 완료: $${NODE_TOKEN:0:15}..."
 
-    WORKER_INSTANCE_ID="${aws_instance.k3s_worker.id}" 
+    WORKER_INSTANCE_ID="${aws_instance.k3s_agent.id}" 
     MASTER_PRIVATE_IP="${aws_instance.k3s_server.private_ip}"
 
     # 워커 노드에 조인 명령 쏘기
