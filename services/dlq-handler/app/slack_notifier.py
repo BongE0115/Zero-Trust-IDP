@@ -3,6 +3,9 @@ import json
 import requests
 import zlib
 import base64
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # 터미널 3 환경변수에서 슬랙 정보를 읽어옵니다.
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
