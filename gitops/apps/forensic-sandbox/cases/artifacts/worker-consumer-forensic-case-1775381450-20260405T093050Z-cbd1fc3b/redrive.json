@@ -1,0 +1,11 @@
+{
+  "case_id": "worker-consumer-forensic-case-1775381450-20260405T093050Z-cbd1fc3b",
+  "payload": {
+    "order_id": "forensic-case-1775381450",
+    "should_fail": false,
+    "payload": {
+      "item": "AIOps-OneShot-Test",
+      "qty": 1
+    }
+  }
+}
