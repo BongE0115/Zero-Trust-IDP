@@ -7,10 +7,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 import requests
 
+from slack_notifier import send_slack_alert # 🚨 추가됨: 슬랙 요원 호출
 
 def getenv(name: str, default: str = "") -> str:
     return os.getenv(name, default)
-
 
 KAFKA_BOOTSTRAP = getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092")
 DLQ_TOPIC = getenv("DLQ_TOPIC", "orders-dlq")
@@ -403,6 +403,7 @@ def validate_github_dispatch_config():
         raise ValueError(f"Missing GitHub dispatch configuration: {', '.join(missing)}")
 
 
+# 🚨 AS-IS: 기존의 자동 격발 함수들 (더 이상 직접 호출하지 않지만, 코드는 유지해도 무방합니다)
 def github_dispatch(workflow_file: str, inputs: Dict[str, str]):
     url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{workflow_file}/dispatches"
     headers = {
@@ -418,7 +419,6 @@ def github_dispatch(workflow_file: str, inputs: Dict[str, str]):
             f"GitHub dispatch failed workflow={workflow_file} "
             f"status={resp.status_code}, body={resp.text}"
         )
-
     print(f"[GITHUB_DISPATCH] workflow={workflow_file} dispatched")
 
 
@@ -454,13 +454,14 @@ def dispatch_create_case_branch(spec: Dict[str, Any]):
 
 
 def main():
-    validate_github_dispatch_config()
+    # HITL 방식에서는 DLQ 핸들러가 직접 GitHub로 쏘지 않으므로, 이 검증을 통과하지 않아도 됩니다.
+    # validate_github_dispatch_config() 
     consumer = get_consumer()
 
     print(
         f"[INFO] DLQ handler started. dlq={DLQ_TOPIC}, "
         f"group={GROUP_ID}, spec_output_mode={SPEC_OUTPUT_MODE}, "
-        f"github_dispatch={ENABLE_GITHUB_DISPATCH}"
+        f"github_dispatch={ENABLE_GITHUB_DISPATCH} (now delegated to Slack HITL)"
     )
 
     for message in consumer:
@@ -497,19 +498,25 @@ def main():
 
             spec_path = emit_spec(sandbox_spec)
 
-            if ENABLE_GITHUB_DISPATCH:
-                # 순서 고정: 1) sandbox manifest 생성 2) case branch 생성
-                dispatch_activate_sandbox(
-                    spec=sandbox_spec,
-                    failure_artifact=failure_artifact,
-                    normal_artifact=normal_artifact,
-                )
-                dispatch_create_case_branch(sandbox_spec)
-
-            print(
-                "[NEXT_ACTION] sandbox activation dispatched, then case branch creation dispatched. "
-                "developer will work on case/<case-id>; sandbox will remain isolated."
+            # 🚨 TO-BE: [jy 브랜치 HITL 통합 로직] 
+            # 자동 격발 대신 슬랙으로 알림을 보냅니다.
+            combined_payload = {
+                "spec": sandbox_spec,
+                "failure_artifact": failure_artifact,
+                "normal_artifact": normal_artifact
+            }
+            
+            error_msg = event.get("error", {}).get("message", "Unknown Error")
+            source_svc = sandbox_spec.get("metadata", {}).get("source_service", "unknown")
+            
+            send_slack_alert(
+                case_id=case_id, 
+                error_msg=error_msg, 
+                raw_payload=combined_payload, 
+                source_service=source_svc
             )
+            
+            print(f"[HITL] 슬랙으로 승인 요청을 보냈습니다. 지휘관님의 버튼 클릭을 대기합니다.")
 
             if spec_path:
                 print(f"[NEXT_ACTION] sandbox_spec_path={spec_path}")
