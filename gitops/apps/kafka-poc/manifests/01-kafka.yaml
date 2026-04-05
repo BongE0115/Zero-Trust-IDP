@@ -79,3 +79,27 @@ spec:
               port: 9092
             initialDelaySeconds: 30
             periodSeconds: 15
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-default-ingress-to-kafka
+  namespace: kafka-poc
+spec:
+  podSelector:
+    matchLabels:
+      app: kafka
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: default
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: logging
+    ports:
+    - protocol: TCP
+      port: 9092
