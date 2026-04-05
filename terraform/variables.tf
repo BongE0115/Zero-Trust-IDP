@@ -172,3 +172,14 @@ variable "external_python_program" {
     error_message = "external_python_program must contain at least one element."
   }
 }
+
+# [추가] 슬랙 봇 토큰과 채널 이름을 변수로 추가하여 보안과 유연성 강화
+
+variable "slack_bot_token" {
+  type      = string
+  sensitive = true # 👈 테라폼 로그에 토큰이 안 남게 숨겨주는 옵션!
+}
+
+variable "slack_channel" {
+  type = string
+}
