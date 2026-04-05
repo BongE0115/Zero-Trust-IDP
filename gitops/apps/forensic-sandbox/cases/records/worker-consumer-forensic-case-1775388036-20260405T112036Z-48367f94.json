@@ -4,7 +4,7 @@
   "branch_name": "case/worker-consumer-forensic-case-1775388036-20260405T112036Z-48367f94",
   "status": "sandbox_created",
   "created_at": "2026-04-05T11:20:49Z",
-  "updated_at": "2026-04-05T11:20:49Z",
+  "updated_at": "2026-04-05T11:53:32Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:3a424c2",
   "candidate_image_ref": null,
   "verified_image_ref": null,
@@ -34,6 +34,24 @@
       "action": "create",
       "status": "sandbox_created",
       "note": "sandbox manifest created on jy"
+    },
+    {
+      "at": "2026-04-05T11:34:48Z",
+      "action": "update",
+      "status": "sandbox_created",
+      "note": "sandbox manifest refreshed on jy"
+    },
+    {
+      "at": "2026-04-05T11:48:10Z",
+      "action": "update",
+      "status": "sandbox_created",
+      "note": "sandbox manifest refreshed on jy"
+    },
+    {
+      "at": "2026-04-05T11:53:32Z",
+      "action": "update",
+      "status": "sandbox_created",
+      "note": "sandbox manifest refreshed on jy"
     }
   ]
 }
