@@ -29,13 +29,12 @@ spec:
       - name: server
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/paymentservice:v0.10.5
         env:
-        - name: PORT              # 🔥 필수 추가: 서버가 50051 포트를 사용하도록 명시
+        - name: PORT
           value: "50051"
-        - name: DISABLE_PROFILER   # 🔥 추가됨: 구글 클라우드 프로파일러 끄기
+        - name: DISABLE_PROFILER
           value: "1"
-        - name: DISABLE_TRACING    # 🔥 추가 권장: 에러 방지를 위해 트레이싱도 끕니다
+        - name: DISABLE_TRACING
           value: "1"
-        # --- 기존 Kafka 설정 유지 ---
         - name: KAFKA_BROKER_URL
           value: "kafka.default.svc.cluster.local:9092"
         - name: KAFKA_TOPIC
@@ -43,7 +42,7 @@ spec:
         - name: DLQ_TOPIC
           value: "orders-dlq"
 
-      # 🔥 에러 발생기 (사이드카) 추가
+      # 🔥 에러 발생기 (사이드카) - YAML/Python 들여쓰기 충돌 완벽 해결 버전
       - name: auto-trigger
         image: python:3.11-slim
         command: ["/bin/sh", "-c"]
@@ -52,38 +51,40 @@ spec:
             # 1. 필요한 라이브러리 설치
             pip install kafka-python > /dev/null 2>&1
             
-            # 2. 파이썬 스크립트 실행 (딱 한 번 전송)
+            # 2. 파이썬 스크립트 실행
             python3 -c '
-import os, time, json
-from kafka import KafkaProducer
+            import textwrap
+            script = """
+            import os, time, json
+            from kafka import KafkaProducer
 
-KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092")
-TOPIC = os.getenv("KAFKA_TOPIC", "orders")
+            KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092")
+            TOPIC = os.getenv("KAFKA_TOPIC", "orders")
 
-try:
-    producer = KafkaProducer(
-        bootstrap_servers=KAFKA_BOOTSTRAP,
-        value_serializer=lambda v: json.dumps(v).encode("utf-8")
-    )
-    
-    # 👇 여기서 변수를 먼저 확실하게 만들어 줍니다!
-    order_id_val = f"forensic-case-{int(time.time())}"
-    
-    msg = {
-        "order_id": order_id_val,
-        "should_fail": True,
-        "payload": {"item": "AIOps-OneShot-Test", "qty": 1}
-    }
-    
-    producer.send(TOPIC, msg)
-    producer.flush()
-    # 👇 만들어둔 변수를 출력합니다.
-    print(f"[AIOPS-EVENT] INFO: Sending intentional FAIL message for case reproduction. OrderID: {order_id_val}")
-except Exception as e:
-    print(f"❌ 전송 실패: {e}")
-'
+            try:
+                producer = KafkaProducer(
+                    bootstrap_servers=KAFKA_BOOTSTRAP,
+                    value_serializer=lambda v: json.dumps(v).encode("utf-8")
+                )
+                
+                order_id_val = f"forensic-case-{int(time.time())}"
+                
+                msg = {
+                    "order_id": order_id_val,
+                    "should_fail": True,
+                    "payload": {"item": "AIOps-OneShot-Test", "qty": 1}
+                }
+                
+                producer.send(TOPIC, msg)
+                producer.flush()
+                print(f"[AIOPS-EVENT] INFO: Sending intentional FAIL message. OrderID: {order_id_val}")
+            except Exception as e:
+                print(f"❌ 전송 실패: {e}")
+            """
+            exec(textwrap.dedent(script))
+            '
             
-            # 3. 🔥 중요: 컨테이너가 죽지 않게 무한 대기
+            # 3. 중요: 컨테이너 무한 대기
             echo "💤 메시지 전송 후 대기 모드로 전환합니다..."
             sleep infinity
         env:
@@ -92,7 +93,7 @@ except Exception as e:
         - name: KAFKA_TOPIC
           value: "orders"
 ---
-# shippingservice는 원본 그대로 사용 (AWS 내부에서 단독 동작)
+# shippingservice는 원본 그대로 사용
 apiVersion: v1
 kind: Service
 metadata:
@@ -123,4 +124,3 @@ spec:
       containers:
       - name: server
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/shippingservice:v0.10.5
-        # (shippingservice는 보통 추가 env 없이도 잘 작동합니다)
