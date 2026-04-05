@@ -529,7 +529,7 @@ resource "aws_security_group" "k3s_server_sg" {
   ingress {
     description     = "NodePort from ALB"
     from_port       = 30080
-    to_port         = 30081
+    to_port         = 30082
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
   }
@@ -617,7 +617,7 @@ resource "aws_security_group" "k3s_agent_sg" {
   ingress {
     description     = "NodePort from ALB"
     from_port       = 30080
-    to_port         = 30081
+    to_port         = 30082
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
   }
@@ -972,6 +972,8 @@ resource "aws_instance" "k3s_server" {
     local_tailscale_ip = var.local_tailscale_ip
     frontend_addr      = "${aws_lb.aiops_alb.dns_name}:8080"
     project_name       = "Zero-Trust-IDP"
+    slack_bot_token    = var.slack_bot_token
+    slack_channel      = var.slack_channel
   })
 
   tags = {
@@ -1009,3 +1011,55 @@ resource "aws_instance" "k3s_agent" {
   }
 }
 
+
+# ==========================================
+# [추가] Slack Interactivity 수신용 Target Group (터미널 4 app.py 용)
+# ==========================================
+resource "aws_lb_target_group" "slack_receiver_tg" {
+  name     = "aiops-slack-receiver-tg"
+  port     = 30082 # K3s NodePort (임의 지정, app.py 서비스용)
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+
+  health_check {
+    path                = "/health" # app.py에 헬스체크용 엔드포인트가 하나 있어야 합니다.
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    matcher             = "200-399"
+  }
+}
+
+# Target Group에 K3s 노드 연결
+resource "aws_lb_target_group_attachment" "slack_receiver_server_attach" {
+  target_group_arn = aws_lb_target_group.slack_receiver_tg.arn
+  target_id        = aws_instance.k3s_server.id
+  port             = 30082
+}
+
+resource "aws_lb_target_group_attachment" "slack_receiver_agent_attach" {
+  target_group_arn = aws_lb_target_group.slack_receiver_tg.arn
+  target_id        = aws_instance.k3s_agent.id
+  port             = 30082
+}
+
+# ==========================================
+# [추가] ALB Listener Rule (경로 기반 라우팅)
+# - /slack/actions 로 들어오는 요청을 app.py로 보냅니다.
+# ==========================================
+resource "aws_lb_listener_rule" "slack_action_rule" {
+  listener_arn = aws_lb_listener.http.arn # 기존 80번 리스너에 룰 추가
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.slack_receiver_tg.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/slack/actions*"]
+    }
+  }
+}

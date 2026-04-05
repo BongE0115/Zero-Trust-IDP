@@ -44,3 +44,13 @@ spec:
                   key: token
             - name: TOPIC_INIT_IMAGE
               value: bitnamilegacy/kafka:3.7
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slack-credentials
+                  key: SLACK_BOT_TOKEN
+            - name: SLACK_CHANNEL
+              valueFrom:
+                secretKeyRef:
+                  name: slack-credentials
+                  key: SLACK_CHANNEL

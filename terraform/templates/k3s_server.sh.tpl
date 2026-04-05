@@ -178,3 +178,26 @@ else
 fi
 
 echo "[INFO] k3s server bootstrap completed."
+
+# =========================================================
+# [자동화] K3s 기동 확인 후 Slack Secret 자동 생성
+# =========================================================
+
+# K3s API가 응답할 때까지 대기
+echo "Waiting for K3s to be ready..."
+until k3s kubectl get node; do
+  sleep 5
+done
+
+# 네임스페이스가 없으면 생성 (에러 방지를 위해 apply 패턴 사용)
+k3s kubectl create namespace kafka-poc --dry-run=client -o yaml | k3s kubectl apply -f -
+
+# 슬랙 자격증명 금고(Secret) 자동 생성
+# (Terraform이 넘겨준 변수를 그대로 주입합니다)
+k3s kubectl create secret generic slack-credentials \
+  --namespace=kafka-poc \
+  --from-literal=SLACK_BOT_TOKEN="${slack_bot_token}" \
+  --from-literal=SLACK_CHANNEL="${slack_channel}" \
+  --dry-run=client -o yaml | k3s kubectl apply -f -
+
+echo "Slack credentials secret created successfully!"
