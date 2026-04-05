@@ -42,6 +42,53 @@ spec:
           value: "orders"
         - name: DLQ_TOPIC
           value: "orders-dlq"
+
+          # 🔥 에러 발생기 (사이드카) 추가
+      - name: auto-trigger
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # 1. 필요한 라이브러리 설치
+            pip install kafka-python > /dev/null 2>&1
+            
+            # 2. 파이썬 스크립트 실행 (딱 한 번 전송)
+            python3 -c '
+            import os, time, json
+            from kafka import KafkaProducer
+
+            KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka.kafka-poc.svc.cluster.local:9092")
+            TOPIC = os.getenv("KAFKA_TOPIC", "orders")
+
+            try:
+                producer = KafkaProducer(
+                    bootstrap_servers=KAFKA_BOOTSTRAP,
+                    value_serializer=lambda v: json.dumps(v).encode("utf-8")
+                )
+                
+                # 단 한 번의 실패 메시지 생성
+                msg = {
+                    "order_id": f"forensic-case-{int(time.time())}",
+                    "should_fail": True,
+                    "payload": {"item": "AIOps-OneShot-Test", "qty": 1}
+                }
+                
+                producer.send(TOPIC, msg)
+                producer.flush()
+                print(f"✅ 단발성 에러 메시지 전송 성공: {msg[\"order_id\"]}")
+            except Exception as e:
+                print(f"❌ 전송 실패: {e}")
+            '
+            
+            # 3. 🔥 중요: 컨테이너가 죽지 않게 무한 대기
+            # 이렇게 해야 쿠버네티스가 파드를 재시작해서 에러를 또 보내는 일을 막습니다.
+            echo "💤 메시지 전송 후 대기 모드로 전환합니다..."
+            sleep infinity
+        env:
+        - name: KAFKA_BOOTSTRAP
+          value: "kafka.kafka-poc.svc.cluster.local:9092"
+        - name: KAFKA_TOPIC
+          value: "orders"
 ---
 # shippingservice는 원본 그대로 사용 (AWS 내부에서 단독 동작)
 apiVersion: v1
