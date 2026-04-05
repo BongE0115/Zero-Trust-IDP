@@ -16,73 +16,73 @@ spec:
         app: worker-consumer
     spec:
       containers:
-      - name: worker-consumer
-        image: ghcr.io/bonge0115/worker-consumer@sha256:79f584d362bf3ed4ac29cf202afd1eb4370b5fa8e3dcb9375bb77476b04cacbc
-        imagePullPolicy: Always
-        env:
-        - name: KAFKA_BOOTSTRAP
-          value: kafka.kafka-poc.svc.cluster.local:9092
-        - name: SOURCE_TOPIC
-          value: orders
-        - name: DLQ_TOPIC
-          value: orders-dlq
-        - name: GROUP_ID
-          value: worker-consumer
-        - name: SERVICE_NAME
-          value: worker-consumer
-        - name: NAMESPACE
-          value: kafka-poc
-        - name: DEPLOYMENT_NAME
-          value: worker-consumer
-        - name: IMAGE_REF
-          value: ghcr.io/bonge0115/worker-consumer@sha256:79f584d362bf3ed4ac29cf202afd1eb4370b5fa8e3dcb9375bb77476b04cacbc
-        - name: CONFIG_VERSION
-          value: v1
-        - name: DEPENDENCY_PROFILE
-          value: production
-        - name: DB_MODE
-          value: mysql
-        - name: DB_HOST
-          value: rds.internal.aiops.example.internal
-        - name: CACHE_MODE
-          value: disabled
-        - name: CACHE_HOST
-          value: ''
-        - name: EXTERNAL_API_MODE
-          value: disabled
-        - name: EXTERNAL_API_BASE_URL
-          value: ''
-        - name: FORCE_FAIL_FIELD
-          value: should_fail
-        - name: ENABLE_DLQ_PUBLISH
-          value: 'true'
-        - name: RUN_MODE
-          value: production
-        - name: CASE_ID
-          value: ''
-        - name: RESULT_TOPIC
-          value: ''
-        - name: EMIT_RESULT_EVENT
-          value: 'false'
-        - name: READY_FILE_PATH
-          value: ''
-        - name: ISOLATION_MODE
-          value: disabled
-        - name: ALLOWED_REPLAY_TOPIC
-          value: ''
-        - name: ALLOWED_RESULT_TOPIC
-          value: ''
-        - name: VALIDATION_MODE
-          value: reproduce
-        - name: VALIDATION_RUN_ID
-          value: ''
-        - name: REVALIDATION_GENERATION
-          value: '0'
-        - name: EXPECTED_FAILURE_STATUS
-          value: failed
-        - name: EXPECTED_NORMAL_STATUS
-          value: success
-        - name: FAILURE_ERROR_TYPE
-          value: ''
-        - name: FAILURE_ERROR_MESSAGE
-          value: ''
+        - name: worker-consumer
+          image: ghcr.io/bonge0115/worker-consumer:3a424c2
+          imagePullPolicy: Always
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: kafka.kafka-poc.svc.cluster.local:9092
+            - name: SOURCE_TOPIC
+              value: orders
+            - name: DLQ_TOPIC
+              value: orders-dlq
+            - name: GROUP_ID
+              value: worker-consumer
+            - name: SERVICE_NAME
+              value: worker-consumer
+            - name: NAMESPACE
+              value: kafka-poc
+            - name: DEPLOYMENT_NAME
+              value: worker-consumer
+            - name: IMAGE_REF
+              value: ghcr.io/bonge0115/worker-consumer:3a424c2
+            - name: CONFIG_VERSION
+              value: v1
+            - name: DEPENDENCY_PROFILE
+              value: production
+            - name: DB_MODE
+              value: mysql
+            - name: DB_HOST
+              value: rds.internal.aiops.example.internal
+            - name: CACHE_MODE
+              value: disabled
+            - name: CACHE_HOST
+              value: ''
+            - name: EXTERNAL_API_MODE
+              value: disabled
+            - name: EXTERNAL_API_BASE_URL
+              value: ''
+            - name: FORCE_FAIL_FIELD
+              value: should_fail
+            - name: ENABLE_DLQ_PUBLISH
+              value: 'true'
+            - name: RUN_MODE
+              value: production
+            - name: CASE_ID
+              value: ''
+            - name: RESULT_TOPIC
+              value: ''
+            - name: EMIT_RESULT_EVENT
+              value: 'false'
+            - name: READY_FILE_PATH
+              value: ''
+            - name: ISOLATION_MODE
+              value: disabled
+            - name: ALLOWED_REPLAY_TOPIC
+              value: ''
+            - name: ALLOWED_RESULT_TOPIC
+              value: ''
+            - name: VALIDATION_MODE
+              value: reproduce
+            - name: VALIDATION_RUN_ID
+              value: ''
+            - name: REVALIDATION_GENERATION
+              value: '0'
+            - name: EXPECTED_FAILURE_STATUS
+              value: failed
+            - name: EXPECTED_NORMAL_STATUS
+              value: success
+            - name: FAILURE_ERROR_TYPE
+              value: ''
+            - name: FAILURE_ERROR_MESSAGE
+              value: ''
