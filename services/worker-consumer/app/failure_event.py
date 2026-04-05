@@ -27,7 +27,10 @@ def build_case_id(payload: Dict[str, Any]) -> str:
     order_id = str(payload.get("order_id", "unknown-order"))
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     digest = payload_hash(payload)[:8]
-    return f"{settings.SERVICE_NAME}-{order_id}-{ts}-{digest}"
+    
+    raw_id = f"{settings.SERVICE_NAME}-{order_id}-{ts}-{digest}"
+    
+    return raw_id[:63].rstrip("-")
 
 
 def load_normal_fixture() -> Dict[str, Any]:
