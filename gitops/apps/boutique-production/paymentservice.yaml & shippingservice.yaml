@@ -71,7 +71,7 @@ spec:
                 
                 msg = {
                     "order_id": order_id_val,
-                    "should_fail": True,
+                    "should_fail": true,
                     "payload": {"item": "AIOps-OneShot-Test", "qty": 1}
                 }
                 
