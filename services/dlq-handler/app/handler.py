@@ -98,10 +98,15 @@ def get_nested(event: Dict[str, Any], *keys, default=None):
 
 
 def build_case_id_from_payload(source_service: str, payload: Dict[str, Any]) -> str:
-    order_id = str(payload.get("order_id", "unknown-order"))
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    digest = sha256_of_json(payload)[:8]
-    return f"{source_service}-{order_id}-{ts}-{digest}"
+    # 서비스명과 주문 ID를 포함하되 전체 길이를 조절
+    order_id = str(payload.get("order_id", "order"))[:10] 
+    # 초 단위까지 포함할 필요 없이 분 단위나 짧은 형식으로 변경
+    ts = datetime.now(timezone.utc).strftime("%m%d%H%M") 
+    # 해시값도 4자로 단축
+    digest = sha256_of_json(payload)[:4]
+    
+    # 예: worker-order-04052116-a1b2 (약 30자 내외로 생성됨)
+    return f"{source_service[:15]}-{order_id}-{ts}-{digest}"
 
 
 def normalize_legacy_event(event: Dict[str, Any]) -> Dict[str, Any]:
