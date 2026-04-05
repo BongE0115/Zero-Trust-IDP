@@ -4,6 +4,7 @@
 # --------------------------------------------------
 # ==================================================
 
+# tfstate 파일 S3에 저장 및 DynamoDB를 통한 동시 apply 방지 
 terraform {
   backend "s3" {
     bucket         = "my-team-zerotrust-tfstate-1234"
@@ -18,10 +19,12 @@ provider "aws" {
   region = "ap-northeast-2"
 }
 
+# 현재 AWS 계정 정보 및 리전 정보 가져오는 데이터 소스
 data "aws_caller_identity" "current" {}
-
 data "aws_region" "current" {}
+# =======================================
 
+# EC2 인스턴스에 사용할 Ubuntu 이미지 
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"]
@@ -31,7 +34,7 @@ data "aws_ami" "ubuntu" {
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 }
-
+# ======================================
 
 # ==========================================
 # 1. VPC
@@ -170,9 +173,12 @@ resource "aws_route53_zone" "private_internal" {
 # ==================================================
 
 # ==========================================
-# IAM Role for K3s nodes (master / worker)
-# - only managed-node permissions
+# [SET 1] IAM Role for K3s nodes (master / worker)
+# - SSM managed-node permissions
+# - GitHub dispatch token SSM read permissions
 # ==========================================
+
+# 1. 역할(Role)
 resource "aws_iam_role" "ssm_node_role" {
   name = "aiops-ssm-node-role"
 
@@ -190,47 +196,13 @@ resource "aws_iam_role" "ssm_node_role" {
   })
 }
 
+# 2-1. 정책(Policy) 연결: AWS SSM으로 접속 가능 
 resource "aws_iam_role_policy_attachment" "ssm_node_attach" {
   role       = aws_iam_role.ssm_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-resource "aws_iam_instance_profile" "ssm_node_profile" {
-  name = "aiops-ssm-node-profile"
-  role = aws_iam_role.ssm_node_role.name
-}
-
-# ==========================================
-# IAM Role for Monitoring node
-# - managed-node permissions
-# - operator permissions for SSM Run Command
-#   only to instances tagged Role=K3s_Server
-# ==========================================
-resource "aws_iam_role" "ssm_monitoring_role" {
-  name = "aiops-ssm-monitoring-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ssm_monitoring_attach" {
-  role       = aws_iam_role.ssm_monitoring_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-# --------
-# dlq git dispatch token ssm 방식으로 추가 iam 
-# --------
+# 2-2. 정책(Policy) 추가: GitHub Dispatch 토큰 읽기 권한 -> 깃 액션 워크플로우 원격 실행 트리거
 resource "aws_iam_role_policy" "ssm_node_github_dispatch_ssm_policy" {
   name = "aiops-ssm-node-github-dispatch-ssm-policy"
   role = aws_iam_role.ssm_node_role.id
@@ -258,6 +230,45 @@ resource "aws_iam_role_policy" "ssm_node_github_dispatch_ssm_policy" {
   })
 }
 
+# 3. 붙이기(Instance Profile): EC2에 역할을 부여하기 위한 프로필
+resource "aws_iam_instance_profile" "ssm_node_profile" {
+  name = "aiops-ssm-node-profile"
+  role = aws_iam_role.ssm_node_role.name
+}
+
+
+# ==========================================
+# [SET 2] IAM Role for Monitoring node
+# - SSM managed-node permissions
+# - SSM Run Command operator permissions (for K3s_Server)
+# - GitHub Runner bootstrap token SSM read permissions
+# ==========================================
+
+# 1. 역할(Role)
+resource "aws_iam_role" "ssm_monitoring_role" {
+  name = "aiops-ssm-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# 2-1. 정책(Policy) 연결: AWS SSM으로 접속 가능
+resource "aws_iam_role_policy_attachment" "ssm_monitoring_attach" {
+  role       = aws_iam_role.ssm_monitoring_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# 2-2. 정책(Policy) 추가: 모니터링 서버가 K3s 마스터 노드에 SSM으로 명령 내릴 수 있는 권한
 resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
   name = "aiops-monitoring-ssm-operator-policy"
   role = aws_iam_role.ssm_monitoring_role.id
@@ -277,7 +288,6 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
           "arn:aws:ssm:*:*:document/AWS-*"
         ]
       },
-
       # Role=K3s_Server 태그가 붙은 EC2 인스턴스에만 명령 허용
       {
         Sid    = "AllowRunCommandToTaggedMasterOnly"
@@ -292,7 +302,6 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
           }
         }
       },
-
       # 명령 결과 조회 및 대상 탐색
       {
         Sid    = "AllowCommandReadOps"
@@ -310,11 +319,7 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
   })
 }
 
-resource "aws_iam_instance_profile" "ssm_monitoring_profile" {
-  name = "aiops-ssm-monitoring-profile"
-  role = aws_iam_role.ssm_monitoring_role.name
-}
-
+# 2-3. 정책(Policy) 추가: 모니터링 서버를 깃 러너로 만들기 위해 AWS 파라미터 스토어에 저장된 깃 허브 Bootstrape 토큰을 읽을 수 있는 권한 부 
 resource "aws_iam_role_policy" "monitoring_runner_bootstrap_ssm_policy" {
   name = "aiops-monitoring-runner-bootstrap-ssm-policy"
   role = aws_iam_role.ssm_monitoring_role.id
@@ -340,6 +345,12 @@ resource "aws_iam_role_policy" "monitoring_runner_bootstrap_ssm_policy" {
       }
     ]
   })
+}
+
+# 3. 붙이기(Instance Profile): EC2에 역할을 부여하기 위한 프로필
+resource "aws_iam_instance_profile" "ssm_monitoring_profile" {
+  name = "aiops-ssm-monitoring-profile"
+  role = aws_iam_role.ssm_monitoring_role.name
 }
 
 
