@@ -42,16 +42,16 @@ spec:
         - name: DLQ_TOPIC
           value: "orders-dlq"
 
-      # 🔥 에러 발생기 (사이드카) - YAML/Python 들여쓰기 충돌 완벽 해결 버전
+      # 🔥 에러 발생기 (사이드카) - 파이썬 대소문자 & 들여쓰기 완전 해결 버전
       - name: auto-trigger
         image: python:3.11-slim
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # 1. 필요한 라이브러리 설치
+            # 1. 라이브러리 설치
             pip install kafka-python > /dev/null 2>&1
             
-            # 2. 파이썬 스크립트 실행
+            # 2. 파이썬 스크립트 실행 (textwrap으로 들여쓰기 안전하게 보호)
             python3 -c '
             import textwrap
             script = """
@@ -67,25 +67,26 @@ spec:
                     value_serializer=lambda v: json.dumps(v).encode("utf-8")
                 )
                 
-                order_id_val = f"forensic-case-{int(time.time())}"
+                oid = f"forensic-case-{int(time.time())}"
                 
+                # 👇 True는 반드시 대문자! json.dumps가 알아서 소문자 true로 바꿔서 카프카에 쏩니다.
                 msg = {
-                    "order_id": order_id_val,
-                    "should_fail": true,
+                    "order_id": oid,
+                    "should_fail": True,
                     "payload": {"item": "AIOps-OneShot-Test", "qty": 1}
                 }
                 
                 producer.send(TOPIC, msg)
                 producer.flush()
-                print(f"[AIOPS-EVENT] INFO: Sending intentional FAIL message. OrderID: {order_id_val}")
+                print(f"[AIOPS-EVENT] SUCCESS: Sent intentional error. OrderID: {oid}")
             except Exception as e:
                 print(f"❌ 전송 실패: {e}")
             """
             exec(textwrap.dedent(script))
             '
             
-            # 3. 중요: 컨테이너 무한 대기
-            echo "💤 메시지 전송 후 대기 모드로 전환합니다..."
+            # 3. 무한 대기 (파드가 죽지 않게 유지)
+            echo "💤 메시지 전송 완료. 대기 모드로 전환합니다..."
             sleep infinity
         env:
         - name: KAFKA_BOOTSTRAP
@@ -93,7 +94,7 @@ spec:
         - name: KAFKA_TOPIC
           value: "orders"
 ---
-# shippingservice는 원본 그대로 사용
+# shippingservice는 원본 그대로 유지
 apiVersion: v1
 kind: Service
 metadata:
