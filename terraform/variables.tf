@@ -50,7 +50,7 @@ variable "local_tailscale_ip" {
 variable "enable_github_secret_sync" {
   description = "Whether Terraform should automatically sync KUBECONFIG_B64 into GitHub Actions secrets"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "github_owner" {
