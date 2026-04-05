@@ -101,8 +101,8 @@ spec:
         matchLabels:
           kubernetes.io/metadata.name: logging
     - namespaceSelector:
-  matchLabels:
-    kubernetes.io/metadata.name: kafka-poc # 🔥 dlq-handler 등 자기 식구 허용!
+        matchLabels:
+          kubernetes.io/metadata.name: kafka-poc # 🔥 dlq-handler 등 자기 식구 허용!
     ports:
     - protocol: TCP
       port: 9092
