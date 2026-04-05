@@ -18,5 +18,5 @@ def process_order(payload: Dict[str, Any]) -> None:
     # - 주문 유효성 검사
     # - 재고 확인
     # - 결제 요청
-    # - 주문 상태 저장
+    # - 주문 상태 저장 d
     return
