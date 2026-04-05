@@ -75,7 +75,7 @@ spec:
                 
                 producer.send(TOPIC, msg)
                 producer.flush()
-                print(f"✅ 단발성 에러 메시지 전송 성공: {msg[\"order_id\"]}")
+                print(f"[AIOPS-EVENT] INFO: Sending intentional FAIL message for case reproduction. OrderID: {msg['order_id']}")
             except Exception as e:
                 print(f"❌ 전송 실패: {e}")
             '
