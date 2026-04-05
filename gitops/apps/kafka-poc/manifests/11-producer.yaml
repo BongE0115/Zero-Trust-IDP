@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: producer-api
-          image: 'ghcr.io/bonge0115/producer-api:da52bd5' # 이미지는 ghcr로 만든다. 이후 your-org는 실제 계정으로 수정
+          image: 'ghcr.io/bonge0115/producer-api:3378008' # 이미지는 ghcr로 만든다. 이후 your-org는 실제 계정으로 수정
           imagePullPolicy: IfNotPresent
           env:
             - name: KAFKA_BOOTSTRAP
@@ -40,4 +40,4 @@ spec:
   template:
     spec:
       containers:
-        - image: ghcr.io/bonge0115/producer-api:da52bd5
+        - image: ghcr.io/bonge0115/producer-api:3378008
