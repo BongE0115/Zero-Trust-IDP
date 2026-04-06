@@ -30,6 +30,18 @@ spec:
                 secretKeyRef:
                   name: slack-credentials
                   key: SLACK_CHANNEL
+            - name: GITHUB_OWNER
+              value: "BongE0115"
+            - name: GITHUB_REPO
+              value: "Zero-Trust-IDP"
+            - name: GITHUB_REF
+              value: "jy"
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-dispatch-secret
+                  key: token
+            
 ---
 # 2. 네트워크 길잡이 (Service - 아까 만드신 것)
 apiVersion: v1
