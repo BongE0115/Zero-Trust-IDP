@@ -137,7 +137,7 @@ jobs:
           # producer-api changed -> 운영 producer만 갱신
           if [ "${{ needs.detect-changes.outputs.producer_api }}" = "true" ]; then
             yq -i '
-              .spec.template.spec.containers[0].image =
+              (select(.kind == "Deployment") | .spec.template.spec.containers[0].image) =
               "ghcr.io/bonge0115/producer-api:" + strenv(SHA_TAG)
             ' gitops/apps/kafka-poc/manifests/11-producer.yaml
           fi
