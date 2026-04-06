@@ -114,7 +114,9 @@ def sanitize_name(value: str, max_len: int = 40) -> str:
 
 
 def make_case_suffix(case_id: str) -> str:
-    return sanitize_name(case_id, max_len=24)
+    cleaned = sanitize_name(case_id, max_len=15)
+    digest = hashlib.sha1(case_id.encode("utf-8")).hexdigest()[:8]
+    return f"{cleaned}-{digest}"
 
 
 def make_case_label(case_id: str, max_len: int = 63) -> str:
