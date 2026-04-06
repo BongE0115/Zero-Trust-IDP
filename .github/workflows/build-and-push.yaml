@@ -42,7 +42,7 @@ jobs:
             forensic_launcher:
               - 'forensic-launcher/**'
             slack_receiver:     
-            - 'services/slack-receiver/**'
+              - 'services/slack-receiver/**'
             anything_changed:
               - 'services/**'
               - 'forensic-launcher/**'
@@ -173,13 +173,12 @@ jobs:
             ' gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
           fi
 
-
           # slack-receiver changed -> 운영 slack-receiver만 갱신
           if [ "${{ needs.detect-changes.outputs.slack_receiver }}" = "true" ]; then
             yq -i '
               (select(.kind == "Deployment") | .spec.template.spec.containers[0].image) =
               "ghcr.io/bonge0115/slack-receiver:" + strenv(SHA_TAG)
-            ' gitops/apps/slack-receiver.yaml
+            ' gitops/platform/observability/manifests/slack-receiver.yaml
           fi
 
       - name: Guardrail - do not touch case manifests or case records
@@ -198,7 +197,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add gitops/apps/kafka-poc/manifests gitops/apps/forensic-sandbox/templates gitops/apps/slack-receiver.yaml
+          git add gitops/apps/kafka-poc/manifests gitops/apps/forensic-sandbox/templates gitops/platform/observability/manifests/slack-receiver.yaml
           git status --short
 
           if git diff --cached --quiet; then
