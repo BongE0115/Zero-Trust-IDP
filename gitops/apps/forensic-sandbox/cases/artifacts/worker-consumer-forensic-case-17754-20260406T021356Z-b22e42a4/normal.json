@@ -1,0 +1,1 @@
+{"artifact_type": "normal_validation", "case_id": "worker-consumer-forensic-case-17754-20260406T021356Z-b22e42a4", "target_topic": "orders-replay-worker-consumer-forensic-case-17754-20260406t021356z-b22e42a4", "payload_hash": "", "created_at": "2026-04-06T02:13:56.368608+00:00", "enabled": false, "source_service": "worker-consumer", "payload": {}}
