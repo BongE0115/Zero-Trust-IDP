@@ -46,17 +46,42 @@ spec:
       name: memory
       target:
         type: Utilization
-        averageUtilization: 90 # 메모리 90
+        averageUtilization: 90 # 메모리 90% 기준
 
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: checkoutservice-hpa
+  name: payment-hpa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: paymentservice.yaml & shippingservice
+    name: paymentservice
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 90 # CPU 90% 기준
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 90 # 메모리 90% 기준
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: shipping-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: shippingservice
   minReplicas: 1
   maxReplicas: 3
   metrics:
