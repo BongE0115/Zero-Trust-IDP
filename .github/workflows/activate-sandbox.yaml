@@ -353,6 +353,10 @@ jobs:
 
           echo "[INFO] waiting for Argo app ${APP} to observe revision ${TARGET_REV}"
 
+          kubectl annotate application "$APP" -n "$NS" argocd.argoproj.io/refresh=hard --overwrite || true
+
+          echo "[INFO] waiting for Argo app ${APP} to observe revision ${TARGET_REV}"
+
           observed="false"
           for i in $(seq 1 36); do
             current_rev="$(kubectl get application "$APP" -n "$NS" -o jsonpath='{.status.sync.revision}' 2>/dev/null || true)"
