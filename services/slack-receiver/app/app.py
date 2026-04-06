@@ -152,4 +152,4 @@ def slack_actions():
     return jsonify({"text": "알 수 없는 액션이거나 승인 버튼이 아닙니다."}), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5001)
