@@ -1063,3 +1063,86 @@ resource "aws_lb_listener_rule" "slack_action_rule" {
     }
   }
 }
+
+
+# 1. CloudFront 배포 정의
+resource "aws_cloudfront_distribution" "aiops_cdn" {
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "AIOps 프로젝트 통합 HTTPS 대문"
+  
+  # [원본 1] AIOps 백엔드 (80포트)
+  origin {
+    domain_name = aws_lb.aiops_alb.dns_name 
+    origin_id   = "Origin-AIOps-80"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  # [원본 2] Boutique 쇼핑몰 (8080포트)
+  origin {
+    domain_name = aws_lb.aiops_alb.dns_name
+    origin_id   = "Origin-Boutique-8080"
+
+    custom_origin_config {
+      http_port              = 8080
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  # -----------------------------------------------------------
+  # 🚨 [규칙 1] 슬랙 전용 (80포트로 배달)
+  # -----------------------------------------------------------
+  ordered_cache_behavior {
+    path_pattern     = "/slack/*"
+    target_origin_id = "Origin-AIOps-80"
+
+    allowed_methods  = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods   = ["GET", "HEAD"]
+    
+    viewer_protocol_policy = "redirect-to-https"
+    
+    # 캐시 끄기 (실시간 통신 필수)
+    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled (AWS 고정 ID)
+  }
+
+  # -----------------------------------------------------------
+  # [기본 규칙] 나머지 모든 접속 (8080 쇼핑몰로 배달)
+  # -----------------------------------------------------------
+  default_cache_behavior {
+    target_origin_id = "Origin-Boutique-8080"
+
+    allowed_methods  = ["GET", "HEAD"]
+    cached_methods   = ["GET", "HEAD"]
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 3600
+    max_ttl                = 86400
+
+    forwarded_values {
+      query_string = false
+      cookies { forward = "none" }
+    }
+  }
+
+  restrictions {
+    geo_restriction { restriction_type = "none" }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true # 도메인 없어도 공짜 HTTPS 주소 사용
+  }
+}
+
+# 2. 생성된 주소를 터미널에 출력 (슬랙에 복붙용)
+output "cloudfront_url" {
+  value = aws_cloudfront_distribution.aiops_cdn.domain_name
+}
