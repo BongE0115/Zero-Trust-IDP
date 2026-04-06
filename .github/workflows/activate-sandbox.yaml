@@ -342,16 +342,13 @@ jobs:
           echo "[INFO] forensic-sandbox namespace check:"
           kubectl get ns forensic-sandbox
 
-      # =====================================================================
-      # 🚨 [추가됨] JIT 방화벽 개방 및 권한 발급 단계 (파드 배포 직전 실행)
-      # =====================================================================
-      - name: 🧹 Pre-Cleanup (기존 임시 권한 초기화)
+      - name:  Pre-Cleanup 
         shell: bash
         run: |
           kubectl delete authorizationpolicy sandbox-jit-access -n forensic-sandbox --ignore-not-found
           kubectl delete authorizationpolicy allow-sandbox-to-kafka -n kafka-poc --ignore-not-found
 
-      - name: 🔓 Unlock & Open Firewall (자물쇠 해제 및 임시 권한 발급)
+      - name:  Unlock & Open Firewall 
         shell: bash
         run: |
           echo "디버깅 모드: 자물쇠를 해제하고 임시 포트를 개방합니다."
