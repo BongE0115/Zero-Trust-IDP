@@ -311,6 +311,40 @@ jobs:
 
           exit 1
 
+      - name: Force Argo refresh for revalidation app
+        shell: bash
+        env:
+          KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p "${HOME}/.kube"
+          echo "${KUBECONFIG_B64_VALUE}" | base64 -di > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+          kubectl -n argocd annotate application forensic-sandbox-revalidation \
+            argocd.argoproj.io/refresh=hard --overwrite
+
+      - name: Force Argo sync for revalidation app
+        shell: bash
+        env:
+          KUBECONFIG_B64_VALUE: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p "${HOME}/.kube"
+          echo "${KUBECONFIG_B64_VALUE}" | base64 -di > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+          kubectl -n argocd patch application forensic-sandbox-revalidation --type merge -p '
+          {
+            "operation": {
+              "sync": {
+                "prune": true
+              }
+            }
+          }'
+
   snapshot-and-collect-revalidation:
     needs: render-revalidation-manifest
     runs-on: [self-hosted, linux, monitoring-node]
