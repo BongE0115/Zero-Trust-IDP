@@ -1,3 +1,39 @@
+# 1. 수신 요원 파드 (Deployment)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slack-receiver
+  namespace: kafka-poc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slack-receiver
+  template:
+    metadata:
+      labels:
+        app: slack-receiver
+    spec:
+      containers:
+        - name: slack-receiver
+          # 🚨 주의: 형님이 app.py를 말아놓은 실제 도커 이미지 주소를 넣어야 합니다!
+          image: 형님의_도커허브_계정/slack-receiver:latest 
+          ports:
+            - containerPort: 5001
+          env:
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slack-credentials
+                  key: SLACK_BOT_TOKEN
+            - name: SLACK_CHANNEL
+              valueFrom:
+                secretKeyRef:
+                  name: slack-credentials
+                  key: SLACK_CHANNEL
+
+---
+# 2. 네트워크 길잡이 (Service - 아까 만드신 것)
 apiVersion: v1
 kind: Service
 metadata:
@@ -10,4 +46,4 @@ spec:
   ports:
     - port: 5001
       targetPort: 5001
-      nodePort: 30082 
+      nodePort: 30082

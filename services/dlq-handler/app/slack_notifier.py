@@ -69,7 +69,7 @@ def send_slack_alert(case_id: str, error_msg: str, raw_payload: dict, source_ser
                     },
                     "style": "primary",
                     "value": compressed_value,
-                    "action_id": "approve_sandbox_creation" # 터미널 4의 app.py와 일치해야 함
+                    "action_id": "approve_sandbox_creation" 
                 }
             ]
         }
