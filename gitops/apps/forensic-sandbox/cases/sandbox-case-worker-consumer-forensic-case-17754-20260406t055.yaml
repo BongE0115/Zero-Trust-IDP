@@ -4,9 +4,9 @@ metadata:
   name: mongodb-temp-worker-consumer-forensic
   namespace: forensic-sandbox
   labels:
-    forensic-case-id: worker-consumer-forensic-case-17754-20260406t053510z-4-19c339de
+    forensic-case-id: worker-consumer-forensic-case-17754-20260406t055519z-8-7a8fdd25
   annotations:
-    forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2
+    forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3
 spec:
   selector:
     app: mongodb-temp-worker-consumer-forensic
@@ -24,9 +24,9 @@ metadata:
   name: mongodb-temp-worker-consumer-forensic
   namespace: forensic-sandbox
   labels:
-    forensic-case-id: worker-consumer-forensic-case-17754-20260406t053510z-4-19c339de
+    forensic-case-id: worker-consumer-forensic-case-17754-20260406t055519z-8-7a8fdd25
   annotations:
-    forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2
+    forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3
 spec:
   replicas: 1
   selector:
@@ -36,9 +36,9 @@ spec:
     metadata:
       labels:
         app: mongodb-temp-worker-consumer-forensic
-        forensic-case-id: worker-consumer-forensic-case-17754-20260406t053510z-4-19c339de
+        forensic-case-id: worker-consumer-forensic-case-17754-20260406t055519z-8-7a8fdd25
       annotations:
-        forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2
+        forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3
     spec:
       containers:
       - name: mongodb-temp
@@ -53,9 +53,9 @@ metadata:
   name: forensic-sandbox-app-worker-consumer-forensic
   namespace: forensic-sandbox
   labels:
-    forensic-case-id: worker-consumer-forensic-case-17754-20260406t053510z-4-19c339de
+    forensic-case-id: worker-consumer-forensic-case-17754-20260406t055519z-8-7a8fdd25
   annotations:
-    forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2
+    forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3
 spec:
   replicas: 1
   selector:
@@ -65,9 +65,9 @@ spec:
     metadata:
       labels:
         app: forensic-sandbox-app-worker-consumer-forensic
-        forensic-case-id: worker-consumer-forensic-case-17754-20260406t053510z-4-19c339de
+        forensic-case-id: worker-consumer-forensic-case-17754-20260406t055519z-8-7a8fdd25
       annotations:
-        forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2
+        forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3
     spec:
       initContainers:
       - name: topic-init
@@ -88,9 +88,9 @@ spec:
         - name: KAFKA_BOOTSTRAP
           value: kafka.kafka-poc.svc.cluster.local:9092
         - name: REPLAY_TOPIC
-          value: orders-replay-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
+          value: orders-replay-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
         - name: RESULT_TOPIC
-          value: orders-result-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
+          value: orders-result-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
         - name: TOPIC_PARTITIONS
           value: '1'
         - name: TOPIC_REPLICATION_FACTOR
@@ -102,16 +102,16 @@ spec:
         - /bin/sh
         - -c
         - "mkdir -p /artifacts\ncat > /artifacts/failure.json <<'EOF'\n{\n  \"artifact_type\"\
-          : \"failure_replay\",\n  \"case_id\": \"worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2\"\
-          ,\n  \"target_topic\": \"orders-replay-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2\"\
-          ,\n  \"payload_hash\": \"454e0bc2c8551942498ae066836649df5f6481deaa3223ade427be042c935deb\"\
-          ,\n  \"created_at\": \"2026-04-06T05:35:10.489068+00:00\",\n  \"source_service\"\
-          : \"worker-consumer\",\n  \"payload\": {\n    \"order_id\": \"forensic-case-1775453710\"\
+          : \"failure_replay\",\n  \"case_id\": \"worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3\"\
+          ,\n  \"target_topic\": \"orders-replay-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3\"\
+          ,\n  \"payload_hash\": \"8c1a6ac34b7abb814ca84128e56104ca7f80215a4b3cf29f9ff66e59ce7e468a\"\
+          ,\n  \"created_at\": \"2026-04-06T05:55:19.121266+00:00\",\n  \"source_service\"\
+          : \"worker-consumer\",\n  \"payload\": {\n    \"order_id\": \"forensic-case-1775454919\"\
           ,\n    \"should_fail\": true,\n    \"payload\": {\n      \"item\": \"AIOps-OneShot-Test\"\
           ,\n      \"qty\": 1\n    }\n  }\n}\nEOF\ncat > /artifacts/normal.json <<'EOF'\n\
-          {\n  \"artifact_type\": \"normal_validation\",\n  \"case_id\": \"worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2\"\
-          ,\n  \"target_topic\": \"orders-replay-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2\"\
-          ,\n  \"payload_hash\": \"\",\n  \"created_at\": \"2026-04-06T05:35:10.489358+00:00\"\
+          {\n  \"artifact_type\": \"normal_validation\",\n  \"case_id\": \"worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3\"\
+          ,\n  \"target_topic\": \"orders-replay-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3\"\
+          ,\n  \"payload_hash\": \"\",\n  \"created_at\": \"2026-04-06T05:55:19.121470+00:00\"\
           ,\n  \"enabled\": false,\n  \"source_service\": \"worker-consumer\",\n \
           \ \"payload\": {}\n}\nEOF\n"
         volumeMounts:
@@ -125,11 +125,11 @@ spec:
         - name: KAFKA_BOOTSTRAP
           value: kafka.kafka-poc.svc.cluster.local:9092
         - name: SOURCE_TOPIC
-          value: orders-replay-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
+          value: orders-replay-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
         - name: DLQ_TOPIC
           value: orders-dlq
         - name: GROUP_ID
-          value: orders-consumer-sandbox-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
+          value: orders-consumer-sandbox-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
         - name: SERVICE_NAME
           value: forensic-sandbox-app-worker-consumer-forensic
         - name: NAMESPACE
@@ -161,9 +161,9 @@ spec:
         - name: RUN_MODE
           value: sandbox
         - name: CASE_ID
-          value: worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2
+          value: worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3
         - name: RESULT_TOPIC
-          value: orders-result-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
+          value: orders-result-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
         - name: EMIT_RESULT_EVENT
           value: 'true'
         - name: READY_FILE_PATH
@@ -171,13 +171,13 @@ spec:
         - name: ISOLATION_MODE
           value: sandbox_strict
         - name: ALLOWED_REPLAY_TOPIC
-          value: orders-replay-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
+          value: orders-replay-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
         - name: ALLOWED_RESULT_TOPIC
-          value: orders-result-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
+          value: orders-result-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
         - name: VALIDATION_MODE
           value: reproduce
         - name: VALIDATION_RUN_ID
-          value: worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2-repro-0
+          value: worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3-repro-0
         - name: REVALIDATION_GENERATION
           value: '0'
         - name: EXPECTED_FAILURE_STATUS
@@ -189,9 +189,9 @@ spec:
         - name: FAILURE_ERROR_MESSAGE
           value: intentional failure for POC
         - name: REPLAY_PAYLOAD_HASH
-          value: 454e0bc2c8551942498ae066836649df5f6481deaa3223ade427be042c935deb
+          value: 8c1a6ac34b7abb814ca84128e56104ca7f80215a4b3cf29f9ff66e59ce7e468a
         - name: REPLAY_ORDER_ID
-          value: forensic-case-1775453710
+          value: forensic-case-1775454919
         - name: NORMAL_PAYLOAD_HASH
           value: ''
         volumeMounts:
@@ -208,12 +208,12 @@ metadata:
   namespace: forensic-sandbox
   labels:
     app: forensic-sandbox-app-worker-consumer-forensic
-    forensic-case-id: worker-consumer-forensic-case-17754-20260406t053510z-4-19c339de
+    forensic-case-id: worker-consumer-forensic-case-17754-20260406t055519z-8-7a8fdd25
   annotations:
     argocd.argoproj.io/sync-wave: '2'
-    forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2
+    forensic.case-id/full: worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3
 data:
-  case_id: worker-consumer-forensic-case-17754-20260406T053510Z-454e0bc2
+  case_id: worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3
   requested_by: manual-or-workflow
   source_service: worker-consumer
   source_namespace: kafka-poc
@@ -222,23 +222,23 @@ data:
   error_message: intentional failure for POC
   consumer_image_ref: ghcr.io/bonge0115/worker-consumer:82ebc80
   deployment_name: forensic-sandbox-app-worker-consumer-forensic
-  replay_topic: orders-replay-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
-  result_topic: orders-result-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
+  replay_topic: orders-replay-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
+  result_topic: orders-result-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
   config_version: v1
   dependency_profile: sandbox
-  requested_at: '2026-04-06T05:35:10.489516+00:00'
-  failure_payload_hash: 454e0bc2c8551942498ae066836649df5f6481deaa3223ade427be042c935deb
+  requested_at: '2026-04-06T05:55:19.121559+00:00'
+  failure_payload_hash: 8c1a6ac34b7abb814ca84128e56104ca7f80215a4b3cf29f9ff66e59ce7e468a
   normal_payload_hash: ''
-  order_id: forensic-case-1775453710
+  order_id: forensic-case-1775454919
   failure_artifact_type: failure_replay
-  failure_artifact_payload_hash: 454e0bc2c8551942498ae066836649df5f6481deaa3223ade427be042c935deb
+  failure_artifact_payload_hash: 8c1a6ac34b7abb814ca84128e56104ca7f80215a4b3cf29f9ff66e59ce7e468a
   normal_artifact_type: normal_validation
   normal_artifact_payload_hash: ''
   normal_validation_enabled: 'false'
   replay_publish_strategy: launcher_after_sandbox_ready
   isolation_mode: sandbox_strict
-  allowed_replay_topic: orders-replay-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
-  allowed_result_topic: orders-result-worker-consumer-forensic-case-17754-20260406t053510z-454e0bc2
+  allowed_replay_topic: orders-replay-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
+  allowed_result_topic: orders-result-worker-consumer-forensic-case-17754-20260406t055519z-8c1a6ac3
   mongo_host: mongodb-temp-worker-consumer-forensic.forensic-sandbox.svc.cluster.local
   expected_failure_status: failed
   expected_normal_status: success
