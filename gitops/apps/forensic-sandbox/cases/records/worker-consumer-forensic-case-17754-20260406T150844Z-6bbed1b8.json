@@ -2,9 +2,9 @@
   "case_id": "worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8",
-  "status": "promoted",
+  "status": "redriven",
   "created_at": "2026-04-06T15:09:07Z",
-  "updated_at": "2026-04-06T15:37:51Z",
+  "updated_at": "2026-04-06T15:38:17Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:1552a15",
   "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:837d7658f273191d341328c5f69eb280cd958612d0de48103c4d47b5e99ba790",
   "verified_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:837d7658f273191d341328c5f69eb280cd958612d0de48103c4d47b5e99ba790",
@@ -13,11 +13,11 @@
   "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-forensic-case-17754-20260406t150.yaml",
   "revalidation_generation": 2,
   "validation_run_id": "worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8-reval-g2",
-  "redrive_count": 0,
+  "redrive_count": 1,
   "flags": {
     "revalidation_passed": true,
     "promoted": true,
-    "redriven": false,
+    "redriven": true,
     "resolved": false,
     "cleanup_completed": false,
     "reproduce_verdict_collected": true,
@@ -51,7 +51,12 @@
     "last_revalidation_error": null,
     "forced_revalidation_pass": true,
     "forced_revalidation_pass_source": "revalidate-sandbox.yaml",
-    "forced_revalidation_pass_generation": "2"
+    "forced_revalidation_pass_generation": "2",
+    "last_redrive_target_topic": "orders",
+    "last_redrive_original_order_id": "forensic-case-1775488124",
+    "last_redrive_source": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8/redrive.json",
+    "redrive_job_name": "forensic-redrive-worker-consumer-forensic-case-17754-2026",
+    "redrive_job_namespace": "forensic-sandbox"
   },
   "history": [
     {
@@ -184,6 +189,16 @@
       "extra": {
         "from_status": "revalidation_passed",
         "to_status": "promoted"
+      }
+    },
+    {
+      "at": "2026-04-06T15:38:17Z",
+      "action": "update",
+      "status": "redriven",
+      "note": "redrive executed automatically after promotion",
+      "extra": {
+        "from_status": "promoted",
+        "to_status": "redriven"
       }
     }
   ]
