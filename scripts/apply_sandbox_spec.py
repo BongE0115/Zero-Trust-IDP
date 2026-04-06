@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Dict, List
@@ -116,6 +117,25 @@ def make_case_suffix(case_id: str) -> str:
     return sanitize_name(case_id, max_len=24)
 
 
+def make_case_label(case_id: str, max_len: int = 63) -> str:
+    cleaned = "".join(c.lower() if c.isalnum() else "-" for c in case_id)
+    while "--" in cleaned:
+        cleaned = cleaned.replace("--", "-")
+    cleaned = cleaned.strip("-")
+
+    if not cleaned:
+        cleaned = "case"
+
+    digest = hashlib.sha1(case_id.encode("utf-8")).hexdigest()[:8]
+    head_len = max_len - len(digest) - 1
+    head = cleaned[:head_len].rstrip("-")
+
+    if not head:
+        head = "case"
+
+    return f"{head}-{digest}"
+
+
 def patch_topic_init_container(
     deployment: Dict[str, Any],
     kafka_bootstrap: str,
@@ -131,8 +151,6 @@ def patch_topic_init_container(
 
     topic_init = find_init_container_by_name(init_containers, "topic-init")
 
-    # /bin/sh 에서는 pipefail 지원 안 하므로 set -eu 사용
-    # 각 옵션은 실제 개행이 유지되도록 안전하게 구성
     script = """set -eu
 
 BOOTSTRAP="${KAFKA_BOOTSTRAP}"
@@ -200,6 +218,7 @@ def build_case_configmap(
     deployment_name: str,
     case_configmap_name: str,
     mongo_host: str,
+    case_label: str,
 ) -> Dict[str, Any]:
     metadata = spec["metadata"]
     failure = spec["failure"]
@@ -216,10 +235,11 @@ def build_case_configmap(
             "namespace": sandbox["namespace"],
             "labels": {
                 "app": deployment_name,
-                "forensic-case-id": metadata["case_id"],
+                "forensic-case-id": case_label,
             },
             "annotations": {
-                "argocd.argoproj.io/sync-wave": "2"
+                "argocd.argoproj.io/sync-wave": "2",
+                "forensic.case-id/full": metadata["case_id"],
             },
         },
         "data": {
@@ -278,6 +298,7 @@ def build_case_manifest_docs(
     mongo_service = copy.deepcopy(template_mongo_service)
 
     case_suffix = make_case_suffix(metadata["case_id"])
+    case_label = make_case_label(metadata["case_id"])
     case_deployment_name = f"{sandbox['deployment_name']}-{case_suffix}"
     case_mongo_name = f"mongodb-temp-{case_suffix}"
     case_app_label = case_deployment_name
@@ -287,12 +308,16 @@ def build_case_manifest_docs(
     deployment["metadata"]["namespace"] = sandbox["namespace"]
     deployment["metadata"]["name"] = case_deployment_name
     deployment["metadata"].setdefault("labels", {})
-    deployment["metadata"]["labels"]["forensic-case-id"] = metadata["case_id"]
+    deployment["metadata"]["labels"]["forensic-case-id"] = case_label
+    deployment["metadata"].setdefault("annotations", {})
+    deployment["metadata"]["annotations"]["forensic.case-id/full"] = metadata["case_id"]
 
     deployment["spec"]["replicas"] = int(sandbox["replicas"])
     deployment["spec"]["selector"]["matchLabels"]["app"] = case_app_label
     deployment["spec"]["template"]["metadata"]["labels"]["app"] = case_app_label
-    deployment["spec"]["template"]["metadata"]["labels"]["forensic-case-id"] = metadata["case_id"]
+    deployment["spec"]["template"]["metadata"]["labels"]["forensic-case-id"] = case_label
+    deployment["spec"]["template"]["metadata"].setdefault("annotations", {})
+    deployment["spec"]["template"]["metadata"]["annotations"]["forensic.case-id/full"] = metadata["case_id"]
 
     pod_spec = deployment["spec"]["template"]["spec"]
     ensure_volume(pod_spec, "artifacts")
@@ -340,15 +365,21 @@ def build_case_manifest_docs(
     mongo_deployment["metadata"]["namespace"] = sandbox["namespace"]
     mongo_deployment["metadata"]["name"] = case_mongo_name
     mongo_deployment["metadata"].setdefault("labels", {})
-    mongo_deployment["metadata"]["labels"]["forensic-case-id"] = metadata["case_id"]
+    mongo_deployment["metadata"]["labels"]["forensic-case-id"] = case_label
+    mongo_deployment["metadata"].setdefault("annotations", {})
+    mongo_deployment["metadata"]["annotations"]["forensic.case-id/full"] = metadata["case_id"]
     mongo_deployment["spec"]["selector"]["matchLabels"]["app"] = case_mongo_name
     mongo_deployment["spec"]["template"]["metadata"]["labels"]["app"] = case_mongo_name
-    mongo_deployment["spec"]["template"]["metadata"]["labels"]["forensic-case-id"] = metadata["case_id"]
+    mongo_deployment["spec"]["template"]["metadata"]["labels"]["forensic-case-id"] = case_label
+    mongo_deployment["spec"]["template"]["metadata"].setdefault("annotations", {})
+    mongo_deployment["spec"]["template"]["metadata"]["annotations"]["forensic.case-id/full"] = metadata["case_id"]
 
     mongo_service["metadata"]["namespace"] = sandbox["namespace"]
     mongo_service["metadata"]["name"] = case_mongo_name
     mongo_service["metadata"].setdefault("labels", {})
-    mongo_service["metadata"]["labels"]["forensic-case-id"] = metadata["case_id"]
+    mongo_service["metadata"]["labels"]["forensic-case-id"] = case_label
+    mongo_service["metadata"].setdefault("annotations", {})
+    mongo_service["metadata"]["annotations"]["forensic.case-id/full"] = metadata["case_id"]
     mongo_service["spec"]["selector"]["app"] = case_mongo_name
 
     case_configmap = build_case_configmap(
@@ -358,6 +389,7 @@ def build_case_manifest_docs(
         deployment_name=case_deployment_name,
         case_configmap_name=case_configmap_name,
         mongo_host=case_mongo_host,
+        case_label=case_label,
     )
 
     return [mongo_service, mongo_deployment, deployment, case_configmap]
