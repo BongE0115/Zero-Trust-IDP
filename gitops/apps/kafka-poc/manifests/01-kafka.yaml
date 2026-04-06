@@ -103,6 +103,9 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: kafka-poc # 🔥 dlq-handler 등 자기 식구 허용!
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: forensic-sandbox # forensic sandbox 허용
     ports:
     - protocol: TCP
       port: 9092
