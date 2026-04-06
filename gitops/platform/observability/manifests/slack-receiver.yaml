@@ -17,7 +17,7 @@ spec:
       containers:
         - name: slack-receiver
           # 🚨 주의: 형님이 app.py를 말아놓은 실제 도커 이미지 주소를 넣어야 합니다!
-          image: 형님의_도커허브_계정/slack-receiver:latest 
+          image: ghcr.io/bonge0115/slack-receiver:latest  
           ports:
             - containerPort: 5001
           env:
