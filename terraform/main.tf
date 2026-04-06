@@ -1138,13 +1138,6 @@ resource "aws_cloudfront_distribution" "aiops_cdn" {
   viewer_certificate {
     cloudfront_default_certificate = true 
   }
-
-  # -----------------------------------------------------------
-  # 🚨 [핵심!] 삭제 방지 생명주기 설정
-  # -----------------------------------------------------------
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 # 2. 생성된 주소를 터미널에 출력
