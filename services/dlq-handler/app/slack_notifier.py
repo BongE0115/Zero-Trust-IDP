@@ -50,7 +50,7 @@ def send_slack_alert(case_id: str, error_msg: str, raw_payload: dict, source_ser
                     f"*탐지 서비스:* `{source_service}`\n"
                     f"*Case ID:* `{case_id}`\n"
                     f"*발생 에러:* `{error_msg}`\n\n"
-                    "⚠️ 비정상 접근이 탐지되었습니다. 분석을 위해 격리된 **포렌식 샌드박스**를 즉시 배포하시겠습니까?"
+                    "⚠️ 서비스에 에러가 탐지되었습니다. 포렌식 샌드박스를 배포하시겠습니까?"
                 )
             }
         },
