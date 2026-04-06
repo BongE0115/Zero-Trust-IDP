@@ -42,7 +42,7 @@ jobs:
             forensic_launcher:
               - 'forensic-launcher/**'
             slack_receiver:     
-            - 'services/slack-receiver/**'
+              - 'services/slack-receiver/**'
             anything_changed:
               - 'services/**'
               - 'forensic-launcher/**'
@@ -172,7 +172,6 @@ jobs:
               "ghcr.io/bonge0115/forensic-launcher:" + strenv(SHA_TAG)
             ' gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
           fi
-
 
           # slack-receiver changed -> 운영 slack-receiver만 갱신
           if [ "${{ needs.detect-changes.outputs.slack_receiver }}" = "true" ]; then
