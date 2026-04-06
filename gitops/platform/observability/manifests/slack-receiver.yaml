@@ -1,5 +1,4 @@
 # 1. 수신 요원 파드 (Deployment)
-# 운영 환경에서는 최신 이미지로 배포하기 위해 build-and-push.yaml에서 이미지 태그를 자동으로 업데이트하도록 설정했습니다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,7 +16,7 @@ spec:
     spec:
       containers:
         - name: slack-receiver
-          image: ghcr.io/bonge0115/slack-receiver:2b3c88c
+          image: ghcr.io/bonge0115/slack-receiver:cb58c26
           ports:
             - containerPort: 5001
           env:

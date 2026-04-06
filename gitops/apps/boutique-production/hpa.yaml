@@ -23,6 +23,8 @@ spec:
         type: Utilization
         averageUtilization: 90 # 메모리 90% 기준
 
+---
+
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -48,6 +50,8 @@ spec:
         type: Utilization
         averageUtilization: 90 # 메모리 90% 기준
 
+---
+
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -72,6 +76,8 @@ spec:
       target:
         type: Utilization
         averageUtilization: 90 # 메모리 90% 기준
+
+---
 
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
