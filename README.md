@@ -57,7 +57,7 @@ AWS와 On-Premises 환경 어디서 발생한 장애든 Kafka 기반 DLQ로 중�
 
 
 ## 📂 저장소 구조 (Monorepo Architecture) - 축약 버전 
-
+**text
 04.06 slack 알람 추가 버전/
 ├─ terraform/                      # AWS 인프라 생성
 │  ├─ main.tf                      # VPC/EC2/ALB/RDS 메인
