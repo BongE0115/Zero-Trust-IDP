@@ -1,0 +1,39 @@
+{
+  "case_id": "worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8",
+  "service": "worker-consumer",
+  "branch_name": "case/worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8",
+  "status": "sandbox_created",
+  "created_at": "2026-04-06T15:09:07Z",
+  "updated_at": "2026-04-06T15:09:07Z",
+  "source_image_ref": "ghcr.io/bonge0115/worker-consumer:1552a15",
+  "candidate_image_ref": null,
+  "verified_image_ref": null,
+  "promoted_image_ref": null,
+  "previous_production_image_ref": null,
+  "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-forensic-case-17754-20260406t150.yaml",
+  "revalidation_generation": 0,
+  "validation_run_id": null,
+  "redrive_count": 0,
+  "flags": {
+    "revalidation_passed": false,
+    "promoted": false,
+    "redriven": false,
+    "resolved": false,
+    "cleanup_completed": false
+  },
+  "metadata": {
+    "case_branch_created": false,
+    "case_branch_ref": "case/worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8",
+    "failure_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8/failure.json",
+    "normal_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8/normal.json",
+    "redrive_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8/redrive.json"
+  },
+  "history": [
+    {
+      "at": "2026-04-06T15:09:07Z",
+      "action": "create",
+      "status": "sandbox_created",
+      "note": "sandbox manifest created on jy"
+    }
+  ]
+}
