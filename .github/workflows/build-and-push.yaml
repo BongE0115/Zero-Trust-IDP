@@ -20,6 +20,7 @@ jobs:
       worker_consumer: ${{ steps.filter.outputs.worker_consumer }}
       dlq_handler: ${{ steps.filter.outputs.dlq_handler }}
       forensic_launcher: ${{ steps.filter.outputs.forensic_launcher }}
+      slack_receiver: ${{ steps.filter.outputs.slack_receiver }}
       anything_changed: ${{ steps.filter.outputs.anything_changed }}
     steps:
       - name: Checkout repository
@@ -40,6 +41,8 @@ jobs:
               - 'services/dlq-handler/**'
             forensic_launcher:
               - 'forensic-launcher/**'
+            slack_receiver:     
+            - 'services/slack-receiver/**'
             anything_changed:
               - 'services/**'
               - 'forensic-launcher/**'
@@ -108,6 +111,16 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/forensic-launcher:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/forensic-launcher:${{ env.SHORT_SHA }}
+      
+      - name: Build and push slack-receiver
+        if: needs.detect-changes.outputs.slack_receiver == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/slack-receiver
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/slack-receiver:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/slack-receiver:${{ env.SHORT_SHA }}
 
       - name: Install yq
         run: |
@@ -160,6 +173,15 @@ jobs:
             ' gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
           fi
 
+
+          # slack-receiver changed -> 운영 slack-receiver만 갱신
+          if [ "${{ needs.detect-changes.outputs.slack_receiver }}" = "true" ]; then
+            yq -i '
+              (select(.kind == "Deployment") | .spec.template.spec.containers[0].image) =
+              "ghcr.io/bonge0115/slack-receiver:" + strenv(SHA_TAG)
+            ' gitops/apps/slack-receiver.yaml
+          fi
+
       - name: Guardrail - do not touch case manifests or case records
         shell: bash
         run: |
@@ -176,7 +198,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add gitops/apps/kafka-poc/manifests gitops/apps/forensic-sandbox/templates
+          git add gitops/apps/kafka-poc/manifests gitops/apps/forensic-sandbox/templates gitops/apps/slack-receiver.yaml
           git status --short
 
           if git diff --cached --quiet; then
