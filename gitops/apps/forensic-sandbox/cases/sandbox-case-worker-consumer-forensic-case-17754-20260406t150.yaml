@@ -85,9 +85,9 @@ spec:
         - name: KAFKA_BOOTSTRAP
           value: kafka.kafka-poc.svc.cluster.local:9092
         - name: REPLAY_TOPIC
-          value: orders-replay-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
+          value: orders-replay-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
         - name: RESULT_TOPIC
-          value: orders-result-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
+          value: orders-result-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
         - name: TOPIC_PARTITIONS
           value: '1'
         - name: TOPIC_REPLICATION_FACTOR
@@ -116,17 +116,17 @@ spec:
           mountPath: /artifacts
       containers:
       - name: consumer-app
-        image: ghcr.io/bonge0115/worker-consumer@sha256:283786b23ace768a0629c07099da7f6cc03995bf735b0f2873856997005ee2ad
+        image: ghcr.io/bonge0115/worker-consumer@sha256:837d7658f273191d341328c5f69eb280cd958612d0de48103c4d47b5e99ba790
         imagePullPolicy: IfNotPresent
         env:
         - name: KAFKA_BOOTSTRAP
           value: kafka.kafka-poc.svc.cluster.local:9092
         - name: SOURCE_TOPIC
-          value: orders-replay-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
+          value: orders-replay-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
         - name: DLQ_TOPIC
           value: orders-dlq
         - name: GROUP_ID
-          value: orders-consumer-sandbox-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
+          value: orders-consumer-sandbox-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
         - name: SERVICE_NAME
           value: forensic-sandbox-app-worker-consumer-41f41fa4
         - name: NAMESPACE
@@ -134,7 +134,7 @@ spec:
         - name: DEPLOYMENT_NAME
           value: forensic-sandbox-app-worker-consumer-41f41fa4
         - name: IMAGE_REF
-          value: ghcr.io/bonge0115/worker-consumer@sha256:283786b23ace768a0629c07099da7f6cc03995bf735b0f2873856997005ee2ad
+          value: ghcr.io/bonge0115/worker-consumer@sha256:837d7658f273191d341328c5f69eb280cd958612d0de48103c4d47b5e99ba790
         - name: CONFIG_VERSION
           value: v1
         - name: DEPENDENCY_PROFILE
@@ -160,7 +160,7 @@ spec:
         - name: CASE_ID
           value: worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8
         - name: RESULT_TOPIC
-          value: orders-result-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
+          value: orders-result-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
         - name: EMIT_RESULT_EVENT
           value: 'true'
         - name: READY_FILE_PATH
@@ -168,15 +168,15 @@ spec:
         - name: ISOLATION_MODE
           value: sandbox_strict
         - name: ALLOWED_REPLAY_TOPIC
-          value: orders-replay-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
+          value: orders-replay-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
         - name: ALLOWED_RESULT_TOPIC
-          value: orders-result-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
+          value: orders-result-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
         - name: VALIDATION_MODE
           value: fix-verify
         - name: VALIDATION_RUN_ID
-          value: worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8-reval-g1
+          value: worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8-reval-g2
         - name: REVALIDATION_GENERATION
-          value: '1'
+          value: '2'
         - name: EXPECTED_FAILURE_STATUS
           value: success
         - name: EXPECTED_NORMAL_STATUS
@@ -217,10 +217,10 @@ data:
   source_deployment: worker-consumer
   error_type: ValueError
   error_message: intentional failure for POC
-  consumer_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:283786b23ace768a0629c07099da7f6cc03995bf735b0f2873856997005ee2ad
+  consumer_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:837d7658f273191d341328c5f69eb280cd958612d0de48103c4d47b5e99ba790
   deployment_name: forensic-sandbox-app-worker-consumer-41f41fa4
-  replay_topic: orders-replay-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
-  result_topic: orders-result-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
+  replay_topic: orders-replay-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
+  result_topic: orders-result-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
   config_version: v1
   dependency_profile: sandbox
   requested_at: '2026-04-06T15:08:44.928234+00:00'
@@ -234,13 +234,13 @@ data:
   normal_validation_enabled: 'false'
   replay_publish_strategy: launcher_after_sandbox_ready
   isolation_mode: sandbox_strict
-  allowed_replay_topic: orders-replay-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
-  allowed_result_topic: orders-result-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
+  allowed_replay_topic: orders-replay-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
+  allowed_result_topic: orders-result-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
   mongo_host: mongodb-temp-worker-consumer-41f41fa4.forensic-sandbox.svc.cluster.local
   expected_failure_status: failed
   expected_normal_status: success
-  candidate_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:283786b23ace768a0629c07099da7f6cc03995bf735b0f2873856997005ee2ad
+  candidate_image_ref: ghcr.io/bonge0115/worker-consumer@sha256:837d7658f273191d341328c5f69eb280cd958612d0de48103c4d47b5e99ba790
   validation_mode: fix-verify
-  revalidation_generation: '1'
-  validation_run_id: worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8-reval-g1
-  group_id: orders-consumer-sandbox-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g1
+  revalidation_generation: '2'
+  validation_run_id: worker-consumer-forensic-case-17754-20260406T150844Z-6bbed1b8-reval-g2
+  group_id: orders-consumer-sandbox-worker-consumer-forensic-case-17754-20260406t150844z-6bbed1b8-g2
