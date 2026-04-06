@@ -22,20 +22,33 @@ AWS와 On-Premises 환경 어디서 발생한 장애든 Kafka 기반 DLQ로 중�
 
 까지 이어지는 폐쇄형 자동 복구 파이프라인을 구현하는 것입니다.
 
+## 🎯 목표 (Goal) 
+
+이 프로젝트의 목표는 다음과 같습니다.
+
+분산된 하이브리드 워크로드에서 발생하는 장애를 중앙 집중형 흐름으로 수렴
+운영망과 개발/분석 환경을 완전히 분리한 Zero-Trust 복구 체계 구축
+동일한 실패를 재현할 수 있는 일회용 샌드박스 자동 생성
+수정 코드가 실제 문제를 해결했는지 검증하는 재현 + 재검증 자동화
+검증된 이미지만 운영에 반영하는 안전한 GitOps 기반 승격(promote)
+장애로 인해 적재된 실패 메시지를 다시 처리하는 Redrive 자동화
+
 ## ✨ 핵심 혁신 포인트 (Key Features)
-* **Decentralized Services, Centralized Recovery:** Kafka의 디커플링을 활용하여, 인프라의 위치와 무관하게 발생하는 모든 치명적 에러를 사내 폐쇄망의 단일 샌드박스로 집중시킵니다.
-* **Zero-Trust Network Isolation:** Istio의 `AuthorizationPolicy`를 통해 샌드박스 파드에서 외부 운영망(AWS RDS)으로 나가는 Egress 통신을 100% 원천 차단합니다.
-* **GitOps & ChatOps Automation:** Slack 봇과 GitHub Actions, ArgoCD를 연동하여 에러 발생 시 즉각적으로 동일한 에러 환경을 재현하는 샌드박스를 On-Demand로 프로비저닝하고 회수(GC)합니다.
-* **FinOps 기반 비용 최적화:** 전체 트래픽이 아닌 0.1% 미만의 에러 데이터만 사내망으로 전송하며, 페이로드 압축을 통해 퍼블릭 클라우드의 아웃바운드 비용을 최소화합니다.
+**분산된 장애를 중앙 DLQ로 수렴하여**, 인프라 위치와 무관한 통합 복구 체계를 제공합니다.
+**Istio 기반 Zero-Trust 샌드박스 격리를 적용해**, 샌드박스를 별도 네임스페이스와 사이드카가 포함된 서비스 메시 내부에 배치하고, AuthorizationPolicy 기반 기본 차단(Default Deny) 정책 아래에서 **사건별 replay/result topic만 허용**하도록 구성했습니다. 이를 통해 **운영 서비스·운영 DB로의 직접 접근을 차단하고, 분석 과정에서 운영망 오염이 확산되는 것을 막습니다.**
+**사건별 일회용 포렌식 샌드박스를 자동 생성**해, 공용 테스트 환경의 한계를 극복합니다. 각 샌드박스는 해당 사건의 payload, consumer image, validation mode를 반영해 독립적으로 구성되며, 검증 종료 후 자동 정리됩니다.
+**실패/정상 케이스를 모두 통과한 수정만 운영 반영**하여, 단순한 패치 배포가 아니라 검증된 수정만 승격되는 복구 체계를 제공합니다.
+**수집–재현–검증–반영–재처리**까지 연결된 폐쇄형 자동 복구 파이프라인을 통해, 알림 중심의 기존 장애 대응을 실제 복구 중심 구조로 전환합니다.
+**GitOps + ChatOps 기반 운영 표준화**를 통해, 장애 대응을 담당자 경험과 수동 명령에 의존하는 방식에서 실행 가능하고 추적 가능한 플랫폼형 프로세스로 전환합니다.
 
 ## 🛠️ 기술 스택 (Tech Stack)
 * **Infrastructure:** AWS (EC2, RDS), On-Premises (K3s), Terraform
 * **Hybrid Network:** Tailscale (Mesh VPN)
-* **Message Broker:** Apache Kafka (Main & DLQ Topic)
-* **Security & Mesh:** Istio (Egress Gateway, mTLS)
+* **Message Broker:** Kafka(main, DLQ, Replay, Result Topic)
+* **Security & Mesh:** Istio (Egress Gateway, mTLS), AutorizationPolicy, NetworkPolicy
 * **CI/CD Automation:** GitHub Actions, ArgoCD
-* **AIOps & Monitoring:** Salesforce Merlion, Prometheus, Grafana
-* **Applications:** Python (FastAPI/Merlion), Slack Bolt API, MongoDB (Ephemeral DB)
+* **Monitoring:** Prometheus, Grafana, Slack Bot, Slack Webhook
+
 
 ## 📂 저장소 구조 (Monorepo Architecture)
 ```text
