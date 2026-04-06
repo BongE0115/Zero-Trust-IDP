@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: slack-receiver
-          image: ghcr.io/bonge0115/slack-receiver:cb58c26
+          image: ghcr.io/bonge0115/slack-receiver:50c7790
           ports:
             - containerPort: 5001
           env:
