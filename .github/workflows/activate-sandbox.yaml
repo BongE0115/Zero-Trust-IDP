@@ -342,6 +342,56 @@ jobs:
           echo "[INFO] forensic-sandbox namespace check:"
           kubectl get ns forensic-sandbox
 
+      # =====================================================================
+      # 🚨 [추가됨] JIT 방화벽 개방 및 권한 발급 단계 (파드 배포 직전 실행)
+      # =====================================================================
+      - name: 🧹 Pre-Cleanup (기존 임시 권한 초기화)
+        shell: bash
+        run: |
+          kubectl delete authorizationpolicy sandbox-jit-access -n forensic-sandbox --ignore-not-found
+          kubectl delete authorizationpolicy allow-sandbox-to-kafka -n kafka-poc --ignore-not-found
+
+      - name: 🔓 Unlock & Open Firewall (자물쇠 해제 및 임시 권한 발급)
+        shell: bash
+        run: |
+          echo "디버깅 모드: 자물쇠를 해제하고 임시 포트를 개방합니다."
+          # 자물쇠(DENY) 제거
+          kubectl delete authorizationpolicy block-everything-sandbox -n forensic-sandbox --ignore-not-found
+          # 열쇠(ALLOW) 삽입
+          cat <<EOF | kubectl apply -f -
+          apiVersion: security.istio.io/v1beta1
+          kind: AuthorizationPolicy
+          metadata:
+            name: sandbox-jit-access
+            namespace: forensic-sandbox
+          spec:
+            selector:
+              matchLabels:
+                app: forensic-sandbox-app
+            action: ALLOW
+            rules:
+            - to:
+              - operation:
+                  ports: ["8080", "27017", "53"]
+          ---
+          apiVersion: security.istio.io/v1beta1
+          kind: AuthorizationPolicy
+          metadata:
+            name: allow-sandbox-to-kafka
+            namespace: kafka-poc
+          spec:
+            action: ALLOW
+            rules:
+            - from:
+              - source:
+                  namespaces: ["forensic-sandbox"]
+              to:
+              - operation:
+                  ports: ["9092"]
+          EOF
+          sleep 5
+      # =====================================================================
+
       - name: Wait for forensic-sandbox-cases revision to be observed by Argo CD
         shell: bash
         run: |
