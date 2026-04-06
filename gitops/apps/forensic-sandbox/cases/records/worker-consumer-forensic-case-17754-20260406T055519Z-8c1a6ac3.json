@@ -4,7 +4,7 @@
   "branch_name": "case/worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3",
   "status": "sandbox_created",
   "created_at": "2026-04-06T05:55:34Z",
-  "updated_at": "2026-04-06T05:55:34Z",
+  "updated_at": "2026-04-06T06:00:34Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:82ebc80",
   "candidate_image_ref": null,
   "verified_image_ref": null,
@@ -26,7 +26,9 @@
     "case_branch_ref": "case/worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3",
     "failure_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3/failure.json",
     "normal_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3/normal.json",
-    "redrive_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3/redrive.json"
+    "redrive_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3/redrive.json",
+    "reproduce_job_manifest_path": "gitops/apps/forensic-sandbox/cases/reproduce/reproduce-case-worker-consumer-forensic-case-17754-20260406T055519Z-8c1a6ac3.yaml",
+    "reproduce_job_name": "forensic-reproduce-worker-consumer-forensic-cas-ad44ec4b"
   },
   "history": [
     {
@@ -34,6 +36,12 @@
       "action": "create",
       "status": "sandbox_created",
       "note": "sandbox manifest created on jy"
+    },
+    {
+      "at": "2026-04-06T06:00:34Z",
+      "action": "update",
+      "status": "sandbox_created",
+      "note": "initial reproduce launcher manifest created"
     }
   ]
 }
