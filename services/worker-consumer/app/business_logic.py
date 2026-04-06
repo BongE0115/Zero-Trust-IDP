@@ -9,9 +9,11 @@ def process_order(payload: Dict[str, Any]) -> None:
     # 👇 어떤 데이터 타입(문자, 불리언, 대소문자)이 오든 
     # 무조건 소문자 문자열로 깎아서 'true'인지 검사하는 무적의 판독기
     fail_flag = payload.get(settings.FORCE_FAIL_FIELD)
+    logger = logging.getLogger(__name__)
     
     if str(fail_flag).lower() == "true":
-        raise ValueError("intentional failure for POC")
+        logger.warning("[FIXED] intentional failure 방어 완료")
+        return
 
     # 여기에 실제 주문 처리 로직이 들어가면 됨.
     # 예:
