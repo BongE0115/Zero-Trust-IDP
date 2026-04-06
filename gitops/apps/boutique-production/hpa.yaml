@@ -2,17 +2,24 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: boutique-hpa
+  namespace: boutique-production
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: cartservice
-  minReplicas: 1
-  maxReplicas: 3
+    name: frontend
+  minReplicas: 3
+  maxReplicas: 10
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 90
+        averageUtilization: 90 # CPU 90% 기준
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 90 # 메모리 90% 기준
