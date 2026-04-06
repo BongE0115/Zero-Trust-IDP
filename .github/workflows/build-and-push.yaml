@@ -1,0 +1,210 @@
+name: Build Push and Update GitOps (Production Only)
+
+on:
+  push:
+    branches:
+      - jy
+    paths:
+      - "services/**"
+      - "forensic-launcher/**"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: bonge0115
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      producer_api: ${{ steps.filter.outputs.producer_api }}
+      worker_consumer: ${{ steps.filter.outputs.worker_consumer }}
+      dlq_handler: ${{ steps.filter.outputs.dlq_handler }}
+      forensic_launcher: ${{ steps.filter.outputs.forensic_launcher }}
+      slack_receiver: ${{ steps.filter.outputs.slack_receiver }}
+      anything_changed: ${{ steps.filter.outputs.anything_changed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            producer_api:
+              - 'services/producer-api/**'
+            worker_consumer:
+              - 'services/worker-consumer/**'
+            dlq_handler:
+              - 'services/dlq-handler/**'
+            forensic_launcher:
+              - 'forensic-launcher/**'
+            slack_receiver:     
+            - 'services/slack-receiver/**'
+            anything_changed:
+              - 'services/**'
+              - 'forensic-launcher/**'
+
+  build-push-update:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.anything_changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: jy
+          fetch-depth: 0
+
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push producer-api
+        if: needs.detect-changes.outputs.producer_api == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/producer-api
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/producer-api:${{ env.SHORT_SHA }}
+
+      - name: Build and push worker-consumer
+        if: needs.detect-changes.outputs.worker_consumer == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/worker-consumer
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/worker-consumer:${{ env.SHORT_SHA }}
+
+      - name: Build and push dlq-handler
+        if: needs.detect-changes.outputs.dlq_handler == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/dlq-handler
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/dlq-handler:${{ env.SHORT_SHA }}
+
+      - name: Build and push forensic-launcher
+        if: needs.detect-changes.outputs.forensic_launcher == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./forensic-launcher
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/forensic-launcher:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/forensic-launcher:${{ env.SHORT_SHA }}
+      
+      - name: Build and push slack-receiver
+        if: needs.detect-changes.outputs.slack_receiver == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/slack-receiver
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/slack-receiver:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/slack-receiver:${{ env.SHORT_SHA }}
+
+      - name: Install yq
+        run: |
+          sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Update production GitOps manifests with SHA tag
+        run: |
+          export SHA_TAG="${SHORT_SHA}"
+          echo "SHORT_SHA=${SHORT_SHA}"
+          echo "SHA_TAG=${SHA_TAG}"
+
+          # producer-api changed -> 운영 producer만 갱신
+          if [ "${{ needs.detect-changes.outputs.producer_api }}" = "true" ]; then
+            yq -i '
+              .spec.template.spec.containers[0].image =
+              "ghcr.io/bonge0115/producer-api:" + strenv(SHA_TAG)
+            ' gitops/apps/kafka-poc/manifests/11-producer.yaml
+          fi
+
+          # worker-consumer changed -> 운영 consumer만 갱신
+          # case/** 브랜치 candidate 빌드 및 sandbox patch는 build-case-candidate.yaml이 담당
+          if [ "${{ needs.detect-changes.outputs.worker_consumer }}" = "true" ]; then
+            yq -i '
+              .spec.template.spec.containers[0].image =
+              "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+            ' gitops/apps/kafka-poc/manifests/21-consumer.yaml
+
+            yq -i '
+              (.spec.template.spec.containers[0].env[] | select(.name == "IMAGE_REF") | .value) =
+              "ghcr.io/bonge0115/worker-consumer:" + strenv(SHA_TAG)
+            ' gitops/apps/kafka-poc/manifests/21-consumer.yaml
+          fi
+
+          # dlq-handler changed -> 운영 dlq-handler만 갱신
+          if [ "${{ needs.detect-changes.outputs.dlq_handler }}" = "true" ]; then
+            yq -i '
+              .spec.template.spec.containers[0].image =
+              "ghcr.io/bonge0115/dlq-handler:" + strenv(SHA_TAG)
+            ' gitops/apps/kafka-poc/manifests/32-dlq-handler.yaml
+          fi
+
+          # forensic-launcher changed -> sandbox template 기본값만 갱신
+          # 이미 생성된 case-specific manifest는 절대 수정하지 않음
+          if [ "${{ needs.detect-changes.outputs.forensic_launcher }}" = "true" ]; then
+            yq -i '
+              (.spec.template.spec.containers[] | select(.name == "forensic-launcher") | .image) =
+              "ghcr.io/bonge0115/forensic-launcher:" + strenv(SHA_TAG)
+            ' gitops/apps/forensic-sandbox/templates/sandbox-app.yaml
+          fi
+
+
+          # slack-receiver changed -> 운영 slack-receiver만 갱신
+          if [ "${{ needs.detect-changes.outputs.slack_receiver }}" = "true" ]; then
+            yq -i '
+              (select(.kind == "Deployment") | .spec.template.spec.containers[0].image) =
+              "ghcr.io/bonge0115/slack-receiver:" + strenv(SHA_TAG)
+            ' gitops/apps/slack-receiver.yaml
+          fi
+
+      - name: Guardrail - do not touch case manifests or case records
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git diff --name-only | grep -E '^gitops/apps/forensic-sandbox/cases/' >/dev/null 2>&1; then
+            echo "ERROR: production build workflow must not modify case manifests or records"
+            git diff --name-only
+            exit 1
+          fi
+
+      - name: Commit and push updated production GitOps manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add gitops/apps/kafka-poc/manifests gitops/apps/forensic-sandbox/templates gitops/apps/slack-receiver.yaml
+          git status --short
+
+          if git diff --cached --quiet; then
+            echo "No manifest changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(gitops): update production images to ${SHORT_SHA}"
+          git push origin jy
