@@ -1109,6 +1109,8 @@ resource "aws_cloudfront_distribution" "aiops_cdn" {
     
     # 캐시 끄기 (실시간 통신 필수)
     cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled (AWS 고정 ID)
+
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AllViewer (AWS 고정 ID)
   }
 
   # [기본 규칙] 나머지 모든 접속 (8080 쇼핑몰로 배달)
