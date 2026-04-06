@@ -56,52 +56,202 @@ AWS와 On-Premises 환경 어디서 발생한 장애든 Kafka 기반 DLQ로 중�
 * **Monitoring:** Prometheus, Grafana, Slack Bot, Slack Webhook
 
 
-## 📂 저장소 구조 (Monorepo Architecture)
-```text
-Zero-Trust-IDP/
-├── .github/                      # 🤖 GitHub Actions (CI/CD 자동화)
-│   └── workflows/
-│       ├── ci-build.yml          # 코드 푸시 시 Docker 이미지 빌드 및 푸시
-│       └── cd-sandbox.yml        # Slack 봇이 트리거하는 샌드박스 배포 파이프라인       
-│       └── jit-debug.yml         # 🚨 Slack 버튼 클릭 시 트리거되어 파드에 netshoot 컨테이너를 붙이고 tcpdump를 실행하는 자동화 워크플로우
+## 📂 저장소 구조 (Monorepo Architecture) - 축약 버전 
+
+04.06 slack 알람 추가 버전/
+├─ terraform/                      # AWS 인프라 생성
+│  ├─ main.tf                      # VPC/EC2/ALB/RDS 메인
+│  └─ templates/                   # EC2 초기화 스크립트
+│     ├─ k3s_server.sh.tpl         # master 부팅
+│     ├─ k3s_agent.sh.tpl          # worker 부팅
+│     └─ monitoring.sh.tpl         # monitoring 부팅
 │
-├── templates/
-│   ├── setup_k3s.yml.tpl
+├─ .github/workflows/              # 자동화 파이프라인
+│  ├─ activate-sandbox.yaml        # 샌드박스 생성
+│  ├─ create-case-branch.yaml      # case 브랜치 생성
+│  ├─ build-case-candidate.yaml    # 수정 이미지 빌드
+│  ├─ revalidate-sandbox.yaml      # 수정 후 검증
+│  ├─ promote-case-image.yaml      # 운영 승격
+│  └─ redrive-dlq.yaml             # DLQ 재처리
 │
-├── terraform/                    # ☁️ 인프라 프로비저닝 (AWS)
-│   ├── main.tf                   # EC2, RDS(MySQL), 보안 그룹(Security Group) 정의
-│   ├── variables.tf              # DB 비밀번호, 리전 등 변수 관리
-│   └── outputs.tf                # 생성된 EC2 IP, RDS 엔드포인트 출력
+├─ gitops/                         # ArgoCD가 보는 배포 원본
+│  ├─ bootstrap/                   # root-app / child-app 정의
+│  └─ apps/
+│     ├─ kafka-poc/                # producer/consumer/dlq-handler
+│     ├─ forensic-sandbox/         # 샌드박스 베이스 + case 파일
+│     ├─ boutique-local/           # 로컬 앱
+│     └─ boutique-production/      # 운영 앱
 │
-├── ansible/                      # 🌉 하이브리드 망 구성 (Tailscale + K3s)
-│   ├── inventory.ini             # AWS EC2 및 로컬 PC의 IP/접속 정보
-│   └── setup-hybrid.yml          # Tailscale VPN 연동 및 K3s 설치 자동화 스크립트         
+├─ forensic-launcher/              # 샌드박스 내부 launcher
+│  └─ app/launcher.py              # 샌드박스 내부 컨슈머-app에 정상, 실패 메시지 주입 및 결과 정 
 │
-├── k8s-manifests/                # ⛵ ArgoCD가 감시하는 K8s 선언문 (GitOps)
-│   ├── core-infra/               # [공통 인프라] 항시 떠 있는 시스템
-│   │   ├── kafka/                # Apache Kafka (Main/DLQ 토픽 설정)
-│   │   ├── monitoring/           # Prometheus & Grafana (에러/트래픽 시각화)
-│   │   └── merlion-ai/           # Salesforce Merlion (DLQ 이상 탐지 AI)
-│   │       
-│   ├── apps/                     # [메인 서비스] 비즈니스 로직
-│   │   ├── consumer-aws/         # AWS에서 도는 메인 컨슈머 파드
-│   │   ├── consumer-local/       # 로컬망에서 도는 메인 컨슈머 파드 (Active-Active)
-│   │   └── redrive-api/          # 복구된 에러를 다시 메인 큐로 밀어넣는 API     
-│   │
-│   └── forensic-sandbox/         # 🛡️ [핵심] On-Demand 격리 샌드박스 구역
-│       ├── sandbox-app.yaml      # [UPDATE] 앰비언트 메시 라벨 (istio.io/dataplane-mode: ambient) 적용
-│       ├── mongodb-temp.yaml     # 샌드박스 전용 일회용 로컬 MongoDB    
-│       ├── istio-rules.yaml      # L7 Egress 차단 룰 (AuthorizationPolicy)
-│       ├── peer-auth.yaml        # 샌드박스 내 STRICT mTLS 강제 적용
-│       ├── waypoint.yaml         # 앰비언트 메시의 L7 정책(차단 룰)을 실행할 Waypoint Proxy
-│       └── network-policy.yaml   # K8s CNI 레벨의 물리적 심층 방어 (AWS RDS 등 외부 IP 원천 차단 화이트리스트)
+├─ ansible/                        # 하이브리드 설정 보조
+├─ docs/case-lifecycle.md          # 메시지 처리 로직 설명 문서
+├─ app.py                          # Slack 버튼 → GitHub Actions 호출
+
+
+## 📂 저장소 구조 (Monorepo Architecture) - 전체 버전
+
+04.06 slack 알람 추가 버전/
+├─ terraform/                              # AWS 인프라를 만드는 Terraform 루트
+│  ├─ main.tf                              # VPC, EC2, ALB, RDS 등 메인 인프라 정의
+│  ├─ variables.tf                         # Terraform 입력 변수 정의
+│  ├─ outputs.tf                           # 생성 후 출력값 정의
+│  ├─ local_env.tf                         # 로컬/외부 연동용 설정
+│  ├─ github_secrets.tf                    # GitHub Actions 시크릿/연동 관련 Terraform
+│  ├─ scripts/                             # Terraform 보조 스크립트
+│  │  └─ get_k3s_kubeconfig.py             # SSM으로 K3s kubeconfig 가져오는 스크립트
+│  └─ templates/                           # EC2 user_data 템플릿
+│     ├─ k3s_server.sh.tpl                 # K3s master 초기 설정 스크립트
+│     ├─ k3s_agent.sh.tpl                  # K3s worker 초기 설정 스크립트
+│     └─ monitoring.sh.tpl                 # monitoring 서버 초기 설정 스크립트
 │
-├── src/                          # 💻 실제 애플리케이션 소스 코드
-│   ├── consumer-app/             
-│   ├── merlion-ai/               # (Python) 시계열 이상 탐지 앱
-│   │   ├── model.py              # Merlion 시계열 모델 
-│   │   └── slack_notifier.py     # 🚨 에러 포트 정보와 '디버깅 권한 부여(JIT)' 대화형 버튼을 Slack으로 쏘는 로직
-│   └── redrive-api/              
+├─ .github/                                # GitHub Actions 워크플로우
+│  └─ workflows/
+│     ├─ activate-sandbox.yaml             # 샌드박스 생성 시작 워크플로우
+│     ├─ build-and-push.yaml               # 기본 이미지 빌드/푸시
+│     ├─ build-case-candidate.yaml         # case 전용 candidate 이미지 빌드
+│     ├─ cleanup-case-sandbox.yaml         # case 샌드박스 정리
+│     ├─ create-case-branch.yaml           # case 브랜치 생성
+│     ├─ promote-case-image.yaml           # 검증 통과 이미지 운영 승격
+│     ├─ redrive-dlq.yaml                  # DLQ 메시지 재처리
+│     ├─ reproduce-sandbox.yaml            # 실패 재현용 샌드박스 실행
+│     └─ revalidate-sandbox.yaml           # 수정 후 재검증 샌드박스 실행
 │
-├── .gitignore                    # 보안 키, tfstate, 로그 파일 등 업로드 방지
-└── README.md                     # 프로젝트 개요, 아키텍처, 실행 가이드
+├─ ansible/                                # Ansible 실행 파일
+│  ├─ inventory.ini                        # 대상 서버 목록
+│  └─ setup-hybrid.yml                     # 하이브리드 환경 설정 플레이북
+│
+├─ docs/                                   # 문서 폴더
+│  └─ case-lifecycle.md                    # case 생성~승격 전체 흐름 문서
+│
+├─ forensic-launcher/                      # 샌드박스 내부 launcher 서비스
+│  ├─ dockerfile                           # launcher 이미지 빌드 파일
+│  ├─ requirements.txt                     # launcher 파이썬 패키지
+│  └─ app/
+│     └─ launcher.py                       # artifact 주입/판정/verdict 생성 로직
+│
+├─ gitops/                                 # ArgoCD가 바라보는 GitOps 루트
+│  ├─ bootstrap/                           # ArgoCD 최초 부트스트랩 영역
+│  │  ├─ root-app.yaml                     # 최상위 ArgoCD root app
+│  │  ├─ argocd/
+│  │  │  └─ values.yaml                    # ArgoCD 설치 values
+│  │  └─ children/
+│  │     ├─ argocd-app.yaml                # ArgoCD child app
+│  │     ├─ boutique-local-app.yaml        # local 앱 child app
+│  │     ├─ boutique-production-app.yaml   # production 앱 child app
+│  │     ├─ forensic-sandbox-app.yaml      # sandbox base app
+│  │     ├─ forensic-sandbox-cases-app.yaml# case sandbox app
+│  │     ├─ forensic-sandbox-reproduce.yaml# reproduce app
+│  │     ├─ forensic-sandbox-revalidation-app.yaml # revalidation app
+│  │     ├─ istio-app.yaml                 # istio app
+│  │     ├─ kafka-stack-app.yaml           # kafka stack app
+│  │     └─ observability-app.yaml         # observability app
+│  │
+│  ├─ apps/                                # 실제 앱 매니페스트 모음
+│  │  ├─ boutique-local/                   # 로컬 부티크 앱
+│  │  │  ├─ cartservice.yaml               # cart 서비스 매니페스트
+│  │  │  ├─ currencyservice.yaml           # currency 서비스 매니페스트
+│  │  │  ├─ loadgenerator.yaml             # 테스트 트래픽 생성기
+│  │  │  ├─ productcatalog.yaml            # 상품 카탈로그 서비스
+│  │  │  └─ kustomization.yaml             # 묶음 배포 정의
+│  │  │
+│  │  ├─ boutique-production/              # 운영 부티크 앱
+│  │  │  ├─ checkoutservice.yaml           # 결제/주문 흐름 서비스
+│  │  │  ├─ frontend.yaml                  # 프론트엔드 서비스
+│  │  │  ├─ hpa.yaml                       # 오토스케일 설정
+│  │  │  ├─ paymentservice.yaml & shippingservice.yaml # 결제/배송 서비스
+│  │  │  └─ kustomization.yaml             # 묶음 배포 정의
+│  │  │
+│  │  ├─ kafka-poc/                        # 장애 처리 실험용 Kafka 앱
+│  │  │  └─ manifests/
+│  │  │     ├─ 00-namespace.yaml           # POC 네임스페이스
+│  │  │     ├─ 01-kafka.yaml               # Kafka 관련 배포
+│  │  │     ├─ 02-topics-job.yaml          # 토픽 생성 Job
+│  │  │     ├─ 11-producer.yaml            # producer 파드
+│  │  │     ├─ 21-consumer.yaml            # consumer 파드
+│  │  │     ├─ 30-dlq-handler-rbac.yaml    # DLQ handler 권한
+│  │  │     ├─ 32-dlq-handler.yaml         # DLQ handler 파드/서비스
+│  │  │     └─ kustomization.yaml          # 묶음 배포 정의
+│  │  │
+│  │  └─ forensic-sandbox/                 # 샌드박스 GitOps 영역
+│  │     ├─ templates/
+│  │     │  └─ sandbox-app.yaml            # 샌드박스 앱 템플릿
+│  │     ├─ base/
+│  │     │  ├─ current-case.yaml           # 현재 case 참조 정보
+│  │     │  ├─ istio-rules.yaml            # sandbox 네트워크 규칙
+│  │     │  ├─ kustomization.yaml          # sandbox base 묶음 정의
+│  │     │  ├─ network-policy.yaml         # 접근 제한 정책
+│  │     │  ├─ peer-auth.yaml              # 보안 통신 정책
+│  │     │  ├─ sandbox-app-sa.yaml         # 서비스어카운트
+│  │     │  ├─ sandbox-developer-rbac.yaml # 개발자 접근 권한
+│  │     │  └─ waypoint.yaml               # 네트워크/트래픽 관련 설정
+│  │     │
+│  │     └─ cases/                         # case별 동적 생성 파일
+│  │        ├─ .gitkeep                    # 빈 폴더 유지용
+│  │        ├─ sandbox-case-*.yaml         # case별 샌드박스 배포 파일
+│  │        ├─ artifacts/                  # case 입력/재처리 artifact
+│  │        │  └─ <case-id>/
+│  │        │     ├─ failure.json          # 실패 재현 입력
+│  │        │     ├─ normal.json           # 정상 검증 입력
+│  │        │     └─ redrive.json          # 운영 재처리 입력
+│  │        ├─ records/                    # case 상태 기록 파일
+│  │        │  ├─ .gitkeep                 # 빈 폴더 유지용
+│  │        │  └─ <case-id>.json           # branch/candidate/verdict 상태 기록
+│  │        ├─ reproduce/                  # 실패 재현용 job 파일
+│  │        │  ├─ .gitkeep                 # 빈 폴더 유지용
+│  │        │  └─ reproduce-case-*.yaml    # 재현 job
+│  │        ├─ revalidation/               # 수정 후 검증용 job 파일
+│  │        │  ├─ .gitkeep                 # 빈 폴더 유지용
+│  │        │  └─ revalidate-case-*.yaml   # 재검증 job
+│  │        ├─ templates/
+│  │        │  └─ revalidation-job.yaml    # 재검증 job 템플릿
+│  │        └─ verdicts/                   # 검증 결과 스냅샷
+│  │           ├─ .gitkeep                 # 빈 폴더 유지용
+│  │           └─ *.json                   # verdict 결과 파일
+│  │
+│  └─ platform/
+│     └─ istio/                            # istio 플랫폼 설정 폴더
+│     └─ observability                     # Prometheus, Grapana 설정 폴더 
+│ 
+├─ scripts/                                    # GitHub Actions/운영 자동화 보조 스크립트
+│  ├─ apply_sandbox_spec.py                    # spec json을 case용 sandbox yaml로 변환
+│  ├─ collect_revalidation_result.py           # verdict 읽어 case record 갱신
+│  ├─ export_verdict_snapshot.py               # pod 안 verdict를 repo 파일로 저장
+│  ├─ patch_case_candidate.py                  # case sandbox yaml의 이미지 태그 교체
+│  ├─ promote_verified_image.py                # 검증 통과 이미지를 운영 manifest에 반영
+│  ├─ redrive_case_messages.py                 # DLQ 메시지를 운영 토픽으로 재전송
+│  ├─ render_revalidation_job.py               # 재검증 job yaml 생성
+│  └─ update_case_record.py                    # case 상태 json 생성/업데이트
+│ 
+│ 
+├─ services/                                   # 실제 실행되는 애플리케이션 코드
+│  ├─ dlq-handler/                             # 장애 이벤트 수집/샌드박스 생성 트리거 서비스
+│  │  ├─ dockerfile                            # dlq-handler 이미지 빌드
+│  │  ├─ requirements.txt                      # dlq-handler 패키지
+│  │  └─ app/
+│  │     ├─ handler.py                         # DLQ 감시, 3개 json 생성, 후속 트리거 핵심 로직
+│  │     └─ slack_notifier.py                  # Slack 알림/버튼 메시지 전송 로직
+│  │
+│  ├─ producer-api/                            # 테스트용 주문/메시지 발행 API
+│  │  ├─ dockerfile                            # producer-api 이미지 빌드
+│  │  ├─ requirements.txt                      # producer-api 패키지
+│  │  └─ app/
+│  │     └─ app.py                             # 요청 받아 Kafka로 메시지 발행
+│  │
+│  └─ worker-consumer/                         # 운영 consumer + 샌드박스 재현 대상 서비스
+│     ├─ dockerfile                            # worker-consumer 이미지 빌드
+│     ├─ requirements.txt                      # worker-consumer 패키지
+│     └─ app/
+│        ├─ business_logic.py                  # 실제 주문 처리/실패 조건 로직
+│        ├─ consumer.py                        # Kafka 메시지 소비 진입점
+│        ├─ failure_event.py                   # 운영 실패 시 DLQ 이벤트 생성
+│        ├─ runtime_context.py                 # 운영/샌드박스 모드 환경값 읽기
+│        └─ sandbox_result.py                  # 샌드박스 결과 이벤트 생성
+│  │
+│  │
+│  │
+│  └─ slack-receiver/
+│        ├─ app.py                              # Slack 버튼 수신 → GitHub Actions dispatch 호출
+│        ├─ dockerfile                          # Slack receiver 이미지 빌드
+│        └─ requirements.txt                    # Slack receiver 패키지
