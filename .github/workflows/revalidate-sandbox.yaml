@@ -50,7 +50,7 @@ env:
 
 jobs:
   render-revalidation-manifest:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, monitoring-node]
 
     steps:
       - name: Validate basic inputs
