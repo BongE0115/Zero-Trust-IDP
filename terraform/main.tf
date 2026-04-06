@@ -1097,9 +1097,7 @@ resource "aws_cloudfront_distribution" "aiops_cdn" {
     }
   }
 
-  # -----------------------------------------------------------
   # 🚨 [규칙 1] 슬랙 전용 (80포트로 배달)
-  # -----------------------------------------------------------
   ordered_cache_behavior {
     path_pattern     = "/slack/*"
     target_origin_id = "Origin-AIOps-80"
@@ -1113,9 +1111,7 @@ resource "aws_cloudfront_distribution" "aiops_cdn" {
     cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled (AWS 고정 ID)
   }
 
-  # -----------------------------------------------------------
   # [기본 규칙] 나머지 모든 접속 (8080 쇼핑몰로 배달)
-  # -----------------------------------------------------------
   default_cache_behavior {
     target_origin_id = "Origin-Boutique-8080"
 
@@ -1138,11 +1134,18 @@ resource "aws_cloudfront_distribution" "aiops_cdn" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true # 도메인 없어도 공짜 HTTPS 주소 사용
+    cloudfront_default_certificate = true 
+  }
+
+  # -----------------------------------------------------------
+  # 🚨 [핵심!] 삭제 방지 생명주기 설정
+  # -----------------------------------------------------------
+  lifecycle {
+    prevent_destroy = true
   }
 }
 
-# 2. 생성된 주소를 터미널에 출력 (슬랙에 복붙용)
+# 2. 생성된 주소를 터미널에 출력
 output "cloudfront_url" {
   value = aws_cloudfront_distribution.aiops_cdn.domain_name
 }
