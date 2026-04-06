@@ -2,17 +2,17 @@
   "case_id": "worker-consumer-forensic-case-17754-20260406T060040Z-6b876ae4",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-forensic-case-17754-20260406T060040Z-6b876ae4",
-  "status": "reproduce_failed",
+  "status": "candidate_built",
   "created_at": "2026-04-06T06:03:50Z",
-  "updated_at": "2026-04-06T06:07:30Z",
+  "updated_at": "2026-04-06T06:32:56Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:82ebc80",
-  "candidate_image_ref": null,
-  "verified_image_ref": null,
-  "promoted_image_ref": null,
+  "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:8a5e6bb0dd20a42cbcbbf07d60c16a79c32a6b03b2b3d6c0809cae808120ae4c",
+  "verified_image_ref": "",
+  "promoted_image_ref": "",
   "previous_production_image_ref": null,
   "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-forensic-case-17754-20260406t060.yaml",
-  "revalidation_generation": 0,
-  "validation_run_id": null,
+  "revalidation_generation": 1,
+  "validation_run_id": "",
   "redrive_count": 0,
   "flags": {
     "revalidation_passed": false,
@@ -35,7 +35,9 @@
     "last_reproduce_overall_passed": false,
     "last_reproduce_validation_mode": "reproduce",
     "last_reproduce_validation_run_id": "reproduce-worker-consumer-forensic-case-17754-20260406T060040Z-6b876ae4-0",
-    "last_reproduce_generation": 0
+    "last_reproduce_generation": 0,
+    "candidate_build_branch": "case/worker-consumer-forensic-case-17754-20260406T060040Z-6b876ae4",
+    "candidate_build_generation": 1
   },
   "history": [
     {
@@ -58,6 +60,26 @@
       "validation_run_id": "reproduce-worker-consumer-forensic-case-17754-20260406T060040Z-6b876ae4-0",
       "generation": 0,
       "verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/worker-consumer-forensic-case-17754-20260406T060040Z-6b876ae4.json"
+    },
+    {
+      "at": "2026-04-06T06:32:56Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "candidate image built from case branch case/worker-consumer-forensic-case-17754-20260406T060040Z-6b876ae4",
+      "extra": {
+        "from_status": "reproduce_failed",
+        "to_status": "candidate_built"
+      }
+    },
+    {
+      "at": "2026-04-06T06:32:56Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "force-synced record after candidate patch",
+      "extra": {
+        "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:8a5e6bb0dd20a42cbcbbf07d60c16a79c32a6b03b2b3d6c0809cae808120ae4c",
+        "revalidation_generation": 1
+      }
     }
   ]
 }
