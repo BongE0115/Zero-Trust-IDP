@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: slack-receiver
-          image: ghcr.io/bonge0115/slack-receiver:latest  
+          image: ghcr.io/bonge0115/slack-receiver:2b3c88c
           ports:
             - containerPort: 5001
           env:
@@ -31,7 +31,6 @@ spec:
                 secretKeyRef:
                   name: slack-credentials
                   key: SLACK_CHANNEL
-
 ---
 # 2. 네트워크 길잡이 (Service - 아까 만드신 것)
 apiVersion: v1
