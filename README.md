@@ -88,7 +88,7 @@ AWS와 On-Premises 환경 어디서 발생한 장애든 Kafka 기반 DLQ로 중�
 ├─ ansible/                        # 하이브리드 설정 보조
 ├─ docs/case-lifecycle.md          # 메시지 처리 로직 설명 문서
 ├─ app.py                          # Slack 버튼 → GitHub Actions 호출
-
+```text
 
 ## 📂 저장소 구조 (Monorepo Architecture) - 전체 버전
 ```text
@@ -248,9 +248,7 @@ AWS와 On-Premises 환경 어디서 발생한 장애든 Kafka 기반 DLQ로 중�
 │        ├─ failure_event.py                   # 운영 실패 시 DLQ 이벤트 생성
 │        ├─ runtime_context.py                 # 운영/샌드박스 모드 환경값 읽기
 │        └─ sandbox_result.py                  # 샌드박스 결과 이벤트 생성
-│  │
-│  │
-│  │
+
 │  └─ slack-receiver/
 │        ├─ app.py                              # Slack 버튼 수신 → GitHub Actions dispatch 호출
 │        ├─ dockerfile                          # Slack receiver 이미지 빌드
