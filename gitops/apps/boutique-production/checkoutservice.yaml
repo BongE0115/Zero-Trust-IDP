@@ -29,6 +29,14 @@ spec:
     metadata:
       labels:
         app: checkoutservice
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5050"
+        prometheus.io/path: "/metrics"
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/worker: "true"
+
     spec:
       nodeSelector:
         node-role.kubernetes.io/worker: "true"
@@ -38,6 +46,15 @@ spec:
           image: us-central1-docker.pkg.dev/google-samples/microservices-demo/checkoutservice:v0.10.5
           ports:
           - containerPort: 5050
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          env:
+          - name: LOCAL_IP
           env:
           - name: LOCAL_IP
             valueFrom:
