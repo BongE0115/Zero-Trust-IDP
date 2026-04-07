@@ -107,6 +107,8 @@ jobs:
                   forensic-validation-mode: reproduce
                   forensic-revalidation-generation: "0"
                   forensic-job-hash: "${CASE_HASH}"
+                  sandbox-tier: strict-isolation
+                  istio.io/use-waypoint: sandbox-waypoint
               spec:
                 restartPolicy: Never
                 initContainers:
