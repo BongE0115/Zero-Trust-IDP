@@ -47,6 +47,7 @@ spec:
     metadata:
       labels:
         app: forensic-sandbox-app
+        
     spec:
       initContainers:
         - name: topic-init
