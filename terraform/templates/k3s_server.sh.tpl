@@ -59,19 +59,14 @@ fi
 ufw allow 6443/tcp || true
 ufw allow in on tailscale0 || true
 
-PRIVATE_IP=$(hostname -I | awk '{print $1}')
-TS_IP=$(tailscale ip -4 2>/dev/null || true)
+PRIVATE_IP="$$(hostname -I | awk '{print $1}')"
+TS_IP="$$(tailscale ip -4 2>/dev/null || true)"
 
 if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
-  INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --tls-san ${PRIVATE_IP}"
-  if [ -n "${TS_IP}" ]; then
-    INSTALL_K3S_EXEC="${INSTALL_K3S_EXEC} --tls-san ${TS_IP}"
-  fi
-
   curl -sfL https://get.k3s.io | \
-    INSTALL_K3S_VERSION="${K3S_VERSION}" \
-    INSTALL_K3S_EXEC="${INSTALL_K3S_EXEC}" \
-    K3S_TOKEN="${K3S_TOKEN}" \
+    INSTALL_K3S_VERSION="$${K3S_VERSION}" \
+    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --tls-san $${PRIVATE_IP} $$( [ -n "$${TS_IP}" ] && printf '%s' "--tls-san $${TS_IP}" )" \
+    K3S_TOKEN="$${K3S_TOKEN}" \
     sh -
 fi
 
