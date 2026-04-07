@@ -42,13 +42,13 @@ systemctl restart amazon-ssm-agent || true
 # ---------------------------------------------------------
 # 3. Tailscale 설치
 # ---------------------------------------------------------
-if [ -n "${TAILSCALE_AUTH_KEY}" ]; then
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
   if ! command -v tailscale >/dev/null 2>&1; then
     curl -fsSL https://tailscale.com/install.sh | sh
   fi
   systemctl enable tailscaled
   systemctl restart tailscaled
-  tailscale up --authkey "${TAILSCALE_AUTH_KEY}" || true
+  tailscale up --authkey "$TAILSCALE_AUTH_KEY" || true
 fi
 
 echo "[INFO] k3s agent base bootstrap completed."
