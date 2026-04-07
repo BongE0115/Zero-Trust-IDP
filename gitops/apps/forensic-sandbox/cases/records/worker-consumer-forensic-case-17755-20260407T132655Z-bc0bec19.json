@@ -2,7 +2,7 @@
   "case_id": "worker-consumer-forensic-case-17755-20260407T132655Z-bc0bec19",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-forensic-case-17755-20260407T132655Z-bc0bec19",
-  "status": "sandbox_created",
+  "status": "reproduce_failed",
   "created_at": "2026-04-07T13:27:12Z",
   "updated_at": "2026-04-07T13:27:42Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:03aa2cc",
@@ -19,7 +19,9 @@
     "promoted": false,
     "redriven": false,
     "resolved": false,
-    "cleanup_completed": false
+    "cleanup_completed": false,
+    "reproduce_verdict_collected": true,
+    "reproduced": false
   },
   "metadata": {
     "case_branch_created": false,
@@ -28,7 +30,12 @@
     "normal_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-forensic-case-17755-20260407T132655Z-bc0bec19/normal.json",
     "redrive_artifact_path": "gitops/apps/forensic-sandbox/cases/artifacts/worker-consumer-forensic-case-17755-20260407T132655Z-bc0bec19/redrive.json",
     "reproduce_job_manifest_path": "gitops/apps/forensic-sandbox/cases/reproduce/reproduce-case-worker-consumer-forensic-case-17755-20260407T132655Z-bc0bec19.yaml",
-    "reproduce_job_name": "forensic-reproduce-worker-consumer-forensic-cas-9df81540"
+    "reproduce_job_name": "forensic-reproduce-worker-consumer-forensic-cas-9df81540",
+    "last_reproduce_verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/worker-consumer-forensic-case-17755-20260407T132655Z-bc0bec19.json",
+    "last_reproduce_overall_passed": false,
+    "last_reproduce_validation_mode": "reproduce",
+    "last_reproduce_validation_run_id": "reproduce-worker-consumer-forensic-case-17755-20260407T132655Z-bc0bec19-0",
+    "last_reproduce_generation": 0
   },
   "history": [
     {
@@ -42,6 +49,15 @@
       "action": "update",
       "status": "sandbox_created",
       "note": "initial reproduce launcher manifest created"
+    },
+    {
+      "event": "collect_reproduce_result",
+      "case_id": "worker-consumer-forensic-case-17755-20260407T132655Z-bc0bec19",
+      "overall_passed": false,
+      "validation_mode": "reproduce",
+      "validation_run_id": "reproduce-worker-consumer-forensic-case-17755-20260407T132655Z-bc0bec19-0",
+      "generation": 0,
+      "verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/worker-consumer-forensic-case-17755-20260407T132655Z-bc0bec19.json"
     }
   ]
 }
