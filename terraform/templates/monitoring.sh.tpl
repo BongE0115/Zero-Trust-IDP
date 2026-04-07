@@ -27,7 +27,6 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   curl unzip gnupg lsb-release apt-transport-https ca-certificates \
   software-properties-common jq awscli
 
-
 # ---------------------------------------------------------
 # 1.5 Tailscale 설치 및 연결
 # ---------------------------------------------------------
@@ -43,7 +42,6 @@ if [[ -n "$${TAILSCALE_AUTH_KEY:-}" ]]; then
 else
   echo "[WARN] TAILSCALE_AUTH_KEY is empty, skipping tailscale up"
 fi
-
 
 # ---------------------------------------------------------
 # 2. kubectl 설치
@@ -63,7 +61,6 @@ echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stab
 apt-get update -y
 apt-get install -y grafana
 
-#Grafana Prometheus 데이터소스 자동 등록
 mkdir -p /etc/grafana/provisioning/datasources
 cat > /etc/grafana/provisioning/datasources/ds-prometheus.yaml <<EOF
 apiVersion: 1
@@ -82,10 +79,9 @@ systemctl restart grafana-server
 # ---------------------------------------------------------
 # 4. Prometheus 설치
 # ---------------------------------------------------------
-# Prometheus 및 관련 서비스를 실행할 유저 생성
 id prometheus >/dev/null 2>&1 || useradd --no-create-home --shell /bin/false prometheus
 
-# 4.1 로컬 Node Exporter 설치 (모니터링 서버 자체 관측용)
+# 4.1 로컬 Node Exporter 설치
 cd /tmp
 NODE_EXPORTER_VERSION="1.7.0"
 curl -LO "https://github.com/prometheus/node_exporter/releases/download/v$${NODE_EXPORTER_VERSION}/node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
@@ -134,23 +130,20 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9100"]
 
-  - job_name: 'kubernetes-node-exporter'
+  - job_name: "kubernetes-node-exporter"
     tls_config:
       insecure_skip_verify: true
     kubernetes_sd_configs:
       - role: pod
         api_server: "https://$${MASTER_PRIVATE_IP}:6443"
     relabel_configs:
-      # 1. 'app: node-exporter' 라벨이 있는 파드만 수집
       - source_labels: [__meta_kubernetes_pod_label_app]
         action: keep
         regex: node-exporter
-      # 2. HostNetwork 사용 중이므로 노드 IP로 주소 변환
       - source_labels: [__meta_kubernetes_pod_host_ip]
         action: replace
         target_label: __address__
         replacement: \$${1}:9100
-      # 3. 그라파나에서 보기 좋게 노드 이름을 라벨로 추가
       - source_labels: [__meta_kubernetes_pod_node_name]
         action: replace
         target_label: node_name
@@ -179,7 +172,6 @@ EOF
 chown -R prometheus:prometheus /etc/prometheus
 chown -R prometheus:prometheus /var/lib/prometheus
 
-# 4.4 Prometheus 서비스 등록
 cat > /etc/systemd/system/prometheus.service <<'SERVICE'
 [Unit]
 Description=Prometheus
@@ -272,9 +264,6 @@ fi
 # ---------------------------------------------------------
 # 8. master에 ArgoCD 설치 + Git clone + root-app apply
 # ---------------------------------------------------------
-# ---------------------------------------------------------
-# 8. master에 ArgoCD 설치 + Git clone + root-app apply
-# ---------------------------------------------------------
 echo "[INFO] Sending bootstrap command to master via SSM..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
 
 cat > /tmp/master-bootstrap-commands.json <<EOF
@@ -286,10 +275,10 @@ cat > /tmp/master-bootstrap-commands.json <<EOF
 
     "if ! pgrep node_exporter > /dev/null; then curl -LO https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz; tar xvf node_exporter-1.7.0.linux-amd64.tar.gz; sudo mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/; sudo nohup /usr/local/bin/node_exporter > /dev/null 2>&1 &; fi",
 
-    "sudo kubectl create clusterrolebinding prometheus-view --clusterrole=view --serviceaccount=default:default || true",
+    "sudo /usr/local/bin/k3s kubectl create clusterrolebinding prometheus-view --clusterrole=view --serviceaccount=default:default || true",
 
-    "sudo kubectl create namespace boutique-production || true",
-    "sudo kubectl label namespace boutique-production istio-injection=enabled --overwrite || true",
+    "sudo /usr/local/bin/k3s kubectl create namespace boutique-production || true",
+    "sudo /usr/local/bin/k3s kubectl label namespace boutique-production istio-injection=enabled --overwrite || true",
 
     "if ! command -v helm >/dev/null 2>&1; then curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; fi",
     "if ! command -v git >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y git; fi",
@@ -303,15 +292,15 @@ cat > /tmp/master-bootstrap-commands.json <<EOF
     "EOF",
     "base64 -d /tmp/argocd-values.b64 | sudo tee /opt/gitops/bootstrap/argocd/values.yaml >/dev/null",
 
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install argocd argo/argo-cd --version 8.0.0 -n argocd --create-namespace -f /opt/gitops/bootstrap/argocd/values.yaml",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-server -n argocd --timeout=300s",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/helm upgrade --install argocd argo/argo-cd --version 8.0.0 -n argocd --create-namespace -f /opt/gitops/bootstrap/argocd/values.yaml",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl rollout status deployment/argocd-server -n argocd --timeout=300s",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s",
 
     "sudo rm -rf /opt/gitops-repo",
     "git clone -b ${GITOPS_TARGET_REVISION} ${GITOPS_REPO_URL} /opt/gitops-repo",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get applications -n argocd || true"
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl get applications -n argocd || true"
   ]
 }
 EOF
@@ -331,6 +320,7 @@ if [ -z "${COMMAND_ID:-}" ] || [ "${COMMAND_ID}" = "None" ]; then
 fi
 
 echo "[INFO] Command sent. CommandId=$COMMAND_ID" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+
 # ---------------------------------------------------------
 # 9. Run Command 완료 대기
 # ---------------------------------------------------------
@@ -450,7 +440,7 @@ if [ "$${ENABLE_MONITORING_GITHUB_RUNNER}" = "true" ]; then
     exit 1
   fi
 
-chown -R ubuntu:ubuntu "$RUNNER_ROOT" 
+  chown -R ubuntu:ubuntu "$RUNNER_ROOT"
 
   if [ ! -f "$RUNNER_ROOT/.runner" ]; then
     sudo -u ubuntu ./config.sh \
@@ -460,7 +450,7 @@ chown -R ubuntu:ubuntu "$RUNNER_ROOT"
       --url "$RUNNER_URL" \
       --token "$REG_TOKEN" \
       --labels "$GITHUB_RUNNER_LABELS,private-vpc,$PRIVATE_IP" \
-      --work "_work" 
+      --work "_work"
   else
     echo "[INFO] Runner already configured. Skipping config.sh." | tee -a /opt/bootstrap/logs/github-runner.log
   fi

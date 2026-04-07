@@ -49,7 +49,7 @@ fi
 # 4. Master API 응답 대기
 # ---------------------------------------------------------
 for i in {1..40}; do
-  if curl -k -sf https://${K3S_SERVER_IP}:6443/ping >/dev/null 2>&1; then
+  if curl -k -sf "https://$K3S_SERVER_IP:6443/ping" >/dev/null 2>&1; then
     echo "[INFO] K3s API is reachable."
     break
   fi
@@ -57,7 +57,7 @@ for i in {1..40}; do
   sleep 15
 done
 
-if ! curl -k -sf https://${K3S_SERVER_IP}:6443/ping >/dev/null 2>&1; then
+if ! curl -k -sf "https://$K3S_SERVER_IP:6443/ping" >/dev/null 2>&1; then
   echo "[ERROR] K3s API on master is not reachable."
   exit 1
 fi
@@ -68,7 +68,7 @@ fi
 if [ ! -f /etc/systemd/system/k3s-agent.service ] && [ ! -f /etc/systemd/system/k3s-agent.service.env ]; then
   curl -sfL https://get.k3s.io | \
     INSTALL_K3S_VERSION="$K3S_VERSION" \
-    K3S_URL="https://${K3S_SERVER_IP}:6443" \
+    K3S_URL="https://$K3S_SERVER_IP:6443" \
     K3S_TOKEN="$K3S_TOKEN" \
     sh -s - agent
 fi
