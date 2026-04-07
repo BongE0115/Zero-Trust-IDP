@@ -173,6 +173,12 @@ variable "external_python_program" {
   }
 }
 
+variable "project_name" {
+  description = "Project name prefix"
+  type        = string
+  default     = "zero-trust-idp"
+}
+
 # [추가] 슬랙 봇 토큰과 채널 이름을 변수로 추가하여 보안과 유연성 강화
 
 variable "slack_bot_token" {

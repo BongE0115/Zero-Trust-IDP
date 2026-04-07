@@ -24,6 +24,17 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 # =======================================
 
+# EC2 인스턴스에 사용할 Ubuntu 이미지 
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+}
+
 locals {
   aws_region = "ap-northeast-2"
 
@@ -35,16 +46,43 @@ locals {
   })
 }
 
-# EC2 인스턴스에 사용할 Ubuntu 이미지 
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"]
+resource "aws_s3_bucket" "ansible_ssm_bucket" {
+  bucket = "${var.project_name}-ansible-ssm-${data.aws_caller_identity.current.account_id}"
 
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  tags = {
+    Name      = "ansible-ssm-transfer-bucket"
+    Project   = var.project_name
+    ManagedBy = "Terraform"
   }
 }
+
+resource "aws_s3_bucket_versioning" "ansible_ssm_bucket_versioning" {
+  bucket = aws_s3_bucket.ansible_ssm_bucket.id
+
+  versioning_configuration {
+    status = "Suspended"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "ansible_ssm_bucket_sse" {
+  bucket = aws_s3_bucket.ansible_ssm_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "ansible_ssm_bucket_pab" {
+  bucket                  = aws_s3_bucket.ansible_ssm_bucket.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+
 # ======================================
 
 # ==========================================
