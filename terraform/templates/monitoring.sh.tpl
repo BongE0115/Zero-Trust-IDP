@@ -272,56 +272,65 @@ fi
 # ---------------------------------------------------------
 # 8. master에 ArgoCD 설치 + Git clone + root-app apply
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# 8. master에 ArgoCD 설치 + Git clone + root-app apply
+# ---------------------------------------------------------
 echo "[INFO] Sending bootstrap command to master via SSM..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+
+cat > /tmp/master-bootstrap-commands.json <<EOF
+{
+  "commands": [
+    "#!/bin/bash",
+    "set -euxo pipefail",
+    "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
+
+    "if ! pgrep node_exporter > /dev/null; then curl -LO https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz; tar xvf node_exporter-1.7.0.linux-amd64.tar.gz; sudo mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/; sudo nohup /usr/local/bin/node_exporter > /dev/null 2>&1 &; fi",
+
+    "sudo kubectl create clusterrolebinding prometheus-view --clusterrole=view --serviceaccount=default:default || true",
+
+    "sudo kubectl create namespace boutique-production || true",
+    "sudo kubectl label namespace boutique-production istio-injection=enabled --overwrite || true",
+
+    "if ! command -v helm >/dev/null 2>&1; then curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; fi",
+    "if ! command -v git >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y git; fi",
+
+    "sudo /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm || true",
+    "sudo /usr/local/bin/helm repo update",
+
+    "sudo mkdir -p /opt/gitops/bootstrap/argocd",
+    "cat > /tmp/argocd-values.b64 <<'\\\\''EOF'\\\\''",
+    "${ARGOCD_VALUES_B64}",
+    "EOF",
+    "base64 -d /tmp/argocd-values.b64 | sudo tee /opt/gitops/bootstrap/argocd/values.yaml >/dev/null",
+
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install argocd argo/argo-cd --version 8.0.0 -n argocd --create-namespace -f /opt/gitops/bootstrap/argocd/values.yaml",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-server -n argocd --timeout=300s",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s",
+
+    "sudo rm -rf /opt/gitops-repo",
+    "git clone -b ${GITOPS_TARGET_REVISION} ${GITOPS_REPO_URL} /opt/gitops-repo",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get applications -n argocd || true"
+  ]
+}
+EOF
 
 COMMAND_ID="$(aws ssm send-command \
   --region "$AWS_REGION" \
   --instance-ids "$MASTER_INSTANCE_ID" \
   --document-name "AWS-RunShellScript" \
   --comment "Install ArgoCD and apply root-app from Git" \
-  --parameters commands='[
-    "#!/bin/bash",
-    "set -euxo pipefail",
-    "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
-
-    # [추가] 8-1. K3s 노드 자체 지표 수집을 위한 Node Exporter 설치
-    "if ! pgrep node_exporter > /dev/null; then",
-    "  curl -LO https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz",
-    "  tar xvf node_exporter-1.7.0.linux-amd64.tar.gz",
-    "  sudo mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/",
-    "  sudo nohup /usr/local/bin/node_exporter > /dev/null 2>&1 &",
-    "fi",
-
-    # [추가] 8-2. Prometheus가 외부에서 파드 정보를 읽을 수 있도록 권한 부여
-    "sudo kubectl create clusterrolebinding prometheus-view --clusterrole=view --serviceaccount=default:default || true",
-
-    # [추가] 8-3. Boutique 네임스페이스 미리 생성 및 Istio 활성화
-    "sudo kubectl create namespace boutique-production || true",
-    "sudo kubectl label namespace boutique-production istio-injection=enabled --overwrite || true",
-
-    "if ! command -v helm >/dev/null 2>&1; then curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; fi",
-    "if ! command -v git >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y git; fi",
-    "sudo /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm || true",
-    "sudo /usr/local/bin/helm repo update",
-    "sudo mkdir -p /opt/gitops/bootstrap/argocd",
-    "cat > /tmp/argocd-values.b64 <<'\''EOF'\''",
-    "'"$ARGOCD_VALUES_B64"'",
-    "EOF",
-    "base64 -d /tmp/argocd-values.b64 | sudo tee /opt/gitops/bootstrap/argocd/values.yaml >/dev/null",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install argocd argo/argo-cd --version 8.0.0 -n argocd --create-namespace -f /opt/gitops/bootstrap/argocd/values.yaml",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-server -n argocd --timeout=300s",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s",
-    "sudo rm -rf /opt/gitops-repo",
-    "git clone -b '"$GITOPS_TARGET_REVISION"' '"$GITOPS_REPO_URL"' /opt/gitops-repo",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get applications -n argocd || true"
-  ]' \
+  --parameters file:///tmp/master-bootstrap-commands.json \
   --query 'Command.CommandId' \
   --output text)"
 
-echo "[INFO] Command sent. CommandId=$COMMAND_ID" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+if [ -z "${COMMAND_ID:-}" ] || [ "${COMMAND_ID}" = "None" ]; then
+  echo "[ERROR] Failed to send bootstrap command to master." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+  exit 1
+fi
 
+echo "[INFO] Command sent. CommandId=$COMMAND_ID" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
 # ---------------------------------------------------------
 # 9. Run Command 완료 대기
 # ---------------------------------------------------------
