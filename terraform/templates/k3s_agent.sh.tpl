@@ -4,9 +4,6 @@ set -euxo pipefail
 LOG_FILE="/var/log/k3s-agent-bootstrap.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-K3S_VERSION="v1.33.9+k3s1"
-K3S_TOKEN="${k3s_token}"
-K3S_SERVER_IP="${k3s_server_ip}"
 TAILSCALE_AUTH_KEY="${tailscale_auth_key}"
 
 # ---------------------------------------------------------
@@ -22,9 +19,15 @@ if ! swapon --show | grep -q "/swapfile"; then
   grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
 fi
 
+export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
-  curl nfs-common ca-certificates apt-transport-https jq
+apt-get install -y \
+  curl \
+  jq \
+  awscli \
+  nfs-common \
+  ca-certificates \
+  apt-transport-https
 
 # ---------------------------------------------------------
 # 2. SSM Agent 보장
@@ -32,58 +35,20 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
 if ! systemctl list-unit-files | grep -q amazon-ssm-agent; then
   snap install amazon-ssm-agent --classic || true
 fi
+
 systemctl enable amazon-ssm-agent || true
 systemctl restart amazon-ssm-agent || true
 
 # ---------------------------------------------------------
-# 3. Tailscale 설치 (옵션)
+# 3. Tailscale 설치
 # ---------------------------------------------------------
-if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-  curl -fsSL https://tailscale.com/install.sh | sh
+if [ -n "${TAILSCALE_AUTH_KEY}" ]; then
+  if ! command -v tailscale >/dev/null 2>&1; then
+    curl -fsSL https://tailscale.com/install.sh | sh
+  fi
   systemctl enable tailscaled
   systemctl restart tailscaled
-  tailscale up --authkey "$TAILSCALE_AUTH_KEY" || true
+  tailscale up --authkey "${TAILSCALE_AUTH_KEY}" || true
 fi
 
-# ---------------------------------------------------------
-# 4. Master API 응답 대기
-# ---------------------------------------------------------
-for i in {1..20}; do
-  if curl -k -sf "https://$K3S_SERVER_IP:6443/ping" >/dev/null 2>&1; then
-    echo "[INFO] K3s API is reachable."
-    break
-  fi
-  echo "[INFO] Waiting for K3s API on master... ($i/20)"
-  sleep 10
-done
-
-if ! curl -k -sf "https://$K3S_SERVER_IP:6443/ping" >/dev/null 2>&1; then
-  echo "[ERROR] K3s API on master is not reachable."
-  exit 1
-fi
-
-# ---------------------------------------------------------
-# 5. K3s Agent 조인
-# ---------------------------------------------------------
-if [ ! -f /etc/systemd/system/k3s-agent.service ] && [ ! -f /etc/systemd/system/k3s-agent.service.env ]; then
-  curl -sfL https://get.k3s.io | \
-    INSTALL_K3S_VERSION="$K3S_VERSION" \
-    K3S_URL="https://$K3S_SERVER_IP:6443" \
-    K3S_TOKEN="$K3S_TOKEN" \
-    sh -s - agent
-fi
-
-systemctl enable k3s-agent || true
-systemctl restart k3s-agent || true
-
-for i in {1..12}; do
-  if systemctl is-active --quiet k3s-agent; then
-    echo "[INFO] k3s-agent is active."
-    break
-  fi
-  echo "[INFO] Waiting for k3s-agent systemd service... ($i/12)"
-  sleep 5
-done
-
-systemctl status k3s-agent --no-pager || true
-echo "[INFO] k3s agent bootstrap completed."
+echo "[INFO] k3s agent base bootstrap completed."

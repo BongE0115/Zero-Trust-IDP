@@ -913,18 +913,24 @@ data "cloudinit_config" "monitoring_config" {
 
       gitops_repo_url        = "https://github.com/BongE0115/Zero-Trust-IDP.git"
       gitops_target_revision = "jy"
+      argocd_values_content  = file("${path.module}/../gitops/bootstrap/argocd/values.yaml")
 
-      argocd_values_content = file("${path.module}/../gitops/bootstrap/argocd/values.yaml")
-
-      enable_monitoring_github_runner      = var.enable_monitoring_github_runner
-      github_runner_scope                  = var.github_runner_scope
-      github_runner_owner                  = var.github_runner_owner
-      github_runner_repository             = var.github_runner_repository
-      github_runner_labels_csv             = join(",", var.github_runner_labels)
-      github_runner_version                = var.github_runner_version
-      github_runner_token_ssm_parameter    = var.github_runner_token_ssm_parameter_name
+      enable_monitoring_github_runner   = var.enable_monitoring_github_runner
+      github_runner_scope               = var.github_runner_scope
+      github_runner_owner               = var.github_runner_owner
+      github_runner_repository          = var.github_runner_repository
+      github_runner_labels_csv          = join(",", var.github_runner_labels)
+      github_runner_version             = var.github_runner_version
+      github_runner_token_ssm_parameter = var.github_runner_token_ssm_parameter_name
 
       tailscale_auth_key = var.tailscale_auth_key
+
+      k3s_token       = var.k3s_token
+      frontend_addr   = "${aws_lb.aiops_alb.dns_name}:8080"
+      slack_bot_token = var.slack_bot_token
+      slack_channel   = var.slack_channel
+
+      ansible_inventory_content = local.ansible_inventory_content
     })
   }
 }

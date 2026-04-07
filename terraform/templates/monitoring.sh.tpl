@@ -5,11 +5,10 @@ LOG_FILE="/var/log/monitoring-bootstrap.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 AWS_REGION="${aws_region}"
-MASTER_PRIVATE_IP="${k3s_server_private_ip}"
-WORKER_PRIVATE_IP="${k3s_agent_private_ip}"
+TAILSCALE_AUTH_KEY="${tailscale_auth_key}"
+
 GITOPS_REPO_URL="${gitops_repo_url}"
 GITOPS_TARGET_REVISION="${gitops_target_revision}"
-TAILSCALE_AUTH_KEY="${tailscale_auth_key}"
 
 ENABLE_MONITORING_GITHUB_RUNNER="${enable_monitoring_github_runner}"
 GITHUB_RUNNER_SCOPE="${github_runner_scope}"
@@ -19,18 +18,18 @@ GITHUB_RUNNER_LABELS="${github_runner_labels_csv}"
 GITHUB_RUNNER_VERSION="${github_runner_version}"
 GITHUB_RUNNER_TOKEN_SSM_PARAMETER="${github_runner_token_ssm_parameter}"
 
-# ---------------------------------------------------------
-# 1. 기본 패키지 설치
-# ---------------------------------------------------------
+K3S_TOKEN="${k3s_token}"
+FRONTEND_ADDR="${frontend_addr}"
+SLACK_BOT_TOKEN="${slack_bot_token}"
+SLACK_CHANNEL="${slack_channel}"
+ARGOCD_VALUES_CONTENT='${argocd_values_content}'
+
+export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
+apt-get install -y \
   curl unzip gnupg lsb-release apt-transport-https ca-certificates \
-  software-properties-common jq awscli
+  software-properties-common jq awscli git python3 python3-pip
 
-
-# ---------------------------------------------------------
-# 1.5 Tailscale 설치 및 연결
-# ---------------------------------------------------------
 if ! command -v tailscale >/dev/null 2>&1; then
   curl -fsSL https://tailscale.com/install.sh | sh
 fi
@@ -38,310 +37,85 @@ fi
 systemctl enable tailscaled
 systemctl restart tailscaled
 
-if [[ -n "$${TAILSCALE_AUTH_KEY:-}" ]]; then
-  tailscale up --authkey "$${TAILSCALE_AUTH_KEY}" --ssh
-else
-  echo "[WARN] TAILSCALE_AUTH_KEY is empty, skipping tailscale up"
+if [[ -n "${TAILSCALE_AUTH_KEY:-}" ]]; then
+  tailscale up --authkey "${TAILSCALE_AUTH_KEY}" || true
 fi
 
-
-# ---------------------------------------------------------
-# 2. kubectl 설치
-# ---------------------------------------------------------
-if ! command -v kubectl >/dev/null 2>&1; then
-  KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
-  curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-  chmod +x /usr/local/bin/kubectl
-fi
-
-# ---------------------------------------------------------
-# 3. Grafana 설치
-# ---------------------------------------------------------
-mkdir -p /etc/apt/keyrings
-curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
-echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
+apt-add-repository --yes --update ppa:ansible/ansible || true
 apt-get update -y
-apt-get install -y grafana
-systemctl enable grafana-server
-systemctl restart grafana-server
+apt-get install -y ansible
 
-# ---------------------------------------------------------
-# 4. Prometheus 설치
-# ---------------------------------------------------------
-id prometheus >/dev/null 2>&1 || useradd --no-create-home --shell /bin/false prometheus
+python3 -m pip install --upgrade pip
+python3 -m pip install boto3 botocore
 
-cd /tmp
-PROM_VERSION="2.54.1"
-curl -LO "https://github.com/prometheus/prometheus/releases/download/v$${PROM_VERSION}/prometheus-$${PROM_VERSION}.linux-amd64.tar.gz"
-tar xvf "prometheus-$${PROM_VERSION}.linux-amd64.tar.gz"
+if ! command -v session-manager-plugin >/dev/null 2>&1; then
+  cd /tmp
+  curl -fsSLo session-manager-plugin.deb \
+    "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
+  dpkg -i session-manager-plugin.deb || apt-get install -f -y
+fi
 
-install -m 0755 "prometheus-$${PROM_VERSION}.linux-amd64/prometheus" /usr/local/bin/prometheus
-install -m 0755 "prometheus-$${PROM_VERSION}.linux-amd64/promtool" /usr/local/bin/promtool
+rm -rf /opt/gitops-repo
+git clone -b "${GITOPS_TARGET_REVISION}" "${GITOPS_REPO_URL}" /opt/gitops-repo
 
-mkdir -p /etc/prometheus /var/lib/prometheus
+mkdir -p /opt/gitops-repo/ansible/inventory
 
-cat > /etc/prometheus/prometheus.yml <<EOF
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: "prometheus"
-    static_configs:
-      - targets: ["localhost:9090"]
-
-  - job_name: "k3s-nodes"
-    metrics_path: "/metrics"
-    static_configs:
-      - targets:
-        - "$${MASTER_PRIVATE_IP}:10250"
-        - "$${WORKER_PRIVATE_IP}:10250"
-        - "$${MASTER_PRIVATE_IP}:9100"
-        - "$${WORKER_PRIVATE_IP}:9100"
+cat > /opt/gitops-repo/ansible/inventory/hosts.ini <<EOF
+${ansible_inventory_content}
 EOF
 
-chown -R prometheus:prometheus /etc/prometheus
-chown -R prometheus:prometheus /var/lib/prometheus
+cat > /opt/gitops-repo/ansible/ansible.cfg <<'EOF'
+[defaults]
+inventory = ./inventory/hosts.ini
+host_key_checking = False
+retry_files_enabled = False
+stdout_callback = yaml
+interpreter_python = auto_silent
+collections_paths = ~/.ansible/collections:/usr/share/ansible/collections
 
-cat > /etc/systemd/system/prometheus.service <<'SERVICE'
-[Unit]
-Description=Prometheus
-After=network.target
-
-[Service]
-User=prometheus
-Group=prometheus
-Type=simple
-ExecStart=/usr/local/bin/prometheus \
-  --config.file=/etc/prometheus/prometheus.yml \
-  --storage.tsdb.path=/var/lib/prometheus
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-SERVICE
-
-systemctl daemon-reload
-systemctl enable prometheus
-systemctl restart prometheus
-
-# ---------------------------------------------------------
-# 5. Bootstrap 자산 저장
-# ---------------------------------------------------------
-mkdir -p /opt/bootstrap/argocd
-mkdir -p /opt/bootstrap/logs
-
-cat <<'EOF' > /opt/bootstrap/argocd/values.yaml
-${argocd_values_content}
+[ssh_connection]
+pipelining = True
 EOF
 
-ARGOCD_VALUES_B64="$(base64 -w0 /opt/bootstrap/argocd/values.yaml)"
+cd /opt/gitops-repo/ansible
 
-# ---------------------------------------------------------
-# 6. SSM 대상 master 인스턴스 찾기
-# ---------------------------------------------------------
-echo "[INFO] Discovering K3s master instance by tag..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-
-MASTER_INSTANCE_ID=""
-for i in {1..20}; do
-  MASTER_INSTANCE_ID="$(aws ec2 describe-instances \
-    --region "$AWS_REGION" \
-    --filters "Name=tag:Role,Values=K3s_Server" "Name=instance-state-name,Values=running" \
-    --query 'Reservations[0].Instances[0].InstanceId' \
-    --output text || true)"
-
-  if [ -n "$MASTER_INSTANCE_ID" ] && [ "$MASTER_INSTANCE_ID" != "None" ]; then
-    echo "[INFO] Master instance found: $MASTER_INSTANCE_ID" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-    break
-  fi
-
-  echo "[INFO] Waiting for master instance discovery... ($i/20)" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-  sleep 10
-done
-
-if [ -z "$MASTER_INSTANCE_ID" ] || [ "$MASTER_INSTANCE_ID" = "None" ]; then
-  echo "[ERROR] Failed to discover K3s master instance." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-  exit 1
+if [ -f requirements.yml ]; then
+  ansible-galaxy collection install -r requirements.yml --force
+else
+  ansible-galaxy collection install amazon.aws community.aws --force
 fi
 
-# ---------------------------------------------------------
-# 7. master가 SSM managed node로 등록될 때까지 대기
-# ---------------------------------------------------------
-echo "[INFO] Waiting for master to appear in SSM..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
+ansible-playbook monitoring-local.yml \
+  -i "localhost," \
+  -c local \
+  -e aws_region="${AWS_REGION}" \
+  -e tailscale_auth_key="${TAILSCALE_AUTH_KEY}" \
+  -e enable_monitoring_github_runner="${ENABLE_MONITORING_GITHUB_RUNNER}" \
+  -e github_runner_scope="${GITHUB_RUNNER_SCOPE}" \
+  -e github_runner_owner="${GITHUB_RUNNER_OWNER}" \
+  -e github_runner_repository="${GITHUB_RUNNER_REPOSITORY}" \
+  -e github_runner_labels="${GITHUB_RUNNER_LABELS}" \
+  -e github_runner_version="${GITHUB_RUNNER_VERSION}" \
+  -e github_runner_token_ssm_parameter="${GITHUB_RUNNER_TOKEN_SSM_PARAMETER}"
 
-ONLINE_PING=""
-for i in {1..20}; do
-  ONLINE_PING="$(aws ssm describe-instance-information \
-    --region "$AWS_REGION" \
-    --filters "Key=InstanceIds,Values=$MASTER_INSTANCE_ID" \
-    --query 'InstanceInformationList[0].PingStatus' \
-    --output text || true)"
+ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
+ansible-playbook k3s-server-remote.yml \
+  -e aws_region="${AWS_REGION}" \
+  -e k3s_token="${K3S_TOKEN}" \
+  -e frontend_addr="${FRONTEND_ADDR}" \
+  -e slack_bot_token="${SLACK_BOT_TOKEN}" \
+  -e slack_channel="${SLACK_CHANNEL}"
 
-  if [ "$ONLINE_PING" = "Online" ]; then
-    echo "[INFO] Master is online in SSM." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-    break
-  fi
+ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
+ansible-playbook k3s-agent-remote.yml \
+  -e aws_region="${AWS_REGION}"
 
-  echo "[INFO] Waiting for SSM registration... ($i/20)" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-  sleep 10
-done
+ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
+ansible-playbook argocd-bootstrap.yml \
+  -e aws_region="${AWS_REGION}" \
+  -e argocd_values_content="${ARGOCD_VALUES_CONTENT}" \
+  -e gitops_repo_url="${GITOPS_REPO_URL}" \
+  -e gitops_target_revision="${GITOPS_TARGET_REVISION}"
 
-if [ "$${ONLINE_PING:-}" != "Online" ]; then
-  echo "[ERROR] Master did not become online in SSM." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-  exit 1
-fi
-
-# ---------------------------------------------------------
-# 8. master에 ArgoCD 설치 + Git clone + root-app apply
-# ---------------------------------------------------------
-echo "[INFO] Sending bootstrap command to master via SSM..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-
-COMMAND_ID="$(aws ssm send-command \
-  --region "$AWS_REGION" \
-  --instance-ids "$MASTER_INSTANCE_ID" \
-  --document-name "AWS-RunShellScript" \
-  --comment "Install ArgoCD and apply root-app from Git" \
-  --parameters commands='[
-    "#!/bin/bash",
-    "set -euxo pipefail",
-    "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
-    "if ! command -v helm >/dev/null 2>&1; then curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; fi",
-    "if ! command -v git >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y git; fi",
-    "sudo /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm || true",
-    "sudo /usr/local/bin/helm repo update",
-    "sudo mkdir -p /opt/gitops/bootstrap/argocd",
-    "cat > /tmp/argocd-values.b64 <<'\''EOF'\''",
-    "'"$ARGOCD_VALUES_B64"'",
-    "EOF",
-    "base64 -d /tmp/argocd-values.b64 | sudo tee /opt/gitops/bootstrap/argocd/values.yaml >/dev/null",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install argocd argo/argo-cd --version 8.0.0 -n argocd --create-namespace -f /opt/gitops/bootstrap/argocd/values.yaml",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-server -n argocd --timeout=300s",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s",
-    "sudo rm -rf /opt/gitops-repo",
-    "git clone -b '"$GITOPS_TARGET_REVISION"' '"$GITOPS_REPO_URL"' /opt/gitops-repo",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get applications -n argocd || true"
-  ]' \
-  --query 'Command.CommandId' \
-  --output text)"
-
-echo "[INFO] Command sent. CommandId=$COMMAND_ID" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-
-# ---------------------------------------------------------
-# 9. Run Command 완료 대기
-# ---------------------------------------------------------
-FINAL_STATUS=""
-for i in {1..20}; do
-  FINAL_STATUS="$(aws ssm get-command-invocation \
-    --region "$AWS_REGION" \
-    --command-id "$COMMAND_ID" \
-    --instance-id "$MASTER_INSTANCE_ID" \
-    --query 'Status' \
-    --output text || true)"
-
-  case "$FINAL_STATUS" in
-    Success)
-      echo "[INFO] ArgoCD install and root-app apply completed successfully." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-      break
-      ;;
-    Pending|InProgress|Delayed|"")
-      echo "[INFO] Waiting for command completion... status=$FINAL_STATUS ($i/20)" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-      sleep 10
-      ;;
-    *)
-      echo "[ERROR] Command failed with status=$FINAL_STATUS" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-      aws ssm get-command-invocation \
-        --region "$AWS_REGION" \
-        --command-id "$COMMAND_ID" \
-        --instance-id "$MASTER_INSTANCE_ID" \
-        --output json | tee -a /opt/bootstrap/logs/ssm-bootstrap.log || true
-      exit 1
-      ;;
-  esac
-done
-
-if [ "$${FINAL_STATUS:-}" != "Success" ]; then
-  echo "[ERROR] Timed out waiting for master bootstrap completion." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-  exit 1
-fi
-
-
-# ---------------------------------------------------------
-# 11. GitHub self-hosted runner 설치 및 등록
-# ---------------------------------------------------------
-if [ "$${ENABLE_MONITORING_GITHUB_RUNNER}" = "true" ]; then
-  echo "[INFO] Installing GitHub Actions self-hosted runner on monitoring node..." | tee -a /opt/bootstrap/logs/github-runner.log
-
-  RUNNER_ROOT="/opt/actions-runner"
-  mkdir -p "$RUNNER_ROOT"
-  cd "$RUNNER_ROOT"
-
-  if [ ! -f "$RUNNER_ROOT/actions-runner-linux-x64-$${GITHUB_RUNNER_VERSION}.tar.gz" ]; then
-    curl -fsSLo "actions-runner-linux-x64-$${GITHUB_RUNNER_VERSION}.tar.gz" \
-      "https://github.com/actions/runner/releases/download/v$${GITHUB_RUNNER_VERSION}/actions-runner-linux-x64-$${GITHUB_RUNNER_VERSION}.tar.gz"
-  fi
-
-  if [ ! -f "$RUNNER_ROOT/bin/Runner.Listener" ]; then
-    tar xzf "actions-runner-linux-x64-$${GITHUB_RUNNER_VERSION}.tar.gz"
-  fi
-
-  INSTANCE_ID="$(curl -fsSL http://169.254.169.254/latest/meta-data/instance-id)"
-  PRIVATE_IP="$(curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4)"
-  RUNNER_NAME="monitoring-$${INSTANCE_ID}"
-
-  GITHUB_BOOTSTRAP_TOKEN="$(aws ssm get-parameter \
-    --region "$AWS_REGION" \
-    --name "$GITHUB_RUNNER_TOKEN_SSM_PARAMETER" \
-    --with-decryption \
-    --query 'Parameter.Value' \
-    --output text)"
-
-  if [ -z "$GITHUB_BOOTSTRAP_TOKEN" ] || [ "$GITHUB_BOOTSTRAP_TOKEN" = "None" ]; then
-    echo "[ERROR] Failed to read GitHub runner bootstrap token from SSM." | tee -a /opt/bootstrap/logs/github-runner.log
-    exit 1
-  fi
-
-  if [ "$GITHUB_RUNNER_SCOPE" = "org" ]; then
-    REG_URL="https://api.github.com/orgs/$${GITHUB_RUNNER_OWNER}/actions/runners/registration-token"
-    RUNNER_URL="https://github.com/$${GITHUB_RUNNER_OWNER}"
-  else
-    REG_URL="https://api.github.com/repos/$${GITHUB_RUNNER_OWNER}/$${GITHUB_RUNNER_REPOSITORY}/actions/runners/registration-token"
-    RUNNER_URL="https://github.com/$${GITHUB_RUNNER_OWNER}/$${GITHUB_RUNNER_REPOSITORY}"
-  fi
-
-  REG_JSON="$(curl -fsSL -X POST \
-    -H "Accept: application/vnd.github+json" \
-    -H "Authorization: Bearer $${GITHUB_BOOTSTRAP_TOKEN}" \
-    "$REG_URL")"
-
-  REG_TOKEN="$(echo "$REG_JSON" | jq -r '.token')"
-
-  if [ -z "$REG_TOKEN" ] || [ "$REG_TOKEN" = "null" ]; then
-    echo "[ERROR] Failed to get registration token from GitHub API." | tee -a /opt/bootstrap/logs/github-runner.log
-    echo "$REG_JSON" | tee -a /opt/bootstrap/logs/github-runner.log
-    exit 1
-  fi
-
-chown -R ubuntu:ubuntu "$RUNNER_ROOT" 
-
-  if [ ! -f "$RUNNER_ROOT/.runner" ]; then
-    sudo -u ubuntu ./config.sh \
-      --unattended \
-      --replace \
-      --name "$RUNNER_NAME" \
-      --url "$RUNNER_URL" \
-      --token "$REG_TOKEN" \
-      --labels "$GITHUB_RUNNER_LABELS,private-vpc,$PRIVATE_IP" \
-      --work "_work" 
-  else
-    echo "[INFO] Runner already configured. Skipping config.sh." | tee -a /opt/bootstrap/logs/github-runner.log
-  fi
-
-  ./svc.sh install root || true
-  ./svc.sh start || true
-
-  systemctl enable actions.runner.* || true
-  systemctl restart actions.runner.* || true
-fi
-
-echo "[INFO] Monitoring bootstrap completed successfully." | tee -a "$LOG_FILE"
+echo "[INFO] Monitoring bootstrap completed successfully."

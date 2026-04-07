@@ -1,0 +1,249 @@
+---
+- name: Configure monitoring node locally
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+
+  vars:
+    prometheus_version: "2.54.1"
+
+  tasks:
+    - name: Ensure required apt packages are installed
+      apt:
+        update_cache: true
+        name:
+          - curl
+          - jq
+          - unzip
+          - gnupg
+          - ca-certificates
+          - apt-transport-https
+          - software-properties-common
+        state: present
+
+    - name: Install kubectl if missing
+      shell: |
+        if ! command -v kubectl >/dev/null 2>&1; then
+          KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+          curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x /usr/local/bin/kubectl
+        fi
+      args:
+        executable: /bin/bash
+
+    - name: Add Grafana apt key
+      shell: |
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
+      args:
+        creates: /etc/apt/keyrings/grafana.gpg
+        executable: /bin/bash
+
+    - name: Add Grafana repository
+      copy:
+        dest: /etc/apt/sources.list.d/grafana.list
+        content: |
+          deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main
+
+    - name: Install Grafana
+      apt:
+        update_cache: true
+        name: grafana
+        state: present
+
+    - name: Enable and start Grafana
+      systemd:
+        name: grafana-server
+        enabled: true
+        state: restarted
+
+    - name: Ensure prometheus user exists
+      user:
+        name: prometheus
+        system: true
+        shell: /usr/sbin/nologin
+        create_home: false
+
+    - name: Download Prometheus archive
+      get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+        dest: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+        mode: "0644"
+
+    - name: Extract Prometheus archive
+      unarchive:
+        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+        dest: /tmp
+        remote_src: true
+        creates: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64"
+
+    - name: Install prometheus binary
+      copy:
+        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/prometheus"
+        dest: /usr/local/bin/prometheus
+        mode: "0755"
+        remote_src: true
+
+    - name: Install promtool binary
+      copy:
+        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/promtool"
+        dest: /usr/local/bin/promtool
+        mode: "0755"
+        remote_src: true
+
+    - name: Ensure Prometheus directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: prometheus
+        group: prometheus
+        mode: "0755"
+      loop:
+        - /etc/prometheus
+        - /var/lib/prometheus
+
+    - name: Deploy Prometheus config
+      copy:
+        dest: /etc/prometheus/prometheus.yml
+        owner: prometheus
+        group: prometheus
+        mode: "0644"
+        content: |
+          global:
+            scrape_interval: 15s
+
+          scrape_configs:
+            - job_name: "prometheus"
+              static_configs:
+                - targets: ["localhost:9090"]
+
+            - job_name: "k3s-nodes"
+              metrics_path: "/metrics"
+              static_configs:
+                - targets:
+                  - "{{ k3s_server_private_ip }}:10250"
+                  - "{{ k3s_agent_private_ip }}:10250"
+                  - "{{ k3s_server_private_ip }}:9100"
+                  - "{{ k3s_agent_private_ip }}:9100"
+
+    - job_name: "kubernetes-pods"
+              tls_config:
+                insecure_skip_verify: true
+              kubernetes_sd_configs:
+                - role: pod
+                  api_server: "https://{{ k3s_server_private_ip }}:6443"
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: true
+                - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                  action: replace
+                  target_label: __address__
+                  regex: ([^:]+)(?::\d+)?;(\d+)
+                  replacement: $1:$2
+
+    - name: Deploy Prometheus systemd service
+      copy:
+        dest: /etc/systemd/system/prometheus.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Prometheus
+          After=network.target
+
+          [Service]
+          User=prometheus
+          Group=prometheus
+          Type=simple
+          ExecStart=/usr/local/bin/prometheus \
+            --config.file=/etc/prometheus/prometheus.yml \
+            --storage.tsdb.path=/var/lib/prometheus
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: true
+
+    - name: Enable and start Prometheus
+      systemd:
+        name: prometheus
+        enabled: true
+        state: restarted
+
+    - name: Install GitHub self-hosted runner when enabled
+      shell: |
+        set -euxo pipefail
+
+        RUNNER_ROOT="/opt/actions-runner"
+        mkdir -p "$RUNNER_ROOT"
+        cd "$RUNNER_ROOT"
+
+        if [ ! -f "$RUNNER_ROOT/actions-runner-linux-x64-${github_runner_version}.tar.gz" ]; then
+          curl -fsSLo "actions-runner-linux-x64-${github_runner_version}.tar.gz" \
+            "https://github.com/actions/runner/releases/download/v${github_runner_version}/actions-runner-linux-x64-${github_runner_version}.tar.gz"
+        fi
+
+        if [ ! -f "$RUNNER_ROOT/bin/Runner.Listener" ]; then
+          tar xzf "actions-runner-linux-x64-${github_runner_version}.tar.gz"
+        fi
+
+        INSTANCE_ID="$(curl -fsSL http://169.254.169.254/latest/meta-data/instance-id)"
+        PRIVATE_IP="$(curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4)"
+        RUNNER_NAME="monitoring-${INSTANCE_ID}"
+
+        GITHUB_BOOTSTRAP_TOKEN="$(aws ssm get-parameter \
+          --region "${aws_region}" \
+          --name "${github_runner_token_ssm_parameter}" \
+          --with-decryption \
+          --query 'Parameter.Value' \
+          --output text)"
+
+        if [ -z "$GITHUB_BOOTSTRAP_TOKEN" ] || [ "$GITHUB_BOOTSTRAP_TOKEN" = "None" ]; then
+          echo "Failed to read GitHub runner bootstrap token from SSM."
+          exit 1
+        fi
+
+        if [ "${github_runner_scope}" = "org" ]; then
+          REG_URL="https://api.github.com/orgs/${github_runner_owner}/actions/runners/registration-token"
+          RUNNER_URL="https://github.com/${github_runner_owner}"
+        else
+          REG_URL="https://api.github.com/repos/${github_runner_owner}/${github_runner_repository}/actions/runners/registration-token"
+          RUNNER_URL="https://github.com/${github_runner_owner}/${github_runner_repository}"
+        fi
+
+        REG_JSON="$(curl -fsSL -X POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${GITHUB_BOOTSTRAP_TOKEN}" \
+          "$REG_URL")"
+
+        REG_TOKEN="$(echo "$REG_JSON" | jq -r '.token')"
+
+        if [ -z "$REG_TOKEN" ] || [ "$REG_TOKEN" = "null" ]; then
+          echo "$REG_JSON"
+          exit 1
+        fi
+
+        chown -R ubuntu:ubuntu "$RUNNER_ROOT"
+
+        if [ ! -f "$RUNNER_ROOT/.runner" ]; then
+          sudo -u ubuntu ./config.sh \
+            --unattended \
+            --replace \
+            --name "$RUNNER_NAME" \
+            --url "$RUNNER_URL" \
+            --token "$REG_TOKEN" \
+            --labels "${github_runner_labels},private-vpc,${PRIVATE_IP}" \
+            --work "_work"
+        fi
+
+        ./svc.sh install root || true
+        ./svc.sh start || true
+        systemctl enable actions.runner.* || true
+        systemctl restart actions.runner.* || true
+      args:
+        executable: /bin/bash
+      when: enable_monitoring_github_runner | string == "true"

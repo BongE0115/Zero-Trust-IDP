@@ -1,0 +1,262 @@
+---
+- name: Configure k3s server remotely through SSM
+  hosts: k3s_server
+  become: true
+  gather_facts: true
+
+  vars:
+    kubeconfig_path: /etc/rancher/k3s/k3s.yaml
+    project_name: "Zero-Trust-IDP"
+    environment_name: "production"
+
+  tasks:
+    - name: Create swap file if not exists
+      shell: |
+        if ! swapon --show | grep -q "/swapfile"; then
+          fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+          chmod 600 /swapfile
+          mkswap /swapfile
+          swapon /swapfile
+        fi
+        grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+      args:
+        executable: /bin/bash
+
+    - name: Install base packages
+      apt:
+        update_cache: true
+        name:
+          - curl
+          - nfs-common
+          - ca-certificates
+          - apt-transport-https
+          - jq
+          - awscli
+        state: present
+
+    - name: Download and extract Node Exporter
+      unarchive:
+        src: "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
+        dest: /tmp
+        remote_src: true
+        creates: /tmp/node_exporter-1.7.0.linux-amd64/node_exporter
+
+    - name: Install Node Exporter binary
+      copy:
+        src: /tmp/node_exporter-1.7.0.linux-amd64/node_exporter
+        dest: /usr/local/bin/node_exporter
+        mode: "0755"
+        remote_src: true
+
+    - name: Configure and start Node Exporter service
+      copy:
+        dest: /etc/systemd/system/node_exporter.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Node Exporter
+          After=network-online.target
+
+          [Service]
+          User=root
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and restart Node Exporter
+      systemd:
+        name: node_exporter
+        enabled: true
+        state: restarted
+        daemon_reload: true
+
+    - name: Get private IP
+      shell: hostname -I | awk '{print $1}'
+      register: master_private_ip
+      changed_when: false
+
+    - name: Get tailscale IPv4
+      shell: tailscale ip -4 | head -n 1 || true
+      register: master_ts_ip
+      changed_when: false
+
+    - name: Open firewall for k3s if ufw exists
+      shell: |
+        if command -v ufw >/dev/null 2>&1; then
+          ufw allow 6443/tcp || true
+          ufw allow in on tailscale0 || true
+        fi
+      args:
+        executable: /bin/bash
+
+    - name: Install k3s server
+      shell: |
+        if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
+          curl -sfL https://get.k3s.io | \
+            INSTALL_K3S_VERSION="{{ k3s_version }}" \
+            INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --tls-san {{ master_private_ip.stdout | trim }}{% if master_ts_ip.stdout | trim != '' %} --tls-san {{ master_ts_ip.stdout | trim }}{% endif %}" \
+            K3S_TOKEN="{{ k3s_token }}" sh -
+        fi
+      args:
+        executable: /bin/bash
+
+    - name: Wait for kubeconfig file
+      wait_for:
+        path: "{{ kubeconfig_path }}"
+        timeout: 600
+
+    - name: Replace kubeconfig endpoint with tailscale IP if available
+      replace:
+        path: "{{ kubeconfig_path }}"
+        regexp: '127\.0\.0\.1'
+        replace: "{{ master_ts_ip.stdout | trim }}"
+      when: master_ts_ip.stdout | trim != ""
+
+    - name: Wait for kubernetes api
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        for i in $(seq 1 40); do
+          kubectl get nodes >/dev/null 2>&1 && exit 0
+          sleep 15
+        done
+        exit 1
+      args:
+        executable: /bin/bash
+
+    - name: Create prometheus-view ClusterRoleBinding
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl create clusterrolebinding prometheus-view \
+          --clusterrole=view \
+          --serviceaccount=default:default \
+          --dry-run=client -o yaml | kubectl apply -f -
+      args:
+        executable: /bin/bash
+
+    - name: Ensure kafka-poc namespace exists
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl get namespace kafka-poc >/dev/null 2>&1 || kubectl create namespace kafka-poc
+      args:
+        executable: /bin/bash
+
+    - name: Read GitHub dispatch token from SSM
+      shell: |
+        aws ssm get-parameter \
+          --name "/zero-trust-idp/github-dispatch-token" \
+          --with-decryption \
+          --query "Parameter.Value" \
+          --output text \
+          --region {{ aws_region }}
+      register: github_dispatch_token
+      changed_when: false
+
+    - name: Fail if GitHub dispatch token is empty
+      fail:
+        msg: "github dispatch token is empty"
+      when: github_dispatch_token.stdout | trim == "" or github_dispatch_token.stdout | trim == "None"
+
+    - name: Apply github-dispatch-secret
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl -n kafka-poc create secret generic github-dispatch-secret \
+          --from-literal=token='{{ github_dispatch_token.stdout | trim }}' \
+          --dry-run=client -o yaml | kubectl apply -f -
+      args:
+        executable: /bin/bash
+
+    - name: Label master node
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl label node "$(hostname)" node-role.kubernetes.io/master=true kubernetes.io/role=master --overwrite
+      args:
+        executable: /bin/bash
+
+    - name: Create global configmap
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl create configmap aws-global-env \
+          --from-literal=AWS_REGION="{{ aws_region }}" \
+          --from-literal=PROJECT_NAME="{{ project_name }}" \
+          --from-literal=ENVIRONMENT="{{ environment_name }}" \
+          --from-literal=LOCAL_TAILSCALE_IP="{{ master_ts_ip.stdout | trim }}" \
+          --from-literal=AWS_IP="{{ master_private_ip.stdout | trim }}" \
+          --from-literal=FRONTEND_ADDR="{{ frontend_addr }}" \
+          -n default --dry-run=client -o yaml | kubectl apply -f -
+      args:
+        executable: /bin/bash
+
+    - name: Install worker auto-label script
+      copy:
+        dest: /usr/local/bin/auto-label-workers.sh
+        mode: "0755"
+        content: |
+          #!/bin/bash
+          while true; do
+            NODES=$(/usr/local/bin/kubectl get nodes --no-headers | grep '<none>' | awk '{print $1}')
+            for NODE in $NODES; do
+              if [[ $NODE == ip-10-10-20-* ]]; then
+                /usr/local/bin/kubectl label node $NODE node-role.kubernetes.io/worker=true kubernetes.io/role=worker --overwrite
+                echo "✅ 노드 $NODE 에 워커 라벨을 자동으로 붙였습니다."
+              fi
+            done
+            sleep 30
+          done
+
+    - name: Install worker auto-label systemd service
+      copy:
+        dest: /etc/systemd/system/auto-label-workers.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Auto label k3s worker nodes
+          After=network.target k3s.service
+          Wants=k3s.service
+
+          [Service]
+          Type=simple
+          Environment=KUBECONFIG={{ kubeconfig_path }}
+          ExecStart=/usr/local/bin/auto-label-workers.sh
+          Restart=always
+          RestartSec=10
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd for auto-label service
+      systemd:
+        daemon_reload: true
+
+    - name: Enable and start auto-label service
+      systemd:
+        name: auto-label-workers.service
+        enabled: true
+        state: restarted
+
+    - name: Install ArgoCD CLI
+      shell: |
+        if ! command -v argocd >/dev/null 2>&1; then
+          curl -sSL -o /tmp/argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          install -m 555 /tmp/argocd-linux-amd64 /usr/local/bin/argocd
+          rm -f /tmp/argocd-linux-amd64
+        fi
+      args:
+        executable: /bin/bash
+
+    - name: Apply slack credentials secret
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl create secret generic slack-credentials \
+          --namespace=kafka-poc \
+          --from-literal=SLACK_BOT_TOKEN='{{ slack_bot_token }}' \
+          --from-literal=SLACK_CHANNEL='{{ slack_channel }}' \
+          --dry-run=client -o yaml | kubectl apply -f -
+      args:
+        executable: /bin/bash
+      when:
+        - slack_bot_token is defined
+        - slack_channel is defined
+        - slack_bot_token | length > 0
+        - slack_channel | length > 0

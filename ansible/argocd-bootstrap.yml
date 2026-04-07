@@ -1,0 +1,191 @@
+---
+- name: Bootstrap ArgoCD and register local cluster
+  hosts: k3s_server
+  become: true
+  gather_facts: true
+
+  vars:
+    kubeconfig_path: /etc/rancher/k3s/k3s.yaml
+    argocd_namespace: argocd
+    argocd_helm_version: "8.0.0"
+
+  tasks:
+    - name: Install Helm if missing
+      shell: |
+        if ! command -v helm >/dev/null 2>&1; then
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        fi
+      args:
+        executable: /bin/bash
+
+    - name: Install Git if missing
+      apt:
+        name: git
+        state: present
+        update_cache: true
+
+    - name: Install ArgoCD CLI if missing
+      shell: |
+        if ! command -v argocd >/dev/null 2>&1; then
+          curl -sSL -o /tmp/argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          install -m 555 /tmp/argocd-linux-amd64 /usr/local/bin/argocd
+          rm -f /tmp/argocd-linux-amd64
+        fi
+      args:
+        executable: /bin/bash
+
+    - name: Add Argo Helm repo
+      shell: |
+        helm repo add argo https://argoproj.github.io/argo-helm || true
+        helm repo update
+      args:
+        executable: /bin/bash
+
+    - name: Ensure ArgoCD values directory exists
+      file:
+        path: /opt/gitops/bootstrap/argocd
+        state: directory
+        mode: "0755"
+
+    - name: Write ArgoCD values.yaml
+      copy:
+        dest: /opt/gitops/bootstrap/argocd/values.yaml
+        mode: "0644"
+        content: "{{ argocd_values_content }}"
+
+    - name: Install ArgoCD with values file
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        helm upgrade --install argocd argo/argo-cd \
+          --version {{ argocd_helm_version }} \
+          -n {{ argocd_namespace }} \
+          --create-namespace \
+          -f /opt/gitops/bootstrap/argocd/values.yaml
+      args:
+        executable: /bin/bash
+
+    - name: Wait for argocd server rollout
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl rollout status deployment/argocd-server -n {{ argocd_namespace }} --timeout=300s
+      args:
+        executable: /bin/bash
+
+    - name: Wait for argocd repo-server rollout
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl rollout status deployment/argocd-repo-server -n {{ argocd_namespace }} --timeout=300s
+      args:
+        executable: /bin/bash
+
+    - name: Wait for argocd application-controller rollout
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl rollout status statefulset/argocd-application-controller -n {{ argocd_namespace }} --timeout=300s
+      args:
+        executable: /bin/bash
+
+    - name: Patch argocd insecure mode
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl patch cm argocd-cmd-params-cm -n {{ argocd_namespace }} \
+          -p '{"data":{"server.insecure":"true"}}' || true
+        kubectl rollout restart deployment argocd-server -n {{ argocd_namespace }} || true
+        kubectl rollout status deployment argocd-server -n {{ argocd_namespace }} --timeout=180s || true
+      args:
+        executable: /bin/bash
+
+    - name: Clone GitOps repository
+      git:
+        repo: "{{ gitops_repo_url }}"
+        dest: /opt/gitops-repo
+        version: "{{ gitops_target_revision }}"
+        force: true
+
+    - name: Apply root-app.yaml
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml
+      args:
+        executable: /bin/bash
+
+    - name: Show applications in argocd namespace
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl get applications -n {{ argocd_namespace }} || true
+      register: argocd_apps
+      changed_when: false
+
+    - name: Read ArgoCD initial admin password
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl -n {{ argocd_namespace }} get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+      register: argocd_admin_password
+      changed_when: false
+
+    - name: Get tailscale IPv4
+      shell: tailscale ip -4 | head -n 1 || true
+      register: master_ts_ip
+      changed_when: false
+
+    - name: Prepare local cluster kubeconfig copy
+      shell: |
+        cp {{ kubeconfig_path }} /tmp/argo-local.yaml
+        sed -i '/certificate-authority-data/d' /tmp/argo-local.yaml || true
+        kubectl config set-cluster local-pc --insecure-skip-tls-verify=true --kubeconfig /tmp/argo-local.yaml || true
+        sed -i 's/127.0.0.1/{{ master_ts_ip.stdout | trim }}/g' /tmp/argo-local.yaml
+        KUBECONFIG=/tmp/argo-local.yaml kubectl config rename-context default local-pc || true
+      args:
+        executable: /bin/bash
+
+    - name: Start argocd port-forward in background
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        pkill -f "port-forward svc/argocd-server 8080:80" || true
+        nohup kubectl -n {{ argocd_namespace }} port-forward svc/argocd-server 8080:80 >/tmp/argocd-portforward.log 2>&1 &
+      args:
+        executable: /bin/bash
+
+    - name: Wait for argocd port-forward
+      shell: |
+        for i in $(seq 1 30); do
+          curl -k http://127.0.0.1:8080 >/dev/null 2>&1 && exit 0
+          sleep 5
+        done
+        exit 1
+      args:
+        executable: /bin/bash
+
+    - name: Login to ArgoCD
+      shell: |
+        argocd login 127.0.0.1:8080 \
+          --username admin \
+          --password '{{ argocd_admin_password.stdout | trim }}' \
+          --insecure
+      args:
+        executable: /bin/bash
+
+    - name: Check existing ArgoCD clusters
+      shell: argocd cluster list
+      register: argocd_cluster_list
+      changed_when: false
+      failed_when: false
+
+    - name: Register local cluster if missing
+      shell: |
+        argocd cluster add local-pc \
+          --name boutique-local-cluster \
+          --kubeconfig /tmp/argo-local.yaml \
+          --yes
+      args:
+        executable: /bin/bash
+      when: "'boutique-local-cluster' not in argocd_cluster_list.stdout"
+
+    - name: Show registered clusters
+      shell: argocd cluster list
+      register: argocd_clusters_final
+      changed_when: false
+
+    - name: Print registered clusters
+      debug:
+        var: argocd_clusters_final.stdout_lines
