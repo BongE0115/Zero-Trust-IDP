@@ -185,7 +185,7 @@
         mkdir -p "$RUNNER_ROOT"
         cd "$RUNNER_ROOT"
 
-        # 💡 Ansible 변수는 {{ }} 사용!
+        # 💡 Ansible 변수를 주입하여 사용
         if [ ! -f "$RUNNER_ROOT/actions-runner-linux-x64-{{ github_runner_version }}.tar.gz" ]; then
           curl -fsSLo "actions-runner-linux-x64-{{ github_runner_version }}.tar.gz" \
             "https://github.com/actions/runner/releases/download/v{{ github_runner_version }}/actions-runner-linux-x64-{{ github_runner_version }}.tar.gz"
