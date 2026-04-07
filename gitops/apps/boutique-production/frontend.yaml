@@ -63,7 +63,6 @@ spec:
               cpu: 200m
               memory: 256Mi
           env:
-          # 🔥 마법 적용
           - name: LOCAL_IP
             valueFrom:
               configMapKeyRef:
@@ -71,7 +70,7 @@ spec:
                 key: LOCAL_TAILSCALE_IP
           - name: PORT
             value: "8080"
-          # 🔥 $(변수명) 치환
+          # $(변수명) 치환
           - name: PRODUCT_CATALOG_SERVICE_ADDR
             value: "$(LOCAL_IP):30550" 
           - name: CURRENCY_SERVICE_ADDR

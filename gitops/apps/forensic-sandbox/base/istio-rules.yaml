@@ -12,4 +12,4 @@ spec:
       app: forensic-sandbox-app
   action: DENY
   rules:
-  - {} # [중요] rules가 비어있으면 "모든 트래픽"을 의미합니다.
+  - {} 

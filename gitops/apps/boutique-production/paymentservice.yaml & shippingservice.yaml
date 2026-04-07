@@ -55,7 +55,7 @@ spec:
           value: "orders"
         - name: DLQ_TOPIC
           value: "orders-dlq"
-      # 2. 에러 발생기 (사이드카) 컨테이너 ### [하나로 통합됨]
+      # 2. 에러 발생기 (사이드카) 컨테이너 
       - name: auto-trigger
         image: python:3.11-slim
         command: ["/bin/sh", "-c"]

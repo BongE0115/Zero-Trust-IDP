@@ -3,14 +3,14 @@ kind: Service
 metadata:
   name: cartservice
 spec:
-  type: NodePort # 🔥 외부(AWS) 호출을 위해 NodePort로 변경
+  type: NodePort # 외부(AWS) 호출을 위해 NodePort로 변경
   selector:
     app: cartservice
   ports:
   - name: grpc
     port: 7070
     targetPort: 7070
-    nodePort: 30002 # 🔥 프론트엔드 환경변수와 일치시킴
+    nodePort: 30002 # 프론트엔드 환경변수와 일치시킴
 ---
 apiVersion: apps/v1
 kind: Deployment

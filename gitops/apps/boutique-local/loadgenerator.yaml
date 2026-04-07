@@ -23,7 +23,7 @@ spec:
       terminationGracePeriodSeconds: 5
       restartPolicy: Always
       
-      # 1. 프론트엔드가 떴는지 먼저 확인하는 정찰병
+      # 1. 프론트엔드가 떴는지 먼저 확인 
       initContainers:
       - name: frontend-check
         image: busybox:latest
@@ -60,7 +60,7 @@ spec:
               key: FRONTEND_ADDR  # 예: 100.88.181.49
 
           
-      # 2. 본진 (실제 트래픽을 쏘는 녀석)
+      # 2. 실제 트래픽 전달 컨테이너
       containers:
       - name: main
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/loadgenerator:v0.10.5
@@ -68,7 +68,7 @@ spec:
         - name: FRONTEND_ADDR
           valueFrom:
             configMapKeyRef:
-              name: aws-global-env  # 🔥 동일하게 수정
+              name: aws-global-env 
               key: FRONTEND_ADDR
         - name: USERS
           value: "10"
