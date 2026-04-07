@@ -198,13 +198,17 @@
       shell: |
         set -euxo pipefail
 
+        # 💡 [핵심 해결책] AWS CLI v2 Pager 비활성화 (무한 대기 방지)
+        export AWS_PAGER=""
+
         RUNNER_ROOT="/opt/actions-runner"
         mkdir -p "$RUNNER_ROOT"
         cd "$RUNNER_ROOT"
 
-        # 💡 Ansible 변수를 주입하여 사용
+        # 💡 curl에 타임아웃(--connect-timeout 5 --max-time 30) 추가
         if [ ! -f "$RUNNER_ROOT/actions-runner-linux-x64-{{ github_runner_version }}.tar.gz" ]; then
           curl -fsSLo "actions-runner-linux-x64-{{ github_runner_version }}.tar.gz" \
+            --connect-timeout 5 --max-time 30 \
             "https://github.com/actions/runner/releases/download/v{{ github_runner_version }}/actions-runner-linux-x64-{{ github_runner_version }}.tar.gz"
         fi
 
@@ -212,12 +216,12 @@
           tar xzf "actions-runner-linux-x64-{{ github_runner_version }}.tar.gz"
         fi
 
-        # 💡 이건 해당 서버(EC2)에서 뽑아내는 Bash 변수이므로 $ 사용 유지
-        INSTANCE_ID="$(curl -fsSL http://169.254.169.254/latest/meta-data/instance-id)"
-        PRIVATE_IP="$(curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4)"
+        # 💡 메타데이터 호출 타임아웃 단축
+        INSTANCE_ID="$(curl -fsSL --connect-timeout 3 --max-time 5 http://169.254.169.254/latest/meta-data/instance-id)"
+        PRIVATE_IP="$(curl -fsSL --connect-timeout 3 --max-time 5 http://169.254.169.254/latest/meta-data/local-ipv4)"
         RUNNER_NAME="monitoring-${INSTANCE_ID}"
 
-        # 💡 Ansible 변수 {{ aws_region }}, {{ github_runner_token_ssm_parameter }} 주입
+        # AWS PAGER가 꺼져있으므로 여기서 멈추지 않음
         GITHUB_BOOTSTRAP_TOKEN="$(aws ssm get-parameter \
           --region "{{ aws_region }}" \
           --name "{{ github_runner_token_ssm_parameter }}" \
@@ -238,7 +242,9 @@
           RUNNER_URL="https://github.com/{{ github_runner_owner }}/{{ github_runner_repository }}"
         fi
 
+        # 💡 GitHub API 호출 시 타임아웃 추가
         REG_JSON="$(curl -fsSL -X POST \
+          --connect-timeout 5 --max-time 10 \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer ${GITHUB_BOOTSTRAP_TOKEN}" \
           "$REG_URL")"
@@ -246,7 +252,7 @@
         REG_TOKEN="$(echo "$REG_JSON" | jq -r '.token')"
 
         if [ -z "$REG_TOKEN" ] || [ "$REG_TOKEN" = "null" ]; then
-          echo "$REG_JSON"
+          echo "Failed to get REG_TOKEN. Response: $REG_JSON"
           exit 1
         fi
 
