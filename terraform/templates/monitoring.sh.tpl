@@ -287,8 +287,8 @@ cat > /tmp/master-bootstrap-commands.json <<EOF
     "sudo /usr/local/bin/helm repo update",
 
     "sudo mkdir -p /opt/gitops/bootstrap/argocd",
-    "cat > /tmp/argocd-values.b64 <<'\\\\''EOF'\\\\''",
-    "$${ARGOCD_VALUES_B64}",
+    "cat > /tmp/argocd-values.b64 <<'EOF'",
+    "${ARGOCD_VALUES_B64}",
     "EOF",
     "base64 -d /tmp/argocd-values.b64 | sudo tee /opt/gitops/bootstrap/argocd/values.yaml >/dev/null",
 
@@ -298,7 +298,7 @@ cat > /tmp/master-bootstrap-commands.json <<EOF
     "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s",
 
     "sudo rm -rf /opt/gitops-repo",
-    "git clone -b $${GITOPS_TARGET_REVISION} $${GITOPS_REPO_URL} /opt/gitops-repo",
+    "git clone -b ${GITOPS_TARGET_REVISION} ${GITOPS_REPO_URL} /opt/gitops-repo",
     "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml",
     "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl get applications -n argocd || true"
   ]
@@ -314,7 +314,7 @@ COMMAND_ID="$(aws ssm send-command \
   --query 'Command.CommandId' \
   --output text)"
 
-if [ -z "$${COMMAND_ID:-}" ] || [ "$${COMMAND_ID}" = "None" ]; then
+if [ -z "${COMMAND_ID:-}" ] || [ "${COMMAND_ID}" = "None" ]; then
   echo "[ERROR] Failed to send bootstrap command to master." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
   exit 1
 fi

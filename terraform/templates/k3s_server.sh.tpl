@@ -50,21 +50,21 @@ fi
 # 4. K3s Server 설치
 # ---------------------------------------------------------
 ufw allow 6443/tcp || true
-if [ -n "$$TS_IP" ]; then
+if [ -n "$TS_IP" ]; then
   ufw allow in on tailscale0 || true
 fi
 
 PRIVATE_IP="$(hostname -I | awk '{print $1}')"
 
-INSTALL_K3S_EXEC_ARGS="server --write-kubeconfig-mode 644 --disable traefik --tls-san $$PRIVATE_IP"
-if [ -n "$$TS_IP" ]; then
-  INSTALL_K3S_EXEC_ARGS="$$INSTALL_K3S_EXEC_ARGS --tls-san $$TS_IP"
+INSTALL_K3S_EXEC_ARGS="server --write-kubeconfig-mode 644 --disable traefik --tls-san $PRIVATE_IP"
+if [ -n "$TS_IP" ]; then
+  INSTALL_K3S_EXEC_ARGS="$INSTALL_K3S_EXEC_ARGS --tls-san $TS_IP"
 fi
 
 if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
   curl -sfL https://get.k3s.io | \
     INSTALL_K3S_VERSION="$K3S_VERSION" \
-    INSTALL_K3S_EXEC="$$INSTALL_K3S_EXEC_ARGS" \
+    INSTALL_K3S_EXEC="$INSTALL_K3S_EXEC_ARGS" \
     K3S_TOKEN="$K3S_TOKEN" \
     sh -
 fi
@@ -85,10 +85,10 @@ if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
   exit 1
 fi
 
-if [ -n "$$TS_IP" ]; then
-  sed -i "s/127.0.0.1/$$TS_IP/g" /etc/rancher/k3s/k3s.yaml
+if [ -n "$TS_IP" ]; then
+  sed -i "s/127.0.0.1/$TS_IP/g" /etc/rancher/k3s/k3s.yaml
 else
-  sed -i "s/127.0.0.1/$$PRIVATE_IP/g" /etc/rancher/k3s/k3s.yaml
+  sed -i "s/127.0.0.1/$PRIVATE_IP/g" /etc/rancher/k3s/k3s.yaml
 fi
 
 chmod 644 /etc/rancher/k3s/k3s.yaml
@@ -122,14 +122,14 @@ GITHUB_DISPATCH_TOKEN="$(aws ssm get-parameter \
   --output text \
   --region ap-northeast-2)"
 
-if [ -z "$$GITHUB_DISPATCH_TOKEN" ] || [ "$$GITHUB_DISPATCH_TOKEN" = "None" ]; then
+if [ -z "$GITHUB_DISPATCH_TOKEN" ] || [ "$GITHUB_DISPATCH_TOKEN" = "None" ]; then
   echo "[ERROR] failed to read github dispatch token from SSM"
   exit 1
 fi
 
 echo "[INFO] applying github-dispatch-secret"
 k3s kubectl -n kafka-poc create secret generic github-dispatch-secret \
-  --from-literal=token="$$GITHUB_DISPATCH_TOKEN" \
+  --from-literal=token="$GITHUB_DISPATCH_TOKEN" \
   --dry-run=client -o yaml | k3s kubectl apply -f -
 
 echo "[INFO] github-dispatch-secret applied successfully"
@@ -152,7 +152,7 @@ k3s kubectl create configmap aws-global-env \
   --from-literal=PROJECT_NAME="${project_name}" \
   --from-literal=ENVIRONMENT="production" \
   --from-literal=LOCAL_TAILSCALE_IP="${local_tailscale_ip}" \
-  --from-literal=AWS_IP="$$PRIVATE_IP" \
+  --from-literal=AWS_IP="$PRIVATE_IP" \
   --from-literal=FRONTEND_ADDR="${frontend_addr}" \
   -n default \
   --dry-run=client -o yaml | k3s kubectl apply -f -
