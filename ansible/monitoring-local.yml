@@ -196,19 +196,24 @@
 
     - name: Install GitHub self-hosted runner when enabled
       shell: |
+        # 💡 모든 실행 과정을 대상 서버의 /tmp/runner-install-debug.log 파일에 실시간 기록
+        exec > >(tee -a /tmp/runner-install-debug.log) 2>&1
         set -euxo pipefail
 
-        # 💡 [핵심 해결책] AWS CLI v2 Pager 비활성화 (무한 대기 방지)
+        echo "--- 1. 스크립트 시작 ---"
         export AWS_PAGER=""
+        # 💡 AWS CLI가 네트워크가 막혔을 때 무한 대기하지 않고 1번만 시도 후 바로 에러를 뱉게 설정
+        export AWS_MAX_ATTEMPTS=1
+        export AWS_RETRY_MODE=standard
 
         RUNNER_ROOT="/opt/actions-runner"
         mkdir -p "$RUNNER_ROOT"
         cd "$RUNNER_ROOT"
 
-        # 💡 curl에 타임아웃(--connect-timeout 5 --max-time 30) 추가
+        echo "--- 2. 러너 파일 다운로드 ---"
         if [ ! -f "$RUNNER_ROOT/actions-runner-linux-x64-{{ github_runner_version }}.tar.gz" ]; then
           curl -fsSLo "actions-runner-linux-x64-{{ github_runner_version }}.tar.gz" \
-            --connect-timeout 5 --max-time 30 \
+            --connect-timeout 5 --max-time 15 \
             "https://github.com/actions/runner/releases/download/v{{ github_runner_version }}/actions-runner-linux-x64-{{ github_runner_version }}.tar.gz"
         fi
 
@@ -216,12 +221,12 @@
           tar xzf "actions-runner-linux-x64-{{ github_runner_version }}.tar.gz"
         fi
 
-        # 💡 메타데이터 호출 타임아웃 단축
+        echo "--- 3. 메타데이터 가져오기 ---"
         INSTANCE_ID="$(curl -fsSL --connect-timeout 3 --max-time 5 http://169.254.169.254/latest/meta-data/instance-id)"
         PRIVATE_IP="$(curl -fsSL --connect-timeout 3 --max-time 5 http://169.254.169.254/latest/meta-data/local-ipv4)"
         RUNNER_NAME="monitoring-${INSTANCE_ID}"
 
-        # AWS PAGER가 꺼져있으므로 여기서 멈추지 않음
+        echo "--- 4. AWS SSM 통신 시도 ---"
         GITHUB_BOOTSTRAP_TOKEN="$(aws ssm get-parameter \
           --region "{{ aws_region }}" \
           --name "{{ github_runner_token_ssm_parameter }}" \
@@ -234,6 +239,7 @@
           exit 1
         fi
 
+        echo "--- 5. GitHub API 통신 시도 ---"
         if [ "{{ github_runner_scope }}" = "org" ]; then
           REG_URL="https://api.github.com/orgs/{{ github_runner_owner }}/actions/runners/registration-token"
           RUNNER_URL="https://github.com/{{ github_runner_owner }}"
@@ -242,7 +248,6 @@
           RUNNER_URL="https://github.com/{{ github_runner_owner }}/{{ github_runner_repository }}"
         fi
 
-        # 💡 GitHub API 호출 시 타임아웃 추가
         REG_JSON="$(curl -fsSL -X POST \
           --connect-timeout 5 --max-time 10 \
           -H "Accept: application/vnd.github+json" \
@@ -256,6 +261,7 @@
           exit 1
         fi
 
+        echo "--- 6. 러너 Config 실행 ---"
         chown -R ubuntu:ubuntu "$RUNNER_ROOT"
 
         if [ ! -f "$RUNNER_ROOT/.runner" ]; then
@@ -269,10 +275,13 @@
             --work "_work"
         fi
 
+        echo "--- 7. 러너 서비스 등록 및 재시작 ---"
         ./svc.sh install root || true
         ./svc.sh start || true
         systemctl enable actions.runner.* || true
         systemctl restart actions.runner.* || true
+        
+        echo "--- 8. 스크립트 정상 종료 ---"
       args:
         executable: /bin/bash
       when: enable_monitoring_github_runner | string == "true"
