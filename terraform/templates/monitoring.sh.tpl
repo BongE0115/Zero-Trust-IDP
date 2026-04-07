@@ -118,7 +118,9 @@ ansible-playbook monitoring-local.yml \
   -e github_runner_repository="$${GITHUB_RUNNER_REPOSITORY}" \
   -e github_runner_labels="$${GITHUB_RUNNER_LABELS}" \
   -e github_runner_version="$${GITHUB_RUNNER_VERSION}" \
-  -e github_runner_token_ssm_parameter="$${GITHUB_RUNNER_TOKEN_SSM_PARAMETER}"
+  -e github_runner_token_ssm_parameter="$${GITHUB_RUNNER_TOKEN_SSM_PARAMETER}"\
+  -e k3s_server_private_ip="$${aws_instance.k3s_server.private_ip}" \
+  -e k3s_agent_private_ip="$${aws_instance.k3s_agent.private_ip}" \
 
 echo "[INFO] running k3s-server-remote.yml"
 ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
