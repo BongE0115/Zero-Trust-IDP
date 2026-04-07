@@ -177,6 +177,23 @@
         enabled: true
         state: restarted
 
+    - name: Remove broken apt awscli
+      apt:
+        name: awscli
+        state: absent
+      become: yes
+
+    - name: Install AWS CLI v2
+      unarchive:
+        src: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp
+        remote_src: yes
+      become: yes
+
+    - name: Run AWS CLI v2 installer
+      command: /tmp/aws/install --update
+      become: yes    
+
     - name: Install GitHub self-hosted runner when enabled
       shell: |
         set -euxo pipefail
