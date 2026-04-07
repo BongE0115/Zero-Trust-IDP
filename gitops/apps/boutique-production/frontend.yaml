@@ -43,6 +43,11 @@ spec:
     metadata:
       labels:
         app: frontend
+        # Prometheus 관제 이름표 추가
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
       nodeSelector:
         node-role.kubernetes.io/worker: "true"
@@ -50,6 +55,13 @@ spec:
       containers:
         - name: server
           image: us-central1-docker.pkg.dev/google-samples/microservices-demo/frontend:v0.10.5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
           env:
           # 🔥 마법 적용
           - name: LOCAL_IP
