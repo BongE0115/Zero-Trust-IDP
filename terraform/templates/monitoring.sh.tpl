@@ -27,6 +27,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   curl unzip gnupg lsb-release apt-transport-https ca-certificates \
   software-properties-common jq awscli
 
+
 # ---------------------------------------------------------
 # 1.5 Tailscale 설치 및 연결
 # ---------------------------------------------------------
@@ -42,6 +43,7 @@ if [[ -n "$${TAILSCALE_AUTH_KEY:-}" ]]; then
 else
   echo "[WARN] TAILSCALE_AUTH_KEY is empty, skipping tailscale up"
 fi
+
 
 # ---------------------------------------------------------
 # 2. kubectl 설치
@@ -60,19 +62,6 @@ curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/
 echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
 apt-get update -y
 apt-get install -y grafana
-
-mkdir -p /etc/grafana/provisioning/datasources
-cat > /etc/grafana/provisioning/datasources/ds-prometheus.yaml <<EOF
-apiVersion: 1
-datasources:
-  - name: Prometheus
-    type: prometheus
-    url: http://localhost:9090
-    isDefault: true
-    access: proxy
-    editable: true
-EOF
-
 systemctl enable grafana-server
 systemctl restart grafana-server
 
@@ -81,32 +70,7 @@ systemctl restart grafana-server
 # ---------------------------------------------------------
 id prometheus >/dev/null 2>&1 || useradd --no-create-home --shell /bin/false prometheus
 
-# 4.1 로컬 Node Exporter 설치
 cd /tmp
-NODE_EXPORTER_VERSION="1.7.0"
-curl -LO "https://github.com/prometheus/node_exporter/releases/download/v$${NODE_EXPORTER_VERSION}/node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
-tar xvf "node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
-install -m 0755 "node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/node_exporter
-
-cat > /etc/systemd/system/node_exporter.service <<'SERVICE'
-[Unit]
-Description=Node Exporter
-After=network.target
-
-[Service]
-User=prometheus
-ExecStart=/usr/local/bin/node_exporter
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-SERVICE
-
-systemctl daemon-reload
-systemctl enable node_exporter
-systemctl start node_exporter
-
-# 4.2 Prometheus 바이너리 설치
 PROM_VERSION="2.54.1"
 curl -LO "https://github.com/prometheus/prometheus/releases/download/v$${PROM_VERSION}/prometheus-$${PROM_VERSION}.linux-amd64.tar.gz"
 tar xvf "prometheus-$${PROM_VERSION}.linux-amd64.tar.gz"
@@ -116,7 +80,6 @@ install -m 0755 "prometheus-$${PROM_VERSION}.linux-amd64/promtool" /usr/local/bi
 
 mkdir -p /etc/prometheus /var/lib/prometheus
 
-# 4.3 Prometheus 설정 파일 작성
 cat > /etc/prometheus/prometheus.yml <<EOF
 global:
   scrape_interval: 15s
@@ -126,47 +89,14 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  - job_name: "monitoring-node"
+  - job_name: "k3s-nodes"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ["localhost:9100"]
-
-  - job_name: "kubernetes-node-exporter"
-    tls_config:
-      insecure_skip_verify: true
-    kubernetes_sd_configs:
-      - role: pod
-        api_server: "https://$${MASTER_PRIVATE_IP}:6443"
-    relabel_configs:
-      - source_labels: [__meta_kubernetes_pod_label_app]
-        action: keep
-        regex: node-exporter
-      - source_labels: [__meta_kubernetes_pod_host_ip]
-        action: replace
-        target_label: __address__
-        replacement: \$${1}:9100
-      - source_labels: [__meta_kubernetes_pod_node_name]
-        action: replace
-        target_label: node_name
-
-  - job_name: "kubernetes-pods"
-    tls_config:
-      insecure_skip_verify: true
-    kubernetes_sd_configs:
-      - role: pod
-        api_server: "https://$${MASTER_PRIVATE_IP}:6443"
-    relabel_configs:
-      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-        action: keep
-        regex: true
-      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
-        action: replace
-        target_label: __metrics_path__
-        regex: (.+)
-      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
-        action: replace
-        target_label: __address__
-        regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: \$${1}:\$${2}
+      - targets:
+        - "$${MASTER_PRIVATE_IP}:10250"
+        - "$${WORKER_PRIVATE_IP}:10250"
+        - "$${MASTER_PRIVATE_IP}:9100"
+        - "$${WORKER_PRIVATE_IP}:9100"
 EOF
 
 chown -R prometheus:prometheus /etc/prometheus
@@ -183,8 +113,7 @@ Group=prometheus
 Type=simple
 ExecStart=/usr/local/bin/prometheus \
   --config.file=/etc/prometheus/prometheus.yml \
-  --storage.tsdb.path=/var/lib/prometheus \
-  --web.enable-lifecycle
+  --storage.tsdb.path=/var/lib/prometheus
 Restart=always
 
 [Install]
@@ -266,58 +195,35 @@ fi
 # ---------------------------------------------------------
 echo "[INFO] Sending bootstrap command to master via SSM..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
 
-cat > /tmp/master-bootstrap-commands.json <<EOF
-{
-  "commands": [
-    "#!/bin/bash",
-    "set -euxo pipefail",
-    "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
-
-    "if ! pgrep node_exporter > /dev/null; then curl -LO https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz; tar xvf node_exporter-1.7.0.linux-amd64.tar.gz; sudo mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/; sudo nohup /usr/local/bin/node_exporter > /dev/null 2>&1 &; fi",
-
-    "sudo /usr/local/bin/k3s kubectl create clusterrolebinding prometheus-view --clusterrole=view --serviceaccount=default:default || true",
-
-    "sudo /usr/local/bin/k3s kubectl create namespace boutique-production || true",
-    "sudo /usr/local/bin/k3s kubectl label namespace boutique-production istio-injection=enabled --overwrite || true",
-
-    "if ! command -v helm >/dev/null 2>&1; then curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; fi",
-    "if ! command -v git >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y git; fi",
-
-    "sudo /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm || true",
-    "sudo /usr/local/bin/helm repo update",
-
-    "sudo mkdir -p /opt/gitops/bootstrap/argocd",
-    "cat > /tmp/argocd-values.b64 <<'EOF'",
-    "${ARGOCD_VALUES_B64}",
-    "EOF",
-    "base64 -d /tmp/argocd-values.b64 | sudo tee /opt/gitops/bootstrap/argocd/values.yaml >/dev/null",
-
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/helm upgrade --install argocd argo/argo-cd --version 8.0.0 -n argocd --create-namespace -f /opt/gitops/bootstrap/argocd/values.yaml",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl rollout status deployment/argocd-server -n argocd --timeout=300s",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s",
-
-    "sudo rm -rf /opt/gitops-repo",
-    "git clone -b ${GITOPS_TARGET_REVISION} ${GITOPS_REPO_URL} /opt/gitops-repo",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml",
-    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml /usr/local/bin/k3s kubectl get applications -n argocd || true"
-  ]
-}
-EOF
-
 COMMAND_ID="$(aws ssm send-command \
   --region "$AWS_REGION" \
   --instance-ids "$MASTER_INSTANCE_ID" \
   --document-name "AWS-RunShellScript" \
   --comment "Install ArgoCD and apply root-app from Git" \
-  --parameters file:///tmp/master-bootstrap-commands.json \
+  --parameters commands='[
+    "#!/bin/bash",
+    "set -euxo pipefail",
+    "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
+    "if ! command -v helm >/dev/null 2>&1; then curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; fi",
+    "if ! command -v git >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y git; fi",
+    "sudo /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm || true",
+    "sudo /usr/local/bin/helm repo update",
+    "sudo mkdir -p /opt/gitops/bootstrap/argocd",
+    "cat > /tmp/argocd-values.b64 <<'\''EOF'\''",
+    "'"$ARGOCD_VALUES_B64"'",
+    "EOF",
+    "base64 -d /tmp/argocd-values.b64 | sudo tee /opt/gitops/bootstrap/argocd/values.yaml >/dev/null",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install argocd argo/argo-cd --version 8.0.0 -n argocd --create-namespace -f /opt/gitops/bootstrap/argocd/values.yaml",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-server -n argocd --timeout=300s",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s",
+    "sudo rm -rf /opt/gitops-repo",
+    "git clone -b '"$GITOPS_TARGET_REVISION"' '"$GITOPS_REPO_URL"' /opt/gitops-repo",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml",
+    "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get applications -n argocd || true"
+  ]' \
   --query 'Command.CommandId' \
   --output text)"
-
-if [ -z "${COMMAND_ID:-}" ] || [ "${COMMAND_ID}" = "None" ]; then
-  echo "[ERROR] Failed to send bootstrap command to master." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-  exit 1
-fi
 
 echo "[INFO] Command sent. CommandId=$COMMAND_ID" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
 
@@ -440,7 +346,7 @@ if [ "$${ENABLE_MONITORING_GITHUB_RUNNER}" = "true" ]; then
     exit 1
   fi
 
-  chown -R ubuntu:ubuntu "$RUNNER_ROOT"
+chown -R ubuntu:ubuntu "$RUNNER_ROOT" 
 
   if [ ! -f "$RUNNER_ROOT/.runner" ]; then
     sudo -u ubuntu ./config.sh \
@@ -450,7 +356,7 @@ if [ "$${ENABLE_MONITORING_GITHUB_RUNNER}" = "true" ]; then
       --url "$RUNNER_URL" \
       --token "$REG_TOKEN" \
       --labels "$GITHUB_RUNNER_LABELS,private-vpc,$PRIVATE_IP" \
-      --work "_work"
+      --work "_work" 
   else
     echo "[INFO] Runner already configured. Skipping config.sh." | tee -a /opt/bootstrap/logs/github-runner.log
   fi
