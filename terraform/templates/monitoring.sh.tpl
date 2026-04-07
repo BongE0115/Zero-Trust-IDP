@@ -4,27 +4,6 @@ set -euxo pipefail
 LOG_FILE="/var/log/monitoring-bootstrap.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-AWS_REGION="${aws_region}"
-TAILSCALE_AUTH_KEY="${tailscale_auth_key}"
-
-GITOPS_REPO_URL="${gitops_repo_url}"
-GITOPS_TARGET_REVISION="${gitops_target_revision}"
-
-ENABLE_MONITORING_GITHUB_RUNNER="${enable_monitoring_github_runner}"
-GITHUB_RUNNER_SCOPE="${github_runner_scope}"
-GITHUB_RUNNER_OWNER="${github_runner_owner}"
-GITHUB_RUNNER_REPOSITORY="${github_runner_repository}"
-GITHUB_RUNNER_LABELS="${github_runner_labels_csv}"
-GITHUB_RUNNER_VERSION="${github_runner_version}"
-GITHUB_RUNNER_TOKEN_SSM_PARAMETER="${github_runner_token_ssm_parameter}"
-
-K3S_TOKEN="${k3s_token}"
-FRONTEND_ADDR="${frontend_addr}"
-SLACK_BOT_TOKEN="${slack_bot_token}"
-SLACK_CHANNEL="${slack_channel}"
-
-ARGOCD_VALUES_B64="${argocd_values_b64}"
-
 export DEBIAN_FRONTEND=noninteractive
 
 echo "[INFO] installing base packages"
@@ -41,8 +20,8 @@ fi
 systemctl enable tailscaled
 systemctl restart tailscaled
 
-if [[ -n "$${TAILSCALE_AUTH_KEY:-}" ]]; then
-  tailscale up --authkey "$${TAILSCALE_AUTH_KEY}" || true
+if [[ -n "${tailscale_auth_key}" ]]; then
+  tailscale up --authkey "${tailscale_auth_key}" || true
 fi
 
 echo "[INFO] installing ansible"
@@ -63,7 +42,7 @@ fi
 
 echo "[INFO] cloning gitops repo"
 rm -rf /opt/gitops-repo
-git clone -b "$${GITOPS_TARGET_REVISION}" "$${GITOPS_REPO_URL}" /opt/gitops-repo
+git clone -b "${gitops_target_revision}" "${gitops_repo_url}" /opt/gitops-repo
 
 mkdir -p /opt/gitops-repo/ansible/inventory
 
@@ -86,14 +65,30 @@ EOF
 
 echo "[INFO] decoding argocd values"
 mkdir -p /opt/gitops-repo/bootstrap-runtime
-printf '%s' "$${ARGOCD_VALUES_B64}" | base64 -d > /opt/gitops-repo/bootstrap-runtime/argocd-values.yaml
+printf '%s' "${argocd_values_b64}" | base64 -d > /opt/gitops-repo/bootstrap-runtime/argocd-values.yaml
 
 cat > /opt/gitops-repo/bootstrap-runtime/argocd-extra-vars.yml <<EOF
-aws_region: "$${AWS_REGION}"
-gitops_repo_url: "$${GITOPS_REPO_URL}"
-gitops_target_revision: "$${GITOPS_TARGET_REVISION}"
+aws_region: "${aws_region}"
+gitops_repo_url: "${gitops_repo_url}"
+gitops_target_revision: "${gitops_target_revision}"
 argocd_values_content: |
 $(sed 's/^/  /' /opt/gitops-repo/bootstrap-runtime/argocd-values.yaml)
+EOF
+
+# 💡 핵심 수정 포인트: 복잡한 명령줄 옵션 대신 Ansible 변수 파일을 동적으로 생성!
+echo "[INFO] creating monitoring variables file"
+cat > /opt/gitops-repo/bootstrap-runtime/monitoring-vars.yml <<EOF
+aws_region: "${aws_region}"
+tailscale_auth_key: "${tailscale_auth_key}"
+enable_monitoring_github_runner: "${enable_monitoring_github_runner}"
+github_runner_scope: "${github_runner_scope}"
+github_runner_owner: "${github_runner_owner}"
+github_runner_repository: "${github_runner_repository}"
+github_runner_labels: "${github_runner_labels_csv}"
+github_runner_version: "${github_runner_version}"
+github_runner_token_ssm_parameter: "${github_runner_token_ssm_parameter}"
+k3s_server_private_ip: "${k3s_server_private_ip}"
+k3s_agent_private_ip: "${k3s_agent_private_ip}"
 EOF
 
 cd /opt/gitops-repo/ansible
@@ -110,32 +105,22 @@ ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
 ansible-playbook monitoring-local.yml \
   -i "localhost," \
   -c local \
-  -e aws_region="{{AWS_REGION}}" \
-  -e tailscale_auth_key="{{TAILSCALE_AUTH_KEY}}" \
-  -e enable_monitoring_github_runner="{{ENABLE_MONITORING_GITHUB_RUNNER}}" \
-  -e github_runner_scope="{{GITHUB_RUNNER_SCOPE}}" \
-  -e github_runner_owner="{{GITHUB_RUNNER_OWNER}}" \
-  -e github_runner_repository="{{GITHUB_RUNNER_REPOSITORY}}" \
-  -e github_runner_labels="{{GITHUB_RUNNER_LABELS}}" \
-  -e github_runner_version="{{GITHUB_RUNNER_VERSION}}" \
-  -e github_runner_token_ssm_parameter="{{GITHUB_RUNNER_TOKEN_SSM_PARAMETER}}" \
-  -e k3s_server_private_ip="${k3s_server.private_ip}" \
-  -e k3s_agent_private_ip="${k3s_agent.private_ip}" 
+  -e @/opt/gitops-repo/bootstrap-runtime/monitoring-vars.yml
 
 echo "[INFO] running k3s-server-remote.yml"
 ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
 ansible-playbook k3s-server-remote.yml \
-  -e aws_region="$${AWS_REGION}" \
-  -e k3s_token="$${K3S_TOKEN}" \
-  -e frontend_addr="$${FRONTEND_ADDR}" \
-  -e slack_bot_token="$${SLACK_BOT_TOKEN}" \
-  -e slack_channel="$${SLACK_CHANNEL}"
+  -e aws_region="${aws_region}" \
+  -e k3s_token="${k3s_token}" \
+  -e frontend_addr="${frontend_addr}" \
+  -e slack_bot_token="${slack_bot_token}" \
+  -e slack_channel="${slack_channel}"
 
 echo "[INFO] running k3s-agent-remote.yml"
 ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
 ansible-playbook k3s-agent-remote.yml \
-  -e aws_region="$${AWS_REGION}" \
-  -e k3s_token="$${K3S_TOKEN}"
+  -e aws_region="${aws_region}" \
+  -e k3s_token="${k3s_token}"
 
 echo "[INFO] running argocd-bootstrap.yml"
 ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
