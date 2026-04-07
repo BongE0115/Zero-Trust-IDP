@@ -62,15 +62,55 @@ curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/
 echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
 apt-get update -y
 apt-get install -y grafana
+
+#Grafana Prometheus 데이터소스 자동 등록
+mkdir -p /etc/grafana/provisioning/datasources
+cat > /etc/grafana/provisioning/datasources/ds-prometheus.yaml <<EOF
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    url: http://localhost:9090
+    isDefault: true
+    access: proxy
+    editable: true
+EOF
+
 systemctl enable grafana-server
 systemctl restart grafana-server
 
 # ---------------------------------------------------------
 # 4. Prometheus 설치
 # ---------------------------------------------------------
+# Prometheus 및 관련 서비스를 실행할 유저 생성
 id prometheus >/dev/null 2>&1 || useradd --no-create-home --shell /bin/false prometheus
 
+# 4.1 로컬 Node Exporter 설치 (모니터링 서버 자체 관측용)
 cd /tmp
+NODE_EXPORTER_VERSION="1.7.0"
+curl -LO "https://github.com/prometheus/node_exporter/releases/download/v$${NODE_EXPORTER_VERSION}/node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+tar xvf "node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+install -m 0755 "node_exporter-$${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/node_exporter
+
+cat > /etc/systemd/system/node_exporter.service <<'SERVICE'
+[Unit]
+Description=Node Exporter
+After=network.target
+
+[Service]
+User=prometheus
+ExecStart=/usr/local/bin/node_exporter
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable node_exporter
+systemctl start node_exporter
+
+# 4.2 Prometheus 바이너리 설치
 PROM_VERSION="2.54.1"
 curl -LO "https://github.com/prometheus/prometheus/releases/download/v$${PROM_VERSION}/prometheus-$${PROM_VERSION}.linux-amd64.tar.gz"
 tar xvf "prometheus-$${PROM_VERSION}.linux-amd64.tar.gz"
@@ -80,6 +120,7 @@ install -m 0755 "prometheus-$${PROM_VERSION}.linux-amd64/promtool" /usr/local/bi
 
 mkdir -p /etc/prometheus /var/lib/prometheus
 
+# 4.3 Prometheus 설정 파일 작성
 cat > /etc/prometheus/prometheus.yml <<EOF
 global:
   scrape_interval: 15s
@@ -89,6 +130,11 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
+  # 로컬 노드 관측
+  - job_name: "monitoring-node"
+    static_configs:
+      - targets: ["localhost:9100"]
+
   - job_name: "k3s-nodes"
     metrics_path: "/metrics"
     static_configs:
@@ -97,11 +143,33 @@ scrape_configs:
         - "$${WORKER_PRIVATE_IP}:10250"
         - "$${MASTER_PRIVATE_IP}:9100"
         - "$${WORKER_PRIVATE_IP}:9100"
+
+  - job_name: "kubernetes-pods"
+    # 외부에서 K3s API 서버에 접근하기 위한 설정
+    tls_config:
+      insecure_skip_verify: true
+    kubernetes_sd_configs:
+      - role: pod
+        api_server: "https://$${MASTER_PRIVATE_IP}:6443"
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $${1}:$${2}
 EOF
 
 chown -R prometheus:prometheus /etc/prometheus
 chown -R prometheus:prometheus /var/lib/prometheus
 
+# 4.4 Prometheus 서비스 등록
 cat > /etc/systemd/system/prometheus.service <<'SERVICE'
 [Unit]
 Description=Prometheus
@@ -113,7 +181,8 @@ Group=prometheus
 Type=simple
 ExecStart=/usr/local/bin/prometheus \
   --config.file=/etc/prometheus/prometheus.yml \
-  --storage.tsdb.path=/var/lib/prometheus
+  --storage.tsdb.path=/var/lib/prometheus \
+  --web.enable-lifecycle
 Restart=always
 
 [Install]
@@ -204,6 +273,22 @@ COMMAND_ID="$(aws ssm send-command \
     "#!/bin/bash",
     "set -euxo pipefail",
     "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
+
+    # [추가] 8-1. K3s 노드 자체 지표 수집을 위한 Node Exporter 설치
+    "if ! pgrep node_exporter > /dev/null; then",
+    "  curl -LO https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz",
+    "  tar xvf node_exporter-1.7.0.linux-amd64.tar.gz",
+    "  sudo mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/",
+    "  sudo nohup /usr/local/bin/node_exporter > /dev/null 2>&1 &",
+    "fi",
+
+    # [추가] 8-2. Prometheus가 외부에서 파드 정보를 읽을 수 있도록 권한 부여
+    "sudo kubectl create clusterrolebinding prometheus-view --clusterrole=view --serviceaccount=default:default || true",
+
+    # [추가] 8-3. Boutique 네임스페이스 미리 생성 및 Istio 활성화
+    "sudo kubectl create namespace boutique-production || true",
+    "sudo kubectl label namespace boutique-production istio-injection=enabled --overwrite || true",
+
     "if ! command -v helm >/dev/null 2>&1; then curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; fi",
     "if ! command -v git >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y git; fi",
     "sudo /usr/local/bin/helm repo add argo https://argoproj.github.io/argo-helm || true",
