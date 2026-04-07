@@ -47,7 +47,7 @@ def send_ssm_command(instance_id: str, region: str) -> str:
     return stdout
 
 
-def wait_for_command(command_id: str, instance_id: str, region: str, timeout_seconds: int = 600) -> Dict[str, Any]:
+def wait_for_command(command_id: str, instance_id: str, region: str, timeout_seconds: int = 180) -> Dict[str, Any]:
     deadline = time.time() + timeout_seconds
 
     while time.time() < deadline:
@@ -100,6 +100,7 @@ def fetch_kubeconfig_with_retry(instance_id: str, region: str, retries: int = 30
 
         except Exception as exc:
             last_error = exc
+            print(f"DEBUG: Attempt failed with error: {exc}", file=sys.stderr)
             time.sleep(wait_seconds)
 
     raise RuntimeError(f"Failed to fetch kubeconfig after retries: {last_error}")

@@ -59,13 +59,13 @@ fi
 ufw allow 6443/tcp || true
 ufw allow in on tailscale0 || true
 
-PRIVATE_IP="$$(hostname -I | awk '{print $1}')"
-TS_IP="$$(tailscale ip -4 2>/dev/null || true)"
+PRIVATE_IP="$(hostname -I | awk '{print $1}')"
+TS_IP="$(tailscale ip -4 2>/dev/null || true)"
 
 if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
   curl -sfL https://get.k3s.io | \
     INSTALL_K3S_VERSION="$${K3S_VERSION}" \
-    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --tls-san $${PRIVATE_IP} $$( [ -n "$${TS_IP}" ] && printf '%s' "--tls-san $${TS_IP}" )" \
+    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --tls-san $${PRIVATE_IP} $( [ -n "$${TS_IP}" ] && printf '%s' "--tls-san $${TS_IP}" )" \
     K3S_TOKEN="$${K3S_TOKEN}" \
     sh -
 fi
@@ -81,7 +81,7 @@ for i in {1..40}; do
 done
 
 if command -v tailscale >/dev/null 2>&1; then
-  MASTER_TS_IP="$$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
+  MASTER_TS_IP="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
 else
   MASTER_TS_IP=""
 fi
@@ -108,7 +108,7 @@ echo "[INFO] ensuring kafka-poc namespace exists"
 kubectl get namespace kafka-poc >/dev/null 2>&1 || kubectl create namespace kafka-poc
 
 echo "[INFO] reading GitHub dispatch token from SSM"
-GITHUB_DISPATCH_TOKEN="$$(aws ssm get-parameter \
+GITHUB_DISPATCH_TOKEN="$(aws ssm get-parameter \
   --name "/zero-trust-idp/github-dispatch-token" \
   --with-decryption \
   --query "Parameter.Value" \
@@ -131,7 +131,7 @@ echo "[INFO] github-dispatch-secret applied successfully"
 # 7. 마스터 노드 라벨 추가
 # ---------------------------------------------------------
 echo "[INFO] labeling master node"
-/usr/local/bin/kubectl label node "$$(hostname)" \
+/usr/local/bin/kubectl label node "$(hostname)" \
   node-role.kubernetes.io/master=true \
   kubernetes.io/role=master \
   --overwrite
@@ -145,7 +145,7 @@ echo "[INFO] creating aws-global-env configmap"
   --from-literal=PROJECT_NAME="${project_name}" \
   --from-literal=ENVIRONMENT="production" \
   --from-literal=LOCAL_TAILSCALE_IP="${local_tailscale_ip}" \
-  --from-literal=AWS_IP="$$(hostname -I | awk '{print $1}')" \
+  --from-literal=AWS_IP="$(hostname -I | awk '{print $1}')" \
   --from-literal=FRONTEND_ADDR="${frontend_addr}" \
   -n default --dry-run=client -o yaml | /usr/local/bin/kubectl apply -f -
 
