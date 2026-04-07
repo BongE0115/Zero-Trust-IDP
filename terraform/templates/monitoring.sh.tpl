@@ -77,7 +77,7 @@ EOF
 
 # 💡 핵심 수정 포인트: 복잡한 명령줄 옵션 대신 Ansible 변수 파일을 동적으로 생성!
 echo "[INFO] creating monitoring variables file"
-cat > /opt/gitops-repo/bootstrap-runtime/monitoring-vars.yml <<EOF
+cat > /opt/gitops-repo/bootstrap-runtime/monitoring-vars.yml <<'EOF'
 aws_region: "${aws_region}"
 tailscale_auth_key: "${tailscale_auth_key}"
 enable_monitoring_github_runner: "${enable_monitoring_github_runner}"
