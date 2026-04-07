@@ -226,6 +226,7 @@ resource "aws_route53_zone" "private_internal" {
 # [SET 1] IAM Role for K3s nodes (master / worker)
 # - SSM managed-node permissions
 # - GitHub dispatch token SSM read permissions
+# - Ansible aws_ssm connection용 S3 bucket permissions
 # ==========================================
 
 # 1. 역할(Role)
@@ -246,13 +247,13 @@ resource "aws_iam_role" "ssm_node_role" {
   })
 }
 
-# 2-1. 정책(Policy) 연결: AWS SSM으로 접속 가능 
+# 2-1. 정책(Policy) 연결: AWS SSM으로 접속 가능
 resource "aws_iam_role_policy_attachment" "ssm_node_attach" {
   role       = aws_iam_role.ssm_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# 2-2. 정책(Policy) 추가: GitHub Dispatch 토큰 읽기 권한 -> 깃 액션 워크플로우 원격 실행 트리거
+# 2-2. 정책(Policy) 추가: GitHub Dispatch 토큰 읽기 권한
 resource "aws_iam_role_policy" "ssm_node_github_dispatch_ssm_policy" {
   name = "aiops-ssm-node-github-dispatch-ssm-policy"
   role = aws_iam_role.ssm_node_role.id
@@ -280,6 +281,40 @@ resource "aws_iam_role_policy" "ssm_node_github_dispatch_ssm_policy" {
   })
 }
 
+# 2-3. 정책(Policy) 추가: Ansible aws_ssm connection plugin용 S3 bucket 접근 권한
+resource "aws_iam_role_policy" "ssm_node_ansible_ssm_s3_policy" {
+  name = "aiops-ssm-node-ansible-ssm-s3-policy"
+  role = aws_iam_role.ssm_node_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowListAnsibleSsmBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = aws_s3_bucket.ansible_ssm_bucket.arn
+      },
+      {
+        Sid    = "AllowObjectOpsInAnsibleSsmBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:AbortMultipartUpload",
+          "s3:ListBucketMultipartUploads",
+          "s3:ListMultipartUploadParts"
+        ]
+        Resource = "${aws_s3_bucket.ansible_ssm_bucket.arn}/*"
+      }
+    ]
+  })
+}
+
 # 3. 붙이기(Instance Profile): EC2에 역할을 부여하기 위한 프로필
 resource "aws_iam_instance_profile" "ssm_node_profile" {
   name = "aiops-ssm-node-profile"
@@ -290,8 +325,9 @@ resource "aws_iam_instance_profile" "ssm_node_profile" {
 # ==========================================
 # [SET 2] IAM Role for Monitoring node
 # - SSM managed-node permissions
-# - SSM Run Command operator permissions (for K3s_Server)
+# - SSM Run Command / Session Manager operator permissions
 # - GitHub Runner bootstrap token SSM read permissions
+# - Ansible aws_ssm connection용 S3 bucket permissions
 # ==========================================
 
 # 1. 역할(Role)
@@ -318,7 +354,7 @@ resource "aws_iam_role_policy_attachment" "ssm_monitoring_attach" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# 2-2. 정책(Policy) 추가: 모니터링 서버가 K3s 마스터 노드에 SSM으로 명령 내릴 수 있는 권한
+# 2-2. 정책(Policy) 수정: 모니터링 서버가 K3s 노드들에 SSM으로 명령/세션 시작 가능
 resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
   name = "aiops-monitoring-ssm-operator-policy"
   role = aws_iam_role.ssm_monitoring_role.id
@@ -338,9 +374,10 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
           "arn:aws:ssm:*:*:document/AWS-*"
         ]
       },
-      # Role=K3s_Server 태그가 붙은 EC2 인스턴스에만 명령 허용
+
+      # Role 태그가 붙은 K3s 서버/워커 인스턴스에 Run Command 허용
       {
-        Sid    = "AllowRunCommandToTaggedMasterOnly"
+        Sid    = "AllowRunCommandToTaggedK3sNodes"
         Effect = "Allow"
         Action = [
           "ssm:SendCommand"
@@ -348,28 +385,77 @@ resource "aws_iam_role_policy" "monitoring_ssm_operator_policy" {
         Resource = "arn:aws:ec2:*:*:instance/*"
         Condition = {
           StringLike = {
-            "ssm:resourceTag/Role" = "K3s_Server"
+            "ssm:resourceTag/Role" = [
+              "K3s_Server",
+              "K3s_Agent"
+            ]
           }
         }
       },
-      # 명령 결과 조회 및 대상 탐색
+
+      # Session Manager 세션 시작/종료/재개 허용
       {
-        Sid    = "AllowCommandReadOps"
+        Sid    = "AllowSessionManagerToTaggedK3sNodes"
+        Effect = "Allow"
+        Action = [
+          "ssm:StartSession",
+          "ssm:ResumeSession",
+          "ssm:TerminateSession"
+        ]
+        Resource = [
+          "arn:aws:ec2:*:*:instance/*",
+          "arn:aws:ssm:*:*:managed-instance/*",
+          "arn:aws:ssm:*:*:document/AWS-StartInteractiveCommand",
+          "arn:aws:ssm:*:*:document/AWS-StartPortForwardingSession",
+          "arn:aws:ssm:*:*:document/AWS-StartSSHSession",
+          "arn:aws:ssm:*:*:document/SSM-SessionManagerRunShell"
+        ]
+      },
+
+      # 명령 결과 / 세션 상태 / 대상 탐색
+      {
+        Sid    = "AllowCommandAndSessionReadOps"
         Effect = "Allow"
         Action = [
           "ssm:GetCommandInvocation",
           "ssm:ListCommandInvocations",
           "ssm:ListCommands",
           "ssm:DescribeInstanceInformation",
+          "ssm:DescribeSessions",
+          "ssm:GetConnectionStatus",
           "ec2:DescribeInstances"
         ]
         Resource = "*"
+      },
+
+      # Ansible aws_ssm connection plugin용 S3 bucket 접근
+      {
+        Sid    = "AllowListAnsibleSsmBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = aws_s3_bucket.ansible_ssm_bucket.arn
+      },
+      {
+        Sid    = "AllowObjectOpsInAnsibleSsmBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:AbortMultipartUpload",
+          "s3:ListBucketMultipartUploads",
+          "s3:ListMultipartUploadParts"
+        ]
+        Resource = "${aws_s3_bucket.ansible_ssm_bucket.arn}/*"
       }
     ]
   })
 }
 
-# 2-3. 정책(Policy) 추가: 모니터링 서버를 깃 러너로 만들기 위해 AWS 파라미터 스토어에 저장된 깃 허브 Bootstrape 토큰을 읽을 수 있는 권한 부 
+# 2-3. 정책(Policy) 추가: GitHub Runner bootstrap 토큰 읽기 권한
 resource "aws_iam_role_policy" "monitoring_runner_bootstrap_ssm_policy" {
   name = "aiops-monitoring-runner-bootstrap-ssm-policy"
   role = aws_iam_role.ssm_monitoring_role.id
@@ -402,7 +488,6 @@ resource "aws_iam_instance_profile" "ssm_monitoring_profile" {
   name = "aiops-ssm-monitoring-profile"
   role = aws_iam_role.ssm_monitoring_role.name
 }
-
 
 
 # ==========================================
@@ -962,9 +1047,9 @@ data "cloudinit_config" "monitoring_config" {
       k3s_server_private_ip = aws_instance.k3s_server.private_ip
       k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
 
-      gitops_repo_url        = "https://github.com/BongE0115/Zero-Trust-IDP.git"
+      gitops_repo_url       = "https://github.com/BongE0115/Zero-Trust-IDP.git"
       gitops_target_revision = "jy"
-      argocd_values_content  = file("${path.module}/../gitops/bootstrap/argocd/values.yaml")
+      argocd_values_b64     = base64encode(file("${path.module}/../gitops/bootstrap/argocd/values.yaml"))
 
       enable_monitoring_github_runner   = var.enable_monitoring_github_runner
       github_runner_scope               = var.github_runner_scope
@@ -1050,11 +1135,10 @@ resource "aws_instance" "k3s_agent" {
   iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
 
   root_block_device {
-    volume_size           = 30    # 기본 8GB에서 30GB로 증설
-    volume_type           = "gp3" # 최신 고성능 범용 스토리지
+    volume_size           = 30
+    volume_type           = "gp3"
     delete_on_termination = true
   }
-
 
   user_data = templatefile("${path.module}/templates/k3s_agent.sh.tpl", {
     tailscale_auth_key = var.tailscale_auth_key
