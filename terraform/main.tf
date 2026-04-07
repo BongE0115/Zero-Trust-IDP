@@ -49,6 +49,7 @@ data "aws_ami" "ubuntu" {
 # ======================================
 resource "aws_s3_bucket" "ansible_ssm_bucket" {
   bucket = "${var.project_name}-ansible-ssm-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
 
   tags = {
     Name      = "ansible-ssm-transfer-bucket"
