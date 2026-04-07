@@ -24,6 +24,18 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 # =======================================
 
+
+locals {
+  aws_region = "ap-northeast-2"
+
+  ansible_inventory_content = templatefile("${path.module}/templates/ansible_inventory_ssm.tpl", {
+    aws_region      = local.aws_region
+    ssm_bucket_name = aws_s3_bucket.ansible_ssm_bucket.bucket
+    k3s_server_id   = aws_instance.k3s_server.id
+    k3s_agent_id    = aws_instance.k3s_agent.id
+  })
+}
+
 # EC2 인스턴스에 사용할 Ubuntu 이미지 
 data "aws_ami" "ubuntu" {
   most_recent = true
