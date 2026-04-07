@@ -8,9 +8,9 @@ spec:
   source:
     repoURL: 'https://github.com/BongE0115/Zero-Trust-IDP.git'
     path: gitops/apps/boutique-local
-    targetRevision: jy # 🔥 회원님의 현재 브랜치
+    targetRevision: jy 
   destination:
-    name: boutique-local-cluster # 🔥 아까 동료가 추가한 로컬 클러스터 이름!
+    name: boutique-local-cluster 
     namespace: boutique-local    # 로컬용 네임스페이스
   syncPolicy:
     automated:

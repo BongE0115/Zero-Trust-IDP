@@ -2,4 +2,4 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: dlq-handler-sa
-  namespace: kafka-poc # 네임스페이스가 kafka-poc인 애가 샌드박스, 몽고 레플리카 0->1로 승격시킴
+  namespace: kafka-poc 

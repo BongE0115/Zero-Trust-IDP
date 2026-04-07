@@ -35,7 +35,7 @@ spec:
         - name: KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE
           value: "true" # 존재하지 않는 토픽에 데이터를 보낼 때 자동으로 생성할지 여부
         - name: KAFKA_CREATE_TOPICS
-          value: "aiops-topic:3:1" # 시작 시 생성할 토픽 (이름:파티션수:복제본수)
+          value: "aiops-topic:3:1" # 시작 시 생성할 토픽 
           
         # 4. 성능 및 리소스 최적화 (보완 사항)
         - name: KAFKA_HEAP_OPTS
