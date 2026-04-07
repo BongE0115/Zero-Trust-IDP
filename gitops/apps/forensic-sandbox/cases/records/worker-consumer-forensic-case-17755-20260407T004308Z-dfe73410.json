@@ -70,6 +70,15 @@
       "validation_run_id": "reproduce-worker-consumer-forensic-case-17755-20260407T004308Z-dfe73410-0",
       "generation": 0,
       "verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/worker-consumer-forensic-case-17755-20260407T004308Z-dfe73410.json"
+    },
+    {
+      "event": "collect_reproduce_result",
+      "case_id": "worker-consumer-forensic-case-17755-20260407T004308Z-dfe73410",
+      "overall_passed": false,
+      "validation_mode": "reproduce",
+      "validation_run_id": "reproduce-worker-consumer-forensic-case-17755-20260407T004308Z-dfe73410-0",
+      "generation": 0,
+      "verdict_path": "gitops/apps/forensic-sandbox/cases/verdicts/worker-consumer-forensic-case-17755-20260407T004308Z-dfe73410.json"
     }
   ]
 }
