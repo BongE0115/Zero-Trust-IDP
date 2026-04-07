@@ -130,22 +130,32 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # 로컬 노드 관측
   - job_name: "monitoring-node"
     static_configs:
       - targets: ["localhost:9100"]
 
-  - job_name: "k3s-nodes"
-    metrics_path: "/metrics"
-    static_configs:
-      - targets:
-        - "$${MASTER_PRIVATE_IP}:10250"
-        - "$${WORKER_PRIVATE_IP}:10250"
-        - "$${MASTER_PRIVATE_IP}:9100"
-        - "$${WORKER_PRIVATE_IP}:9100"
+  - job_name: 'kubernetes-node-exporter'
+    tls_config:
+      insecure_skip_verify: true
+    kubernetes_sd_configs:
+      - role: pod
+        api_server: "https://$${MASTER_PRIVATE_IP}:6443"
+    relabel_configs:
+      # 1. 'app: node-exporter' 라벨이 있는 파드만 수집
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: node-exporter
+      # 2. HostNetwork 사용 중이므로 노드 IP로 주소 변환
+      - source_labels: [__meta_kubernetes_pod_host_ip]
+        action: replace
+        target_label: __address__
+        replacement: \$${1}:9100
+      # 3. 그라파나에서 보기 좋게 노드 이름을 라벨로 추가
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        action: replace
+        target_label: node_name
 
   - job_name: "kubernetes-pods"
-    # 외부에서 K3s API 서버에 접근하기 위한 설정
     tls_config:
       insecure_skip_verify: true
     kubernetes_sd_configs:
@@ -163,7 +173,7 @@ scrape_configs:
         action: replace
         target_label: __address__
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: $${1}:$${2}
+        replacement: \$${1}:\$${2}
 EOF
 
 chown -R prometheus:prometheus /etc/prometheus
