@@ -972,7 +972,7 @@ resource "aws_instance" "monitoring_server" {
 # ==========================================
 resource "aws_instance" "k3s_server" {
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "m7i-flex.large"
+  instance_type          = "c7i-flex.large"
   subnet_id              = aws_subnet.private_a.id
   vpc_security_group_ids = [aws_security_group.k3s_server_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
@@ -1004,7 +1004,7 @@ resource "aws_instance" "k3s_server" {
 # ==========================================
 resource "aws_instance" "k3s_agent" {
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "c7i-flex.large"
+  instance_type          = "m7i-flex.large"
   subnet_id              = aws_subnet.private_b.id
   vpc_security_group_ids = [aws_security_group.k3s_agent_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name

@@ -38,7 +38,7 @@ systemctl enable tailscaled
 systemctl restart tailscaled
 
 if [[ -n "${TAILSCALE_AUTH_KEY:-}" ]]; then
-  tailscale up --authkey "${TAILSCALE_AUTH_KEY}" || true
+  tailscale up --authkey "$TAILSCALE_AUTH_KEY" || true
 fi
 
 apt-add-repository --yes --update ppa:ansible/ansible || true
@@ -90,7 +90,7 @@ ansible-playbook monitoring-local.yml \
   -i "localhost," \
   -c local \
   -e aws_region="${AWS_REGION}" \
-  -e tailscale_auth_key="${TAILSCALE_AUTH_KEY}" \
+  -e tailscale_auth_key="$TAILSCALE_AUTH_KEY" \
   -e enable_monitoring_github_runner="${ENABLE_MONITORING_GITHUB_RUNNER}" \
   -e github_runner_scope="${GITHUB_RUNNER_SCOPE}" \
   -e github_runner_owner="${GITHUB_RUNNER_OWNER}" \
