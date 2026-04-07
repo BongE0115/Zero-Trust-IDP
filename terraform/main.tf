@@ -34,55 +34,6 @@ data "aws_ami" "ubuntu" {
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 }
-
-locals {
-  aws_region = "ap-northeast-2"
-
-  ansible_inventory_content = templatefile("${path.module}/templates/ansible_inventory_ssm.tpl", {
-    aws_region      = local.aws_region
-    ssm_bucket_name = aws_s3_bucket.ansible_ssm_bucket.bucket
-    k3s_server_id   = aws_instance.k3s_server.id
-    k3s_agent_id    = aws_instance.k3s_agent.id
-  })
-}
-
-resource "aws_s3_bucket" "ansible_ssm_bucket" {
-  bucket = "${var.project_name}-ansible-ssm-${data.aws_caller_identity.current.account_id}"
-
-  tags = {
-    Name      = "ansible-ssm-transfer-bucket"
-    Project   = var.project_name
-    ManagedBy = "Terraform"
-  }
-}
-
-resource "aws_s3_bucket_versioning" "ansible_ssm_bucket_versioning" {
-  bucket = aws_s3_bucket.ansible_ssm_bucket.id
-
-  versioning_configuration {
-    status = "Suspended"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "ansible_ssm_bucket_sse" {
-  bucket = aws_s3_bucket.ansible_ssm_bucket.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "ansible_ssm_bucket_pab" {
-  bucket                  = aws_s3_bucket.ansible_ssm_bucket.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-
 # ======================================
 
 # ==========================================
@@ -1010,7 +961,7 @@ resource "aws_instance" "monitoring_server" {
 # ==========================================
 resource "aws_instance" "k3s_server" {
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "c7i-flex.large"
+  instance_type          = "m7i-flex.large"
   subnet_id              = aws_subnet.private_a.id
   vpc_security_group_ids = [aws_security_group.k3s_server_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
@@ -1042,7 +993,7 @@ resource "aws_instance" "k3s_server" {
 # ==========================================
 resource "aws_instance" "k3s_agent" {
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "m7i-flex.large"
+  instance_type          = "c7i-flex.large"
   subnet_id              = aws_subnet.private_b.id
   vpc_security_group_ids = [aws_security_group.k3s_agent_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
