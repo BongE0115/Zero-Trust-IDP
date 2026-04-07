@@ -24,14 +24,17 @@ spec:
         app: paymentservice
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "50051"   # Payment 서비스의 gRPC 포트
+        prometheus.io/port: "50051"
         prometheus.io/path: "/metrics"
     spec:
       nodeSelector:
         node-role.kubernetes.io/worker: "true"
       containers:
+      # 1. 메인 결제 서비스 컨테이너
       - name: server
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/paymentservice:v0.10.5
+        ports:
+        - containerPort: 50051
         resources:
           requests:
             cpu: 100m
@@ -39,7 +42,6 @@ spec:
           limits:
             cpu: 200m
             memory: 256Mi
-      - name: auto-trigger
         env:
         - name: PORT
           value: "50051"
@@ -51,10 +53,8 @@ spec:
           value: "kafka.default.svc.cluster.local:9092"
         - name: KAFKA_TOPIC
           value: "orders"
-        - name: DLQ_TOPIC
-          value: "orders-dlq"
 
-      # 🔥 에러 발생기 (사이드카) - 파이썬 대소문자 & 들여쓰기 완전 해결 버전
+      # 2. 에러 발생기 (사이드카) 컨테이너 ### [하나로 통합됨]
       - name: auto-trigger
         image: python:3.11-slim
         command: ["/bin/sh", "-c"]
@@ -63,7 +63,7 @@ spec:
             # 1. 라이브러리 설치
             pip install kafka-python > /dev/null 2>&1
             
-            # 2. 파이썬 스크립트 실행 (textwrap으로 들여쓰기 안전하게 보호)
+            # 2. 파이썬 스크립트 실행
             python3 -c '
             import textwrap
             script = """
@@ -78,16 +78,12 @@ spec:
                     bootstrap_servers=KAFKA_BOOTSTRAP,
                     value_serializer=lambda v: json.dumps(v).encode("utf-8")
                 )
-                
                 oid = f"forensic-case-{int(time.time())}"
-                
-                # 👇 True는 반드시 대문자! json.dumps가 알아서 소문자 true로 바꿔서 카프카에 쏩니다.
                 msg = {
                     "order_id": oid,
                     "should_fail": True,
                     "payload": {"item": "AIOps-OneShot-Test", "qty": 1}
                 }
-                
                 producer.send(TOPIC, msg)
                 producer.flush()
                 print(f"[AIOPS-EVENT] SUCCESS: Sent intentional error. OrderID: {oid}")
@@ -96,8 +92,7 @@ spec:
             """
             exec(textwrap.dedent(script))
             '
-            
-            # 3. 무한 대기 (파드가 죽지 않게 유지)
+            # 3. 무한 대기
             echo "💤 메시지 전송 완료. 대기 모드로 전환합니다..."
             sleep infinity
         env:
