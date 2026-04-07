@@ -8,6 +8,8 @@
 
   vars:
     prometheus_version: "2.54.1"
+    k3s_server_private_ip: "{{ k3s_server_private_ip }}"
+    k3s_agent_private_ip: "{{ k3s_agent_private_ip }}"
 
   tasks:
     - name: Ensure required apt packages are installed
