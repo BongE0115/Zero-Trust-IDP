@@ -21,47 +21,57 @@ if ! swapon --show | grep -q "/swapfile"; then
   grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
 fi
 
+export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
-  curl nfs-common ca-certificates apt-transport-https jq awscli
+apt-get install -y \
+  curl \
+  nfs-common \
+  ca-certificates \
+  apt-transport-https \
+  jq \
+  awscli
 
 # ---------------------------------------------------------
 # 2. SSM Agent 보장
 # ---------------------------------------------------------
-if ! systemctl list-unit-files | grep -q amazon-ssm-agent; then
+if ! snap list | grep -q amazon-ssm-agent; then
   snap install amazon-ssm-agent --classic || true
 fi
-systemctl enable amazon-ssm-agent || true
-systemctl restart amazon-ssm-agent || true
+
+snap services amazon-ssm-agent || true
+systemctl daemon-reload || true
 
 # ---------------------------------------------------------
-# 3. Tailscale 설치 (기존 구조 유지 시)
+# 3. Tailscale 설치
 # ---------------------------------------------------------
-if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-  curl -fsSL https://tailscale.com/install.sh | sh
+if [ -n "$${TAILSCALE_AUTH_KEY:-}" ]; then
+  if ! command -v tailscale >/dev/null 2>&1; then
+    curl -fsSL https://tailscale.com/install.sh | sh
+  fi
   systemctl enable tailscaled
   systemctl restart tailscaled
-  tailscale up --authkey "$TAILSCALE_AUTH_KEY" || true
+  tailscale up --authkey "$${TAILSCALE_AUTH_KEY}" || true
 fi
 
 # ---------------------------------------------------------
-# 4. K3s Server 설치 (방화벽 및 TLS SAN 자동 등록)
+# 4. K3s Server 설치
 # ---------------------------------------------------------
 ufw allow 6443/tcp || true
 ufw allow in on tailscale0 || true
 
-PRIVATE_IP=$(hostname -I | awk '{print $1}')
-TS_IP=$(tailscale ip -4 || true)
+PRIVATE_IP="$$(hostname -I | awk '{print $1}')"
+TS_IP="$$(tailscale ip -4 2>/dev/null || true)"
 
 if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
   curl -sfL https://get.k3s.io | \
-    INSTALL_K3S_VERSION="$K3S_VERSION" \
-    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --tls-san $PRIVATE_IP --tls-san $TS_IP" \
-    K3S_TOKEN="$K3S_TOKEN" sh -
+    INSTALL_K3S_VERSION="$${K3S_VERSION}" \
+    INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --tls-san $${PRIVATE_IP} $$( [ -n "$${TS_IP}" ] && printf '%s' "--tls-san $${TS_IP}" )" \
+    K3S_TOKEN="$${K3S_TOKEN}" \
+    sh -
 fi
 
 # ---------------------------------------------------------
-# 5. K3s readiness 대기 및 k3s.yaml IP 치환
+# 5. K3s readiness 대기 및 kubeconfig 접속 주소 수정
 # ---------------------------------------------------------
 for i in {1..40}; do
   if [ -f /etc/rancher/k3s/k3s.yaml ]; then
@@ -70,9 +80,15 @@ for i in {1..40}; do
   sleep 10
 done
 
-# 🔥 [핵심 추가] 127.0.0.1을 마스터 노드의 Tailscale IP로 덮어쓰기
-MASTER_TS_IP=$(tailscale ip -4 | head -n 1)
-sed -i "s/127.0.0.1/$MASTER_TS_IP/g" /etc/rancher/k3s/k3s.yaml
+if command -v tailscale >/dev/null 2>&1; then
+  MASTER_TS_IP="$$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
+else
+  MASTER_TS_IP=""
+fi
+
+if [ -n "$${MASTER_TS_IP}" ] && [ -f /etc/rancher/k3s/k3s.yaml ]; then
+  sed -i "s/127.0.0.1/$${MASTER_TS_IP}/g" /etc/rancher/k3s/k3s.yaml
+fi
 
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
@@ -81,7 +97,7 @@ for i in {1..40}; do
     echo "[INFO] Kubernetes API is ready."
     break
   fi
-  echo "[INFO] Waiting for Kubernetes API... ($i/40)"
+  echo "[INFO] Waiting for Kubernetes API... ($${i}/40)"
   sleep 15
 done
 
@@ -92,7 +108,7 @@ echo "[INFO] ensuring kafka-poc namespace exists"
 kubectl get namespace kafka-poc >/dev/null 2>&1 || kubectl create namespace kafka-poc
 
 echo "[INFO] reading GitHub dispatch token from SSM"
-GITHUB_DISPATCH_TOKEN="$(aws ssm get-parameter \
+GITHUB_DISPATCH_TOKEN="$$(aws ssm get-parameter \
   --name "/zero-trust-idp/github-dispatch-token" \
   --with-decryption \
   --query "Parameter.Value" \
@@ -112,37 +128,42 @@ kubectl -n kafka-poc create secret generic github-dispatch-secret \
 echo "[INFO] github-dispatch-secret applied successfully"
 
 # ---------------------------------------------------------
-# 7. 마스터 노드 라벨 수동 추가 (보안 정책 회피)
+# 7. 마스터 노드 라벨 추가
 # ---------------------------------------------------------
-echo "마스터 노드 라벨링 중..."
-/usr/local/bin/kubectl label node "$(hostname)" node-role.kubernetes.io/master=true kubernetes.io/role=master --overwrite
+echo "[INFO] labeling master node"
+/usr/local/bin/kubectl label node "$$(hostname)" \
+  node-role.kubernetes.io/master=true \
+  kubernetes.io/role=master \
+  --overwrite
 
 # ---------------------------------------------------------
-# 8. configmap 생성 (글로벌 환경변수 전달)
+# 8. 글로벌 ConfigMap 생성
 # ---------------------------------------------------------
-echo "글로벌 환경변수 ConfigMap 생성 중..."
+echo "[INFO] creating aws-global-env configmap"
 /usr/local/bin/kubectl create configmap aws-global-env \
   --from-literal=AWS_REGION="ap-northeast-2" \
   --from-literal=PROJECT_NAME="${project_name}" \
   --from-literal=ENVIRONMENT="production" \
   --from-literal=LOCAL_TAILSCALE_IP="${local_tailscale_ip}" \
-  --from-literal=AWS_IP="$(hostname -I | awk '{print $1}')" \
+  --from-literal=AWS_IP="$$(hostname -I | awk '{print $1}')" \
   --from-literal=FRONTEND_ADDR="${frontend_addr}" \
   -n default --dry-run=client -o yaml | /usr/local/bin/kubectl apply -f -
 
-echo "✅ ConfigMap 생성 완료!"
+echo "[INFO] aws-global-env configmap created"
 
 # ---------------------------------------------------------
-# 9. 워커 노드 자동 라벨링 백그라운드 루프
+# 9. 워커 자동 라벨링 루프
 # ---------------------------------------------------------
 cat <<'EOF' > /usr/local/bin/auto-label-workers.sh
 #!/bin/bash
+set -eu
+
 while true; do
-  NODES=$(/usr/local/bin/kubectl get nodes --no-headers | grep '<none>' | awk '{print $1}')
+  NODES=$(/usr/local/bin/kubectl get nodes --no-headers 2>/dev/null | awk '$2 != "Ready" || $3 == "<none>" {print $1}')
   for NODE in $NODES; do
-    if [[ $NODE == ip-10-10-20-* ]]; then
-      /usr/local/bin/kubectl label node $NODE node-role.kubernetes.io/worker=true kubernetes.io/role=worker --overwrite
-      echo "✅ 노드 $NODE 에 워커 라벨을 자동으로 붙였습니다."
+    if [[ "$NODE" == ip-10-10-20-* ]]; then
+      /usr/local/bin/kubectl label node "$NODE" node-role.kubernetes.io/worker=true kubernetes.io/role=worker --overwrite || true
+      echo "worker label applied to $NODE"
     fi
   done
   sleep 30
@@ -153,25 +174,24 @@ chmod +x /usr/local/bin/auto-label-workers.sh
 nohup /usr/local/bin/auto-label-workers.sh > /var/log/k3s-auto-label.log 2>&1 &
 
 # ---------------------------------------------------------
-# 10. ArgoCD CLI 자동 설치
+# 10. ArgoCD CLI 설치
 # ---------------------------------------------------------
-echo "Installing ArgoCD CLI..."
-curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
-rm -f argocd-linux-amd64
-echo "ArgoCD CLI installation complete."
+echo "[INFO] installing ArgoCD CLI"
+curl -sSL -o /tmp/argocd-linux-amd64 \
+  https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+install -m 555 /tmp/argocd-linux-amd64 /usr/local/bin/argocd
+rm -f /tmp/argocd-linux-amd64
+echo "[INFO] ArgoCD CLI installation complete"
 
 # ---------------------------------------------------------
-# 11. ArgoCD 서버 Insecure 모드 설정 (ALB 연동 필수)
+# 11. ArgoCD insecure 모드 패치
 # ---------------------------------------------------------
-echo "ArgoCD 서버를 ALB용 Insecure 모드로 전환 중..."
+echo "[INFO] patching ArgoCD insecure mode if namespace exists"
 if /usr/local/bin/kubectl get namespace argocd >/dev/null 2>&1; then
   /usr/local/bin/kubectl patch cm argocd-cmd-params-cm -n argocd \
-    -p '{"data": {"server.insecure": "true"}}' || true
+    -p '{"data":{"server.insecure":"true"}}' || true
 
   /usr/local/bin/kubectl rollout restart deployment argocd-server -n argocd || true
-
-  echo "ArgoCD 서버 재시작 대기 중..."
   /usr/local/bin/kubectl rollout status deployment argocd-server -n argocd --timeout=60s || true
 else
   echo "[WARN] argocd namespace not found. skipping argocd insecure patch."
@@ -180,24 +200,19 @@ fi
 echo "[INFO] k3s server bootstrap completed."
 
 # =========================================================
-# [자동화] K3s 기동 확인 후 Slack Secret 자동 생성
+# 12. K3s 기동 확인 후 Slack Secret 생성
 # =========================================================
-
-# K3s API가 응답할 때까지 대기
-echo "Waiting for K3s to be ready..."
-until k3s kubectl get node; do
+echo "[INFO] waiting for K3s to be ready"
+until k3s kubectl get node >/dev/null 2>&1; do
   sleep 5
 done
 
-# 네임스페이스가 없으면 생성 (에러 방지를 위해 apply 패턴 사용)
 k3s kubectl create namespace kafka-poc --dry-run=client -o yaml | k3s kubectl apply -f -
 
-# 슬랙 자격증명 금고(Secret) 자동 생성
-# (Terraform이 넘겨준 변수를 그대로 주입합니다)
 k3s kubectl create secret generic slack-credentials \
   --namespace=kafka-poc \
   --from-literal=SLACK_BOT_TOKEN="${slack_bot_token}" \
   --from-literal=SLACK_CHANNEL="${slack_channel}" \
   --dry-run=client -o yaml | k3s kubectl apply -f -
 
-echo "Slack credentials secret created successfully!"
+echo "[INFO] Slack credentials secret created successfully"
