@@ -6,9 +6,3 @@ resources:
   - checkoutservice.yaml
   - paymentservice.yaml & shippingservice.yaml
   - hpa.yaml
-
-# 모든 Deployment에 모니터링 이름표(Annotation) 일괄 삽입
-commonAnnotations:
-  prometheus.io/scrape: "true"
-  prometheus.io/port: "8080"  # 부티크 서비스들의 기본 포트
-  prometheus.io/path: "/metrics"
