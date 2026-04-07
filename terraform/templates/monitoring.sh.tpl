@@ -213,7 +213,7 @@ ARGOCD_VALUES_B64="$(base64 -w0 /opt/bootstrap/argocd/values.yaml)"
 echo "[INFO] Discovering K3s master instance by tag..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
 
 MASTER_INSTANCE_ID=""
-for i in {1..40}; do
+for i in {1..20}; do
   MASTER_INSTANCE_ID="$(aws ec2 describe-instances \
     --region "$AWS_REGION" \
     --filters "Name=tag:Role,Values=K3s_Server" "Name=instance-state-name,Values=running" \
@@ -225,8 +225,8 @@ for i in {1..40}; do
     break
   fi
 
-  echo "[INFO] Waiting for master instance discovery... ($i/40)" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-  sleep 15
+  echo "[INFO] Waiting for master instance discovery... ($i/20)" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+  sleep 10
 done
 
 if [ -z "$MASTER_INSTANCE_ID" ] || [ "$MASTER_INSTANCE_ID" = "None" ]; then
@@ -240,7 +240,7 @@ fi
 echo "[INFO] Waiting for master to appear in SSM..." | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
 
 ONLINE_PING=""
-for i in {1..40}; do
+for i in {1..20}; do
   ONLINE_PING="$(aws ssm describe-instance-information \
     --region "$AWS_REGION" \
     --filters "Key=InstanceIds,Values=$MASTER_INSTANCE_ID" \
@@ -252,8 +252,8 @@ for i in {1..40}; do
     break
   fi
 
-  echo "[INFO] Waiting for SSM registration... ($i/40)" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-  sleep 15
+  echo "[INFO] Waiting for SSM registration... ($i/20)" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+  sleep 10
 done
 
 if [ "$${ONLINE_PING:-}" != "Online" ]; then
@@ -325,7 +325,7 @@ echo "[INFO] Command sent. CommandId=$COMMAND_ID" | tee -a /opt/bootstrap/logs/s
 # 9. Run Command 완료 대기
 # ---------------------------------------------------------
 FINAL_STATUS=""
-for i in {1..40}; do
+for i in {1..20}; do
   FINAL_STATUS="$(aws ssm get-command-invocation \
     --region "$AWS_REGION" \
     --command-id "$COMMAND_ID" \
@@ -339,8 +339,8 @@ for i in {1..40}; do
       break
       ;;
     Pending|InProgress|Delayed|"")
-      echo "[INFO] Waiting for command completion... status=$FINAL_STATUS ($i/40)" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
-      sleep 15
+      echo "[INFO] Waiting for command completion... status=$FINAL_STATUS ($i/20)" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
+      sleep 10
       ;;
     *)
       echo "[ERROR] Command failed with status=$FINAL_STATUS" | tee -a /opt/bootstrap/logs/ssm-bootstrap.log
@@ -359,30 +359,6 @@ if [ "$${FINAL_STATUS:-}" != "Success" ]; then
   exit 1
 fi
 
-# ---------------------------------------------------------
-# 10. monitoring node용 kubeconfig 생성
-# ---------------------------------------------------------
-mkdir -p /root/.kube
-cat > /root/.kube/config <<EOF
-apiVersion: v1
-kind: Config
-clusters:
-- cluster:
-    insecure-skip-tls-verify: true
-    server: https://$${MASTER_PRIVATE_IP}:6443
-  name: aiops-k3s
-contexts:
-- context:
-    cluster: aiops-k3s
-    user: aiops-k3s
-  name: aiops-k3s
-current-context: aiops-k3s
-users:
-- name: aiops-k3s
-  user:
-    token: dummy
-EOF
-chmod 600 /root/.kube/config
 
 # ---------------------------------------------------------
 # 11. GitHub self-hosted runner 설치 및 등록
