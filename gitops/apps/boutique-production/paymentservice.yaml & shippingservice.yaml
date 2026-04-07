@@ -22,12 +22,24 @@ spec:
     metadata:
       labels:
         app: paymentservice
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "50051"   # Payment 서비스의 gRPC 포트
+        prometheus.io/path: "/metrics"
     spec:
       nodeSelector:
         node-role.kubernetes.io/worker: "true"
       containers:
       - name: server
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/paymentservice:v0.10.5
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+      - name: auto-trigger
         env:
         - name: PORT
           value: "50051"
@@ -119,9 +131,20 @@ spec:
     metadata:
       labels:
         app: shippingservice
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "50051"
+        prometheus.io/path: "/metrics"
     spec:
       nodeSelector:
         node-role.kubernetes.io/worker: "true"
       containers:
       - name: server
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/shippingservice:v0.10.5
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
