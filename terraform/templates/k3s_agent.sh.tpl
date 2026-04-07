@@ -36,7 +36,7 @@ systemctl enable amazon-ssm-agent || true
 systemctl restart amazon-ssm-agent || true
 
 # ---------------------------------------------------------
-# 3. Tailscale 설치 (기존 구조 유지 시)
+# 3. Tailscale 설치 (옵션)
 # ---------------------------------------------------------
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
   curl -fsSL https://tailscale.com/install.sh | sh
@@ -49,7 +49,7 @@ fi
 # 4. Master API 응답 대기
 # ---------------------------------------------------------
 for i in {1..40}; do
-  if curl -k https://$K3S_SERVER_IP:6443 >/dev/null 2>&1; then
+  if curl -k -sf https://${K3S_SERVER_IP}:6443/ping >/dev/null 2>&1; then
     echo "[INFO] K3s API is reachable."
     break
   fi
@@ -57,18 +57,33 @@ for i in {1..40}; do
   sleep 15
 done
 
+if ! curl -k -sf https://${K3S_SERVER_IP}:6443/ping >/dev/null 2>&1; then
+  echo "[ERROR] K3s API on master is not reachable."
+  exit 1
+fi
+
 # ---------------------------------------------------------
 # 5. K3s Agent 조인
 # ---------------------------------------------------------
-if [ ! -f /etc/rancher/k3s/k3s.yaml ] && [ ! -f /etc/systemd/system/k3s-agent.service ]; then
+if [ ! -f /etc/systemd/system/k3s-agent.service ] && [ ! -f /etc/systemd/system/k3s-agent.service.env ]; then
   curl -sfL https://get.k3s.io | \
     INSTALL_K3S_VERSION="$K3S_VERSION" \
-    K3S_URL="https://$K3S_SERVER_IP:6443" \
-    K3S_TOKEN="$K3S_TOKEN" 
-    sh -s -agent
+    K3S_URL="https://${K3S_SERVER_IP}:6443" \
+    K3S_TOKEN="$K3S_TOKEN" \
+    sh -s - agent
 fi
 
 systemctl enable k3s-agent || true
 systemctl restart k3s-agent || true
 
+for i in {1..20}; do
+  if systemctl is-active --quiet k3s-agent; then
+    echo "[INFO] k3s-agent is active."
+    break
+  fi
+  echo "[INFO] Waiting for k3s-agent systemd service... ($i/20)"
+  sleep 10
+done
+
+systemctl status k3s-agent --no-pager || true
 echo "[INFO] k3s agent bootstrap completed."
