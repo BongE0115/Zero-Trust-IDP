@@ -8,7 +8,45 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: forensic-sandbox-app
+      # 🔥 동적으로 변하지 않는 고정 라벨 타겟팅
+      sandbox-tier: strict-isolation
   policyTypes:
   - Egress
   egress:
+  # 1. DNS 허용 (필수)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  
+  # 2. 내부망 MongoDB 허용 (27017)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: forensic-sandbox
+    ports:
+    - protocol: TCP
+      port: 27017
+
+  # 3. Kafka 허용 (9092)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kafka-poc
+    ports:
+    - protocol: TCP
+      port: 9092
+
+  # 4. Frontend 허용 (80, 8080)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: default
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 8080

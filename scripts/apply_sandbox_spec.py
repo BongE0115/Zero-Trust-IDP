@@ -320,6 +320,9 @@ def build_case_manifest_docs(
     deployment["spec"]["template"]["metadata"]["labels"]["forensic-case-id"] = case_label
     deployment["spec"]["template"]["metadata"].setdefault("annotations", {})
     deployment["spec"]["template"]["metadata"]["annotations"]["forensic.case-id/full"] = metadata["case_id"]
+    deployment["spec"]["template"]["metadata"]["labels"]["sandbox-tier"] = "strict-isolation"
+    deployment["spec"]["template"]["metadata"]["labels"]["istio.io/use-waypoint"] = "sandbox-waypoint"
+    
 
     pod_spec = deployment["spec"]["template"]["spec"]
     ensure_volume(pod_spec, "artifacts")

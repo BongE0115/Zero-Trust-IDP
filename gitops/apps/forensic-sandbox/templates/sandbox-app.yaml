@@ -47,6 +47,16 @@ spec:
     metadata:
       labels:
         app: forensic-sandbox-app
+        sandbox-tier: strict-isolation
+        istio.io/use-waypoint: sandbox-waypoint
+        serviceAccountName: sandbox-app-sa
+        automountServiceAccountToken: false
+      
+  
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
     spec:
       initContainers:
         - name: topic-init
