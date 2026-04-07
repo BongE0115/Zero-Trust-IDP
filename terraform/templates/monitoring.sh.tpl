@@ -56,7 +56,7 @@ if ! command -v session-manager-plugin >/dev/null 2>&1; then
 fi
 
 rm -rf /opt/gitops-repo
-git clone -b "${GITOPS_TARGET_REVISION}" "${GITOPS_REPO_URL}" /opt/gitops-repo
+git clone -b "$GITOPS_TARGET_REVISION" "$GITOPS_REPO_URL" /opt/gitops-repo
 
 mkdir -p /opt/gitops-repo/ansible/inventory
 
@@ -89,33 +89,33 @@ ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
 ansible-playbook monitoring-local.yml \
   -i "localhost," \
   -c local \
-  -e aws_region="${AWS_REGION}" \
+  -e aws_region="$AWS_REGION" \
   -e tailscale_auth_key="$TAILSCALE_AUTH_KEY" \
-  -e enable_monitoring_github_runner="${ENABLE_MONITORING_GITHUB_RUNNER}" \
-  -e github_runner_scope="${GITHUB_RUNNER_SCOPE}" \
-  -e github_runner_owner="${GITHUB_RUNNER_OWNER}" \
-  -e github_runner_repository="${GITHUB_RUNNER_REPOSITORY}" \
-  -e github_runner_labels="${GITHUB_RUNNER_LABELS}" \
-  -e github_runner_version="${GITHUB_RUNNER_VERSION}" \
-  -e github_runner_token_ssm_parameter="${GITHUB_RUNNER_TOKEN_SSM_PARAMETER}"
+  -e enable_monitoring_github_runner="$ENABLE_MONITORING_GITHUB_RUNNER" \
+  -e github_runner_scope="$GITHUB_RUNNER_SCOPE" \
+  -e github_runner_owner="$GITHUB_RUNNER_OWNER" \
+  -e github_runner_repository="$GITHUB_RUNNER_REPOSITORY" \
+  -e github_runner_labels="$GITHUB_RUNNER_LABELS" \
+  -e github_runner_version="$GITHUB_RUNNER_VERSION" \
+  -e github_runner_token_ssm_parameter="$GITHUB_RUNNER_TOKEN_SSM_PARAMETER"
 
 ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
 ansible-playbook k3s-server-remote.yml \
-  -e aws_region="${AWS_REGION}" \
-  -e k3s_token="${K3S_TOKEN}" \
-  -e frontend_addr="${FRONTEND_ADDR}" \
-  -e slack_bot_token="${SLACK_BOT_TOKEN}" \
-  -e slack_channel="${SLACK_CHANNEL}"
+  -e aws_region="$AWS_REGION" \
+  -e k3s_token="$K3S_TOKEN" \
+  -e frontend_addr="$FRONTEND_ADDR" \
+  -e slack_bot_token="$SLACK_BOT_TOKEN" \
+  -e slack_channel="$SLACK_CHANNEL"
 
 ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
 ansible-playbook k3s-agent-remote.yml \
-  -e aws_region="${AWS_REGION}"
+  -e aws_region="$AWS_REGION"
 
 ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
 ansible-playbook argocd-bootstrap.yml \
-  -e aws_region="${AWS_REGION}" \
-  -e argocd_values_content="${ARGOCD_VALUES_CONTENT}" \
-  -e gitops_repo_url="${GITOPS_REPO_URL}" \
-  -e gitops_target_revision="${GITOPS_TARGET_REVISION}"
+  -e aws_region="$AWS_REGION" \
+  -e argocd_values_content="$ARGOCD_VALUES_CONTENT" \
+  -e gitops_repo_url="$GITOPS_REPO_URL" \
+  -e gitops_target_revision="$GITOPS_TARGET_REVISION"
 
 echo "[INFO] Monitoring bootstrap completed successfully."
