@@ -48,13 +48,13 @@ fi
 # ---------------------------------------------------------
 # 4. Master API 응답 대기
 # ---------------------------------------------------------
-for i in {1..40}; do
+for i in {1..20}; do
   if curl -k -sf "https://$K3S_SERVER_IP:6443/ping" >/dev/null 2>&1; then
     echo "[INFO] K3s API is reachable."
     break
   fi
-  echo "[INFO] Waiting for K3s API on master... ($i/40)"
-  sleep 15
+  echo "[INFO] Waiting for K3s API on master... ($i/20)"
+  sleep 10
 done
 
 if ! curl -k -sf "https://$K3S_SERVER_IP:6443/ping" >/dev/null 2>&1; then
@@ -76,13 +76,13 @@ fi
 systemctl enable k3s-agent || true
 systemctl restart k3s-agent || true
 
-for i in {1..20}; do
+for i in {1..12}; do
   if systemctl is-active --quiet k3s-agent; then
     echo "[INFO] k3s-agent is active."
     break
   fi
-  echo "[INFO] Waiting for k3s-agent systemd service... ($i/20)"
-  sleep 10
+  echo "[INFO] Waiting for k3s-agent systemd service... ($i/12)"
+  sleep 5
 done
 
 systemctl status k3s-agent --no-pager || true

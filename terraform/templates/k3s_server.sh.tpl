@@ -72,12 +72,12 @@ fi
 # ---------------------------------------------------------
 # 5. K3s readiness 대기 및 kubeconfig 정리
 # ---------------------------------------------------------
-for i in {1..40}; do
+for i in {1..12}; do
   if [ -f /etc/rancher/k3s/k3s.yaml ]; then
     break
   fi
-  echo "[INFO] Waiting for /etc/rancher/k3s/k3s.yaml ... ($i/40)"
-  sleep 10
+  echo "[INFO] Waiting for /etc/rancher/k3s/k3s.yaml ... ($i/12)"
+  sleep 5
 done
 
 if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
@@ -94,13 +94,13 @@ fi
 chmod 644 /etc/rancher/k3s/k3s.yaml
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-for i in {1..40}; do
+for i in {1..20}; do
   if k3s kubectl get nodes >/dev/null 2>&1; then
     echo "[INFO] Kubernetes API is ready."
     break
   fi
-  echo "[INFO] Waiting for Kubernetes API... ($i/40)"
-  sleep 15
+  echo "[INFO] Waiting for Kubernetes API... ($i/20)"
+  sleep 10
 done
 
 if ! k3s kubectl get nodes >/dev/null 2>&1; then
