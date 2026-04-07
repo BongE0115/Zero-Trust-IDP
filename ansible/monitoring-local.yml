@@ -1,6 +1,6 @@
 ---
 - name: Configure monitoring node locally
-  hosts: All
+  hosts: localhost
   connection: local
   become: true
   gather_facts: true
