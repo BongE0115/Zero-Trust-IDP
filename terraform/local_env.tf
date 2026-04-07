@@ -113,8 +113,6 @@ EOF
         "sudo sed -i \"s/127.0.0.1/\$MASTER_TS_IP/g\" /etc/rancher/k3s/k3s.yaml",
         "while ! kubectl get pods -n argocd | grep argocd-server | grep Running; do sleep 5; done",
         
-        "echo '"$LOCAL_KUBECONFIG_B64"' | base64 -d > /tmp/local-cluster.yaml",
-        
         "KUBECONFIG=/tmp/local-cluster.yaml kubectl config rename-context default local-pc || true",
         "KUBECONFIG=/tmp/local-cluster.yaml kubectl config set-cluster default --insecure-skip-tls-verify=true",
         "sed -i \"/certificate-authority-data/d\" /tmp/local-cluster.yaml",
