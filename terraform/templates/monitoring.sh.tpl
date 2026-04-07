@@ -37,7 +37,7 @@ fi
 systemctl enable tailscaled
 systemctl restart tailscaled
 
-if [[ -n "${TAILSCALE_AUTH_KEY:-}" ]]; then
+if [[ -n "$TAILSCALE_AUTH_KEY:-" ]]; then
   tailscale up --authkey "$TAILSCALE_AUTH_KEY" || true
 fi
 
