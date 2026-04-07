@@ -1,3 +1,4 @@
+# 
 ---
 - name: Configure monitoring node locally
   hosts: localhost
