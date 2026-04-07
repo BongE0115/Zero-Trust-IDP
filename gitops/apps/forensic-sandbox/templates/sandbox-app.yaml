@@ -49,9 +49,8 @@ spec:
         app: forensic-sandbox-app
         sandbox-tier: strict-isolation
         istio.io/use-waypoint: sandbox-waypoint
-    spec:
-      serviceAccountName: sandbox-app-sa
-      automountServiceAccountToken: false
+        serviceAccountName: sandbox-app-sa
+        automountServiceAccountToken: false
       
   
       securityContext:
