@@ -133,6 +133,7 @@
         cp {{ kubeconfig_path }} /tmp/argo-local.yaml
         sed -i 's/127.0.0.1/{{ master_ts_ip.stdout | trim }}/g' /tmp/argo-local.yaml
         KUBECONFIG=/tmp/argo-local.yaml kubectl config rename-context default local-pc || true
+        KUBECONFIG=/tmp/argo-local.yaml kubectl config set-context local-pc --namespace={{ argocd_namespace }}
       args:
         executable: /bin/bash
 
@@ -146,11 +147,9 @@
 
     - name: Register local cluster if missing
       shell: |
-        export KUBECONFIG={{ kubeconfig_path }}
-        kubectl create configmap argocd-cm -n {{ argocd_namespace }} || true
+        export KUBECONFIG=/tmp/argo-local.yaml
         argocd cluster add local-pc \
           --name boutique-local-cluster \
-          --kubeconfig /tmp/argo-local.yaml \
           --yes \
           --core \
           --namespace {{ argocd_namespace }}
