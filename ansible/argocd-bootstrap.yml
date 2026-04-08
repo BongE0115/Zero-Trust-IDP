@@ -1,5 +1,5 @@
 ---
-- name: Bootstrap ArgoCD and register local cluster
+- name: Bootstrap ArgoCD
   hosts: k3s_server
   become: true
   gather_facts: true
@@ -101,23 +101,13 @@
       args:
         executable: /bin/bash
 
-    - name: Clone GitOps repository
-      git:
-        repo: "{{ gitops_repo_url }}"
-        dest: /opt/gitops-repo
-        version: "{{ gitops_target_revision }}"
-        force: true
-
-    - name: Apply root-app.yaml
+    - name: Read ArgoCD initial admin password
       shell: |
         export KUBECONFIG={{ kubeconfig_path }}
-        kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml
-      args:
-        executable: /bin/bash
-
-    - name: Show applications in argocd namespace
-      shell: |
-        export KUBECONFIG={{ kubeconfig_path }}
-        kubectl get applications -n {{ argocd_namespace }} || true
-      register: argocd_apps
+        kubectl -n {{ argocd_namespace }} get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+      register: argocd_admin_password
       changed_when: false
+      
+    - name: Print ArgoCD Admin Password
+      debug:
+        msg: "🎉 ArgoCD 초기 비밀번호: {{ argocd_admin_password.stdout }}"
