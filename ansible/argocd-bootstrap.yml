@@ -137,7 +137,7 @@
         KUBECONFIG=/tmp/argo-target.yaml kubectl config set-cluster default \
           --server=https://{{ local_tailscale_ip }}:6443 \
           --insecure-skip-tls-verify=true
-        kubectl config set clusters.default.tls-server-name 127.0.0.1
+        kubectl config set clusters.default.tls-server-name {{ local_tailscale_ip }}
         KUBECONFIG=/tmp/argo-target.yaml kubectl config rename-context default local-pc || true
 
         cp {{ kubeconfig_path }} /tmp/argo-exec.yaml
