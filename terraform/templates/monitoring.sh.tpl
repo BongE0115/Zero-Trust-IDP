@@ -67,6 +67,15 @@ echo "[INFO] decoding argocd values"
 mkdir -p /opt/gitops-repo/bootstrap-runtime
 printf '%s' "${argocd_values_b64}" | base64 -d > /opt/gitops-repo/bootstrap-runtime/argocd-values.yaml
 
+cat > /opt/gitops-repo/bootstrap-runtime/argocd-extra-vars.yml <<EOF
+aws_region: "${aws_region}"
+gitops_repo_url: "${gitops_repo_url}"
+gitops_target_revision: "${gitops_target_revision}"
+local_tailscale_ip: "${local_tailscale_ip}"
+argocd_values_content: |
+$(sed 's/^/  /' /opt/gitops-repo/bootstrap-runtime/argocd-values.yaml)
+EOF
+
 echo "[INFO] creating monitoring variables file"
 cat > /opt/gitops-repo/bootstrap-runtime/monitoring-vars.yml <<'EOF'
 aws_region: "${aws_region}"
@@ -115,5 +124,10 @@ ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
 ansible-playbook k3s-agent-remote.yml \
   -e aws_region="${aws_region}" \
   -e k3s_token="${k3s_token}"
+
+echo "[INFO] running argocd-bootstrap.yml"
+ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \
+ansible-playbook argocd-bootstrap.yml \
+  -e @/opt/gitops-repo/bootstrap-runtime/argocd-extra-vars.yml
 
 echo "[INFO] Monitoring bootstrap completed successfully."
