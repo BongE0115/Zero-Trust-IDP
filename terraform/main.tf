@@ -610,7 +610,7 @@ resource "aws_security_group" "k3s_server_sg" {
   description = "Security group for K3s master node"
   vpc_id      = aws_vpc.main.id
 
-  # 🔥 수정: Tailscale 망(100.64.0.0/10)도 K3s API 접속 허용
+  #  수정: Tailscale 망(100.64.0.0/10)도 K3s API 접속 허용
   ingress {
     description = "K3s API from VPC and Tailscale"
     from_port   = 6443
@@ -619,7 +619,7 @@ resource "aws_security_group" "k3s_server_sg" {
     cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
-  # 🔥 수정: Tailscale 망도 Kubelet 통신 허용
+  #  수정: Tailscale 망도 Kubelet 통신 허용
   ingress {
     description = "Kubelet metrics from VPC and Tailscale"
     from_port   = 10250
@@ -636,7 +636,7 @@ resource "aws_security_group" "k3s_server_sg" {
     cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
-  # 🔥 수정: Tailscale 노드도 Flannel 가상 네트워크에 참여 허용
+  #  수정: Tailscale 노드도 Flannel 가상 네트워크에 참여 허용
   ingress {
     description = "Flannel VXLAN from VPC and Tailscale"
     from_port   = 8472
@@ -645,7 +645,7 @@ resource "aws_security_group" "k3s_server_sg" {
     cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
-  # 🔥 핵심 추가: Tailscale 직접 통신(P2P)을 위한 전용 포트 개방
+  #  핵심 추가: Tailscale 직접 통신(P2P)을 위한 전용 포트 개방
   ingress {
     description = "Tailscale P2P Direct Connection"
     from_port   = 41641
@@ -699,7 +699,7 @@ resource "aws_security_group" "k3s_agent_sg" {
   description = "Security group for K3s worker node"
   vpc_id      = aws_vpc.main.id
 
-  # 🔥 수정: Tailscale 망도 Kubelet 통신 허용
+  #  수정: Tailscale 망도 Kubelet 통신 허용
   ingress {
     description = "Kubelet metrics from VPC and Tailscale"
     from_port   = 10250
@@ -724,7 +724,7 @@ resource "aws_security_group" "k3s_agent_sg" {
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
-  # 🔥 수정: Tailscale 노드도 Flannel 가상 네트워크에 참여 허용
+  #  수정: Tailscale 노드도 Flannel 가상 네트워크에 참여 허용
   ingress {
     description = "Flannel VXLAN from VPC and Tailscale"
     from_port   = 8472
@@ -733,7 +733,7 @@ resource "aws_security_group" "k3s_agent_sg" {
     cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
-  # 🔥 핵심 추가: Tailscale 직접 통신(P2P)을 위한 전용 포트 개방
+  #  핵심 추가: Tailscale 직접 통신(P2P)을 위한 전용 포트 개방
   ingress {
     description = "Tailscale P2P Direct Connection"
     from_port   = 41641
@@ -839,7 +839,7 @@ resource "aws_lb_target_group" "boutique_frontend_tg" {
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
-  # 🚨 헬스 체크를 명시해야 ALB가 노드를 Healthy로 인식합니다.
+  #  헬스 체크를 명시해야 ALB가 노드를 Healthy로 인식합니다.
   health_check {
     path                = "/" # 프론트엔드 메인 페이지 혹은 /healthz
     port                = "30081"
@@ -1239,7 +1239,7 @@ resource "aws_cloudfront_distribution" "aiops_cdn" {
     }
   }
 
-  # 🚨 [규칙 1] 슬랙 전용 (80포트로 배달)
+  # [규칙 1] 슬랙 전용 (80포트로 배달)
   ordered_cache_behavior {
     path_pattern     = "/slack/*"
     target_origin_id = "Origin-AIOps-80"

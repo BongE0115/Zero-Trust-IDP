@@ -183,7 +183,7 @@ variable "project_name" {
 
 variable "slack_bot_token" {
   type      = string
-  sensitive = true # 👈 테라폼 로그에 토큰이 안 남게 숨겨주는 옵션!
+  sensitive = true #  테라폼 로그에 토큰이 안 남게 숨겨주는 옵션!
 }
 
 variable "slack_channel" {

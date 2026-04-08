@@ -75,7 +75,7 @@ argocd_values_content: |
 $(sed 's/^/  /' /opt/gitops-repo/bootstrap-runtime/argocd-values.yaml)
 EOF
 
-# 💡 핵심 수정 포인트: 복잡한 명령줄 옵션 대신 Ansible 변수 파일을 동적으로 생성!
+# 핵심 수정 포인트: 복잡한 명령줄 옵션 대신 Ansible 변수 파일을 동적으로 생성
 echo "[INFO] creating monitoring variables file"
 cat > /opt/gitops-repo/bootstrap-runtime/monitoring-vars.yml <<'EOF'
 aws_region: "${aws_region}"
@@ -102,8 +102,6 @@ if [ -f requirements.yml ]; then
 else
   ansible-galaxy collection install amazon.aws community.aws -p "$COLLECTION_PATH" --force
 fi
-
-echo "[INFO] Ansible 컬렉션 설치 완료. 경로: $COLLECTION_PATH"
 
 echo "[INFO] running monitoring-local.yml"
 ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \

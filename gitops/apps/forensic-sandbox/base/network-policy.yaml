@@ -8,7 +8,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      # 🔥 동적으로 변하지 않는 고정 라벨 타겟팅
+      # 동적으로 변하지 않는 고정 라벨 타겟팅
       sandbox-tier: strict-isolation
   policyTypes:
   - Egress

@@ -79,4 +79,4 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true # 🔥 테라폼 없이도 logging 네임스페이스를 자동 생성!
+      - CreateNamespace=true # 테라폼 없이도 logging 네임스페이스를 자동 생성

@@ -8,9 +8,9 @@ metadata:
 spec:
   selector:
     matchLabels:
-      sandbox-tier: strict-isolation # 🔥 고정 라벨 타겟팅
+      sandbox-tier: strict-isolation # 고정 라벨 타겟팅
   action: DENY
   rules:
   - to:
     - operation:
-        ports: ["3306"] # 🔥 RDS MySQL 통신만 차단
+        ports: ["3306"] # RDS MySQL 통신만 차단
