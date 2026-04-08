@@ -147,6 +147,7 @@
     - name: Register local cluster if missing
       shell: |
         export KUBECONFIG={{ kubeconfig_path }}
+        kubectl create configmap argocd-cm -n {{ argocd_namespace }} || true
         argocd cluster add local-pc \
           --name boutique-local-cluster \
           --kubeconfig /tmp/argo-local.yaml \
