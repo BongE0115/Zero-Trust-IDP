@@ -115,36 +115,81 @@
         content: |
           global:
             scrape_interval: 15s
+            scrape_timeout: 15s
 
           scrape_configs:
             - job_name: "prometheus"
               static_configs:
                 - targets: ["localhost:9090"]
 
-            - job_name: "k3s-nodes"
-              metrics_path: "/metrics"
+            - job_name: "k3s-nodes-exporter"
               static_configs:
                 - targets:
-                  - "{{ k3s_server_private_ip }}:10250"
-                  - "{{ k3s_agent_private_ip }}:10250"
-                  - "{{ k3s_server_private_ip }}:9100"
-                  - "{{ k3s_agent_private_ip }}:9100"
+                    - "{{ k3s_server_private_ip }}:9100"
+                    - "{{ k3s_agent_private_ip }}:9100"
 
-            - job_name: "kubernetes-pods"
+            - job_name: "k3s-nodes-cadvisor"
+              scheme: https
+              bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              tls_config:
+                insecure_skip_verify: true
+              metrics_path: /metrics/cadvisor
+              static_configs:
+                - targets:
+                    - "{{ k3s_server_private_ip }}:10250"
+                    - "{{ k3s_agent_private_ip }}:10250"
+
+            - job_name: 'kubernetes-pods'
+              scheme: https
               tls_config:
                 insecure_skip_verify: true
               kubernetes_sd_configs:
                 - role: pod
                   api_server: "https://{{ k3s_server_private_ip }}:6443"
+                  tls_config:
+                    insecure_skip_verify: true
+
               relabel_configs:
                 - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
                   action: keep
-                  regex: true
-                - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                  regex: "true"
+
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
                   action: replace
-                  target_label: __address__
-                  regex: ([^:]+)(?::\d+)?;(\d+)
-                  replacement: $1:$2
+                  target_label: __tmp_pod_port
+                  regex: (.+)
+                - source_labels: [__tmp_pod_port]
+                  action: replace
+                  target_label: __tmp_pod_port
+                  regex: ^$
+                  replacement: "80"
+
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                  action: replace
+                  target_label: __tmp_pod_path
+                  regex: (.+)
+                - source_labels: [__tmp_pod_path]
+                  action: replace
+                  target_label: __tmp_pod_path
+                  regex: ^$
+                  replacement: "/metrics"
+
+                - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_name, __tmp_pod_port, __tmp_pod_path]
+                  separator: ;
+                  regex: ([^;]+);([^;]+);([^;]+);(.+)
+                  target_label: __metrics_path__
+                  replacement: /api/v1/namespaces/${1}/pods/${2}:${3}/proxy${4}
+                  action: replace
+
+                - target_label: __address__
+                  replacement: "{{ k3s_server_private_ip }}:6443"
+                
+                - source_labels: [__meta_kubernetes_namespace]
+                  target_label: kubernetes_namespace
+                - source_labels: [__meta_kubernetes_pod_name]
+                  target_label: kubernetes_pod_name
+                - source_labels: [__meta_kubernetes_pod_container_name]
+                  target_label: container
 
     - name: Deploy Prometheus systemd service
       copy:
