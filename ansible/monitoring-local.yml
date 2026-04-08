@@ -127,8 +127,8 @@
                 - targets:
                   - "{{ k3s_server_private_ip }}:10250"
                   - "{{ k3s_agent_private_ip }}:10250"
-                  - "{{ k3s_server_private_ip }}:9100"
-                  - "{{ k3s_agent_private_ip }}:9100"
+                  - "{{ k3s_server_private_ip }}:9101"
+                  - "{{ k3s_agent_private_ip }}:9101"
 
             - job_name: "kubernetes-pods"
               tls_config:
