@@ -108,6 +108,20 @@
       register: argocd_admin_password
       changed_when: false
       
+    - name: Clone GitOps repository
+      git:
+        repo: "{{ gitops_repo_url }}"
+        dest: /opt/gitops-repo
+        version: "{{ gitops_target_revision }}"
+        force: true
+
+    - name: Apply root-app.yaml
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl apply -f /opt/gitops-repo/gitops/bootstrap/root-app.yaml
+      args:
+        executable: /bin/bash
+
     - name: Print ArgoCD Admin Password
       debug:
         msg: "🎉 ArgoCD 초기 비밀번호: {{ argocd_admin_password.stdout }}"
