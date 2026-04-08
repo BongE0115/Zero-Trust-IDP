@@ -109,6 +109,8 @@ jobs:
                   forensic-job-hash: "${CASE_HASH}"
                   sandbox-tier: strict-isolation
                   istio.io/use-waypoint: sandbox-waypoint
+                  istio.io/dataplane-mode: ambient
+
               spec:
                 restartPolicy: Never
                 initContainers:
