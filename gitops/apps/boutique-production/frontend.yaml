@@ -46,7 +46,7 @@ spec:
         # Prometheus 관제 이름표 추가
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
+        prometheus.io/port: "15020"
         prometheus.io/path: "/metrics"
     spec:
       nodeSelector:

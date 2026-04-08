@@ -31,7 +31,7 @@ spec:
         app: checkoutservice
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "5050"
+        prometheus.io/port: "15020"
         prometheus.io/path: "/metrics"
     spec:
       nodeSelector:

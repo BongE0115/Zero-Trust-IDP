@@ -24,7 +24,7 @@ spec:
         app: paymentservice
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "50051"
+        prometheus.io/port: "15020"
         prometheus.io/path: "/metrics"
     spec:
       nodeSelector:
@@ -129,7 +129,7 @@ spec:
         app: shippingservice
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "50051"
+        prometheus.io/port: "15020"
         prometheus.io/path: "/metrics"
     spec:
       nodeSelector:
