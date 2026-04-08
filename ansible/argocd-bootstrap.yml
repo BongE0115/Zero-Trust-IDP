@@ -7,9 +7,15 @@
   vars:
     kubeconfig_path: /etc/rancher/k3s/k3s.yaml
     argocd_namespace: argocd
-    argocd_helm_version: "8.0.0"
+    argocd_helm_version: "8.0.0"  
 
   tasks:
+    - name: Fix Kubeconfig apiVersion (v2 to v1)
+      replace:
+        path: "{{ kubeconfig_path }}"
+        regexp: '^apiVersion:\s*v2'
+        replace: 'apiVersion: v1'
+
     - name: Install Helm if missing
       shell: |
         if ! command -v helm >/dev/null 2>&1; then
@@ -145,11 +151,7 @@
       args:
         executable: /bin/bash
 
-    - name: Fix Kubeconfig apiVersion (v2 to v1)
-      replace:
-        path: "{{ kubeconfig_path }}"
-        regexp: '^apiVersion:\s*v2'
-        replace: 'apiVersion: v1'
+    
 
 
     - name: Register local cluster if missing
