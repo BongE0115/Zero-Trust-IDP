@@ -136,18 +136,25 @@
 
     - name: Prepare argo configs
       shell: |
-        # 1. 원본 복사 (CA, 클라이언트 인증서 완벽 보존)
+        # 1. K3s 원본 설정 파일 복사
         cp {{ kubeconfig_path }} /tmp/argo-target.yaml
         
-        # 2. kubectl을 쓰지 않고 sed 정규식으로 서버 주소를 치환 + tls-server-name 트릭을 동시에 주입
-        sed -i -E "s|server: https://.*:6443|server: https://{{ local_tailscale_ip }}:6443\n    tls-server-name: 127.0.0.1|g" /tmp/argo-target.yaml
-        
-        # 3. 컨텍스트 이름 변경
+        # [안전장치] 지금부터 실행되는 모든 kubectl은 이 임시 파일만 바라봅니다!
         export KUBECONFIG=/tmp/argo-target.yaml
+        
+        # 2. YAML 구조를 유지하며 안전하게 서버 IP 변경
+        kubectl config set-cluster default --server=https://{{ local_tailscale_ip }}:6443
+        
+        # 3. 인증서 검증 우회를 위한 tls-server-name 삽입 (CA 데이터 완벽 보존됨)
+        kubectl config set clusters.default.tls-server-name 127.0.0.1
+        
+        # 4. 컨텍스트 이름 변경
         kubectl config rename-context default local-pc || true
 
-        # 4. 실행용 kubeconfig 복사
+        # 5. 실행용 kubeconfig 준비
         cp {{ kubeconfig_path }} /tmp/argo-exec.yaml
+        
+        # [안전장치] 이제부터는 실행용 파일만 바라봅니다!
         export KUBECONFIG=/tmp/argo-exec.yaml
         kubectl config set-context default --namespace={{ argocd_namespace }}
       args:
