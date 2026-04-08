@@ -167,7 +167,9 @@
         argocd login 127.0.0.1:8080 \
           --username admin \
           --password '{{ argocd_admin_password.stdout | trim }}' \
-          --insecure
+          --insecure \
+          --plaintext \
+          --grpc-web
       args:
         executable: /bin/bash
 
