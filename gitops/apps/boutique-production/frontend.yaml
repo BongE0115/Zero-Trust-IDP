@@ -47,7 +47,7 @@ spec:
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "15020"
-        prometheus.io/path: "/metrics"
+        prometheus.io/path: "/stats/prometheus"
     spec:
       nodeSelector:
         node-role.kubernetes.io/worker: "true"
