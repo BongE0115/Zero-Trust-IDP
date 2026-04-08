@@ -141,8 +141,7 @@
     - name: Check existing ArgoCD clusters
       shell: |
         export KUBECONFIG={{ kubeconfig_path }}
-        # 💡 핵심: --core 옵션을 사용하면 로그인 없이 직접 API와 통신합니다.
-        argocd cluster list --core -n {{ argocd_namespace }}
+        argocd cluster list --core --namespace {{ argocd_namespace }}
       register: argocd_cluster_list
       changed_when: false
       failed_when: false
@@ -155,7 +154,7 @@
           --kubeconfig /tmp/argo-local.yaml \
           --yes \
           --core \
-          -n {{ argocd_namespace }}
+          --namespace {{ argocd_namespace }}
       args:
         executable: /bin/bash
       when: "'boutique-local-cluster' not in argocd_cluster_list.stdout"
@@ -163,7 +162,7 @@
     - name: Show registered clusters
       shell: |
         export KUBECONFIG={{ kubeconfig_path }}
-        argocd cluster list --core -n {{ argocd_namespace }}
+        argocd cluster list --core --namespace {{ argocd_namespace }}
       register: argocd_clusters_final
       changed_when: false
 
