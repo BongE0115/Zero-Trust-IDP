@@ -81,8 +81,6 @@ spec:
             value: "$(LOCAL_IP):30003"
           - name: AD_SERVICE_ADDR
             value: "$(LOCAL_IP):30005"
-          - name: loadgenerator
-            value: "$(LOCAL_IP):30006"
           - name: SHIPPING_SERVICE_ADDR
             value: "shippingservice:50051"
           - name: CHECKOUT_SERVICE_ADDR
