@@ -94,7 +94,8 @@ EOF
 cd /opt/gitops-repo/ansible
 
 echo "[INFO] installing ansible collections"
-COLLECTION_PATH="$HOME/.ansible/collections"
+export HOME=/root
+COLLECTION_PATH="/root/.ansible/collections"
 mkdir -p "$COLLECTION_PATH"
 if [ -f requirements.yml ]; then
   ansible-galaxy collection install -r requirements.yml -p "$COLLECTION_PATH" --force
