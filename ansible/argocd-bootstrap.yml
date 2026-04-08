@@ -122,6 +122,16 @@
       args:
         executable: /bin/bash
 
+    - name: Update App ConfigMap with Local Tailscale IP
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+
+        kubectl patch configmap aws-global-env -n default \
+          --type merge \
+          -p '{"data":{"LOCAL_TAILSCALE_IP":"{{ local_tailscale_ip }}"}}' || true
+      args:
+        executable: /bin/bash
+
     - name: Print ArgoCD Admin Password
       debug:
         msg: "🎉 ArgoCD 초기 비밀번호: {{ argocd_admin_password.stdout }}"
