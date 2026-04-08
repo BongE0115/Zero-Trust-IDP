@@ -141,7 +141,7 @@
     - name: Start argocd port-forward in background
       shell: |
         export KUBECONFIG={{ kubeconfig_path }}
-        pkill -f "port-forward svc/argocd-server 8080:80" || true
+        pkill -f "[p]ort-forward svc/argocd-server 8080:80" || true
         nohup kubectl -n {{ argocd_namespace }} port-forward svc/argocd-server 8080:80 >/tmp/argocd-portforward.log 2>&1 &
       args:
         executable: /bin/bash
