@@ -179,8 +179,6 @@ variable "project_name" {
   default     = "zero-trust-idp"
 }
 
-# [추가] 슬랙 봇 토큰과 채널 이름을 변수로 추가하여 보안과 유연성 강화
-
 variable "slack_bot_token" {
   type      = string
   sensitive = true #  테라폼 로그에 토큰이 안 남게 숨겨주는 옵션!
@@ -188,4 +186,10 @@ variable "slack_bot_token" {
 
 variable "slack_channel" {
   type = string
+}
+
+variable "local_tailscale_ip" {
+  description = "로컬 PC의 Tailscale IP (ArgoCD 클러스터 등록용)"
+  type        = string
+  sensitive = true 
 }

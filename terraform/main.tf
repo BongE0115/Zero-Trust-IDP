@@ -1047,11 +1047,9 @@ data "cloudinit_config" "monitoring_config" {
       aws_region            = "ap-northeast-2"
       k3s_server_private_ip = aws_instance.k3s_server.private_ip
       k3s_agent_private_ip  = aws_instance.k3s_agent.private_ip
-
       gitops_repo_url       = "https://github.com/BongE0115/Zero-Trust-IDP.git"
       gitops_target_revision = "jy"
       argocd_values_b64     = base64encode(file("${path.module}/../gitops/bootstrap/argocd/values.yaml"))
-
       enable_monitoring_github_runner   = var.enable_monitoring_github_runner
       github_runner_scope               = var.github_runner_scope
       github_runner_owner               = var.github_runner_owner
@@ -1059,14 +1057,12 @@ data "cloudinit_config" "monitoring_config" {
       github_runner_labels_csv          = join(",", var.github_runner_labels)
       github_runner_version             = var.github_runner_version
       github_runner_token_ssm_parameter = var.github_runner_token_ssm_parameter_name
-
+      local_tailscale_ip = var.local_tailscale_ip
       tailscale_auth_key = var.tailscale_auth_key
-
       k3s_token       = var.k3s_token
       frontend_addr   = "${aws_lb.aiops_alb.dns_name}:8080"
       slack_bot_token = var.slack_bot_token
       slack_channel   = var.slack_channel
-
       ansible_inventory_content = local.ansible_inventory_content
     })
   }

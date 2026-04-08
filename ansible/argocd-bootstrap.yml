@@ -131,7 +131,7 @@
     - name: Prepare local cluster kubeconfig copy
       shell: |
         cp {{ kubeconfig_path }} /tmp/argo-local.yaml
-        sed -i 's/127.0.0.1/{{ master_ts_ip.stdout | trim }}/g' /tmp/argo-local.yaml
+        KUBECONFIG=/tmp/argo-local.yaml kubectl config set-cluster default --server=https://{{ local_tailscale_ip }}:6443
         KUBECONFIG=/tmp/argo-local.yaml kubectl config rename-context default local-pc || true
         KUBECONFIG=/tmp/argo-local.yaml kubectl config set-context local-pc --namespace={{ argocd_namespace }}
       args:

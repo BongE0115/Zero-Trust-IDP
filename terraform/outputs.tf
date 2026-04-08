@@ -38,7 +38,7 @@ output "argocd_access_info" {
 http://${aws_lb.aiops_alb.dns_name}
 
 🔑 [ArgoCD 초기 비밀번호 확인 방법]
-설치가 완료된 후, 모니터링 서버(SSM)에 접속하여 아래 명령어를 입력하세요:
+설치가 완료된 후, 마스터 서버(SSM)에 접속하여 아래 명령어를 입력하세요:
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
 
 =========================================================

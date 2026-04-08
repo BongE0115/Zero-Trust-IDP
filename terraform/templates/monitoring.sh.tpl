@@ -71,6 +71,7 @@ cat > /opt/gitops-repo/bootstrap-runtime/argocd-extra-vars.yml <<EOF
 aws_region: "${aws_region}"
 gitops_repo_url: "${gitops_repo_url}"
 gitops_target_revision: "${gitops_target_revision}"
+local_tailscale_ip: "${local_tailscale_ip}"
 argocd_values_content: |
 $(sed 's/^/  /' /opt/gitops-repo/bootstrap-runtime/argocd-values.yaml)
 EOF
