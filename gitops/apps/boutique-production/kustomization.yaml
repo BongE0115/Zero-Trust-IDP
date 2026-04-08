@@ -7,3 +7,4 @@ resources:
   - paymentservice.yaml & shippingservice.yaml
   - loadgenerator.yaml
   - hpa.yaml
+  - namespace.yaml
