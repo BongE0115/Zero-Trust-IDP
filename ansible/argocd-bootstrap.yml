@@ -152,7 +152,6 @@
           --name boutique-local-cluster \
           --kubeconfig /tmp/argo-target.yaml \
           --yes \
-          --insecure \
           --core
       args:
         executable: /bin/bash
