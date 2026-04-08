@@ -19,11 +19,14 @@ spec:
       labels:
         app: loadgenerator
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/worker: "true"
+
       serviceAccountName: loadgenerator
       terminationGracePeriodSeconds: 5
       restartPolicy: Always
       
-      # 1. 프론트엔드가 떴는지 먼저 확인 
+      # 1. 프론트엔드가 떴는지 먼저 확인
       initContainers:
       - name: frontend-check
         image: busybox:latest
@@ -34,13 +37,12 @@ spec:
           MAX_RETRIES=12
           RETRY_INTERVAL=10
 
-          # 포트가 없을 경우를 대비해 기본값(80) 설정 (셸 파라미터 확장 문법)
-          TARGET_URL="http://${FRONTEND_ADDR}"
+          # 💡 [수정 1] TARGET_URL 끝에 :30006 포트를 명시적으로 붙여줍니다!
+          TARGET_URL="http://${FRONTEND_ADDR}:30006"
 
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i: Pinging frontend: ${TARGET_URL}..."
             
-            # wget으로 상태 코드만 추출
             STATUSCODE=$(wget --server-response ${TARGET_URL} 2>&1 | awk '/^  HTTP/{print $2}')
             
             if [ "$STATUSCODE" = "200" ]; then
@@ -57,23 +59,24 @@ spec:
           valueFrom:
             configMapKeyRef:
               name: aws-global-env
-              key: FRONTEND_ADDR  # 예: 100.88.181.49
+              key: FRONTEND_ADDR
 
-          
       # 2. 실제 트래픽 전달 컨테이너
       containers:
       - name: main
         image: us-central1-docker.pkg.dev/google-samples/microservices-demo/loadgenerator:v0.10.5
         env:
+        # 💡 [수정 2] 환경 변수 값 자체에 :30006 포트를 강제로 조합해서 넣어줍니다!
         - name: FRONTEND_ADDR
-          valueFrom:
-            configMapKeyRef:
-              name: aws-global-env 
-              key: FRONTEND_ADDR
+          value: "$(FRONTEND_ADDR):30006"
         - name: USERS
           value: "10"
         - name: RATE
           value: "1"
+        # (원래 환경변수 값을 가져오는 부분은 삭제하지 말고, 바로 위처럼 덮어쓰거나 아래처럼 직접 선언합니다)
+        envFrom:
+        - configMapRef:
+            name: aws-global-env
         resources:
           requests:
             cpu: 300m
