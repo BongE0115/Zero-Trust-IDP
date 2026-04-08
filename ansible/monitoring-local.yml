@@ -106,6 +106,20 @@
         - /etc/prometheus
         - /var/lib/prometheus
 
+    - name: Setup Prometheus RBAC and Token
+      shell: |
+        kubectl create clusterrolebinding prometheus-node-viewer \
+          --clusterrole=system:node-viewer \
+          --serviceaccount=default:default \
+          --dry-run=client -o yaml | kubectl apply -f -
+        mkdir -p /etc/prometheus/secrets
+        kubectl create token default --duration=87600h > /etc/prometheus/secrets/k3s_token
+        chown -R prometheus:prometheus /etc/prometheus/secrets
+        chmod 600 /etc/prometheus/secrets/k3s_token
+      args:
+        executable: /bin/bash
+      become: true
+
     - name: Deploy Prometheus config
       copy:
         dest: /etc/prometheus/prometheus.yml
@@ -130,7 +144,7 @@
 
             - job_name: "k3s-nodes-cadvisor"
               scheme: https
-              bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              bearer_token_file: /etc/prometheus/secrets/k3s_token
               tls_config:
                 insecure_skip_verify: true
               metrics_path: /metrics/cadvisor
