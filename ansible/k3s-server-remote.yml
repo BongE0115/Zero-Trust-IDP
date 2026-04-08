@@ -5,6 +5,7 @@
   gather_facts: true
 
   vars:
+    k3s_version: "v1.33.9+k3s1"
     kubeconfig_path: /etc/rancher/k3s/k3s.yaml
     project_name: "Zero-Trust-IDP"
     environment_name: "production"
