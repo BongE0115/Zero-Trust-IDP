@@ -128,17 +128,20 @@
       register: master_ts_ip
       changed_when: false
 
-    - name: Prepare local cluster kubeconfig copy
+    - name: Prepare argo configs
       shell: |
         cp {{ kubeconfig_path }} /tmp/argo-target.yaml
         sed -i 's/127.0.0.1/{{ local_tailscale_ip }}/g' /tmp/argo-target.yaml
         KUBECONFIG=/tmp/argo-target.yaml kubectl config rename-context default local-pc || true
+
+        cp {{ kubeconfig_path }} /tmp/argo-exec.yaml
+        KUBECONFIG=/tmp/argo-exec.yaml kubectl config set-context default --namespace={{ argocd_namespace }}
       args:
         executable: /bin/bash
 
     - name: Check existing ArgoCD clusters
       shell: |
-        export KUBECONFIG={{ kubeconfig_path }}
+        export KUBECONFIG=/tmp/argo-exec.yaml
         argocd cluster list --core
       register: argocd_cluster_list
       changed_when: false
@@ -146,7 +149,7 @@
 
     - name: Register local cluster if missing
       shell: |
-        export KUBECONFIG={{ kubeconfig_path }}
+        export KUBECONFIG=/tmp/argo-exec.yaml
         argocd cluster add local-pc \
           --name boutique-local-cluster \
           --kubeconfig /tmp/argo-target.yaml \
@@ -158,7 +161,7 @@
 
     - name: Show registered clusters
       shell: |
-        export KUBECONFIG={{ kubeconfig_path }}
+        export KUBECONFIG=/tmp/argo-exec.yaml
         argocd cluster list --core
       register: argocd_clusters_final
       changed_when: false
