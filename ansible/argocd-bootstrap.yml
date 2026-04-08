@@ -157,7 +157,7 @@
           --core
       args:
         executable: /bin/bash
-      when: "'boutique-local-cluster' not in argocd_cluster_list.stdout"
+      # when: "'boutique-local-cluster' not in argocd_cluster_list.stdout"
 
     - name: Show registered clusters
       shell: |
