@@ -138,59 +138,32 @@
       args:
         executable: /bin/bash
 
-    - name: Start argocd port-forward in background
+    - name: Check existing ArgoCD clusters
       shell: |
         export KUBECONFIG={{ kubeconfig_path }}
-        # 1. 자기 자신을 죽이지 않도록 안전하게 이전 프로세스 킬
-        ps aux | grep "port-forward svc/argocd-server 8080:80" | grep -v grep | awk '{print $2}' | xargs -r kill -9 || true
-        
-        # 2. 포트포워딩 실행
-        nohup kubectl -n {{ argocd_namespace }} port-forward svc/argocd-server 8080:80 >/tmp/argocd-portforward.log 2>&1 &
-      args:
-        executable: /bin/bash
-      async: 300   
-      poll: 0    
-
-
-    - name: Wait for argocd port-forward
-      shell: |
-        for i in $(seq 1 30); do
-          curl -k http://127.0.0.1:8080 >/dev/null 2>&1 && exit 0
-          sleep 5
-        done
-        exit 1
-      args:
-        executable: /bin/bash
-
-    - name: Login to ArgoCD
-      shell: |
-        argocd login 127.0.0.1:8080 \
-          --username admin \
-          --password '{{ argocd_admin_password.stdout | trim }}' \
-          --insecure \
-          --plaintext \
-          --grpc-web
-      args:
-        executable: /bin/bash
-
-    - name: Check existing ArgoCD clusters
-      shell: argocd cluster list
+        # 💡 핵심: --core 옵션을 사용하면 로그인 없이 직접 API와 통신합니다.
+        argocd cluster list --core -n {{ argocd_namespace }}
       register: argocd_cluster_list
       changed_when: false
       failed_when: false
 
     - name: Register local cluster if missing
       shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
         argocd cluster add local-pc \
           --name boutique-local-cluster \
           --kubeconfig /tmp/argo-local.yaml \
-          --yes
+          --yes \
+          --core \
+          -n {{ argocd_namespace }}
       args:
         executable: /bin/bash
       when: "'boutique-local-cluster' not in argocd_cluster_list.stdout"
 
     - name: Show registered clusters
-      shell: argocd cluster list
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        argocd cluster list --core -n {{ argocd_namespace }}
       register: argocd_clusters_final
       changed_when: false
 
