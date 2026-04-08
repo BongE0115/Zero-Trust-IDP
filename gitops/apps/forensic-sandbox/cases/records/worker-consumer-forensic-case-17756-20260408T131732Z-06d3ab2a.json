@@ -2,9 +2,9 @@
   "case_id": "worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a",
-  "status": "candidate_built",
+  "status": "revalidation_requested",
   "created_at": "2026-04-08T13:18:00Z",
-  "updated_at": "2026-04-08T15:05:56Z",
+  "updated_at": "2026-04-08T15:06:22Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:03aa2cc",
   "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:0a6183482d87757494d0bb23799bfcde8b284871e8650378cb9fd6e5760f21e5",
   "verified_image_ref": "",
@@ -12,7 +12,7 @@
   "previous_production_image_ref": null,
   "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-forensic-case-17756-20260408t131.yaml",
   "revalidation_generation": 1,
-  "validation_run_id": "",
+  "validation_run_id": "worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a-reval-g1",
   "redrive_count": 0,
   "flags": {
     "revalidation_passed": false,
@@ -37,7 +37,12 @@
     "last_reproduce_validation_run_id": "reproduce-worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a-0",
     "last_reproduce_generation": 0,
     "candidate_build_branch": "case/worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a",
-    "candidate_build_generation": 1
+    "candidate_build_generation": 1,
+    "revalidation_job_manifest_path": "/opt/actions-runner/_work/Zero-Trust-IDP/Zero-Trust-IDP/gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a.yaml",
+    "revalidation_expected_failure_status": "success",
+    "revalidation_expected_normal_status": "success",
+    "last_requested_revalidation_generation": 1,
+    "last_requested_launcher_image_ref": "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc"
   },
   "history": [
     {
@@ -79,6 +84,26 @@
       "extra": {
         "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:0a6183482d87757494d0bb23799bfcde8b284871e8650378cb9fd6e5760f21e5",
         "revalidation_generation": 1
+      }
+    },
+    {
+      "at": "2026-04-08T15:06:22Z",
+      "action": "update",
+      "status": "revalidation_requested",
+      "note": "revalidation requested automatically after candidate build",
+      "extra": {
+        "from_status": "candidate_built",
+        "to_status": "revalidation_requested"
+      }
+    },
+    {
+      "at": "2026-04-08T15:06:22Z",
+      "action": "update",
+      "status": "revalidation_requested",
+      "note": "force-synced record after revalidation render",
+      "extra": {
+        "revalidation_generation": 1,
+        "launcher_image_ref": "ghcr.io/bonge0115/forensic-launcher@sha256:3792fe064586acae63b368913a01c31ed6da8b95329452855deb37700ca000cc"
       }
     }
   ]
