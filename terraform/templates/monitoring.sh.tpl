@@ -94,11 +94,15 @@ EOF
 cd /opt/gitops-repo/ansible
 
 echo "[INFO] installing ansible collections"
+COLLECTION_PATH="$HOME/.ansible/collections"
+mkdir -p "$COLLECTION_PATH"
 if [ -f requirements.yml ]; then
-  ansible-galaxy collection install -r requirements.yml --force
+  ansible-galaxy collection install -r requirements.yml -p "$COLLECTION_PATH" --force
 else
-  ansible-galaxy collection install amazon.aws community.aws --force
+  ansible-galaxy collection install amazon.aws community.aws -p "$COLLECTION_PATH" --force
 fi
+
+echo "[INFO] Ansible 컬렉션 설치 완료. 경로: $COLLECTION_PATH"
 
 echo "[INFO] running monitoring-local.yml"
 ANSIBLE_CONFIG=/opt/gitops-repo/ansible/ansible.cfg \

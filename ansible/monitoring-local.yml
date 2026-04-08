@@ -278,8 +278,6 @@
         echo "--- 7. 러너 서비스 등록 및 재시작 ---"
         ./svc.sh install root || true
         ./svc.sh start || true
-        systemctl enable actions.runner.* || true
-        systemctl restart actions.runner.* || true
         
         echo "--- 8. 스크립트 정상 종료 ---"
       args:
