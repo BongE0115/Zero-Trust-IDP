@@ -145,6 +145,13 @@
       args:
         executable: /bin/bash
 
+    - name: Fix Kubeconfig apiVersion (v2 to v1)
+      replace:
+        path: "{{ kubeconfig_path }}"
+        regexp: '^apiVersion:\s*v2'
+        replace: 'apiVersion: v1'
+
+
     - name: Register local cluster if missing
       shell: |
         export KUBECONFIG=/tmp/argo-exec.yaml
