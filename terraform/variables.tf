@@ -41,7 +41,7 @@ variable "private_dns_zone_name" {
 variable "local_tailscale_ip" {
   description = "Tailscale IP address for the local environment"
   type        = string
-  default     = ""
+  sensitive = true 
 }
 
 # ------------------------------------------
@@ -186,10 +186,4 @@ variable "slack_bot_token" {
 
 variable "slack_channel" {
   type = string
-}
-
-variable "local_tailscale_ip" {
-  description = "로컬 PC의 Tailscale IP (ArgoCD 클러스터 등록용)"
-  type        = string
-  sensitive = true 
 }
