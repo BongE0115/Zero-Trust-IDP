@@ -136,18 +136,20 @@
 
     - name: Prepare argo configs
       shell: |
-        # 1. Kubeconfig 복사 (트릭이나 삭제 없이 순수 복사)
+        # 1. 원본 복사 (CA, 클라이언트 인증서 완벽 보존)
         cp {{ kubeconfig_path }} /tmp/argo-target.yaml
         
-        # 2. 서버 주소를 Tailscale IP로 변경 (이제 K3s가 이 IP를 공식 지원하므로 문제 없음)
-        KUBECONFIG=/tmp/argo-target.yaml kubectl config set-cluster default --server=https://{{ local_tailscale_ip }}:6443
+        # 2. kubectl을 쓰지 않고 sed 정규식으로 서버 주소를 치환 + tls-server-name 트릭을 동시에 주입
+        sed -i -E "s|server: https://.*:6443|server: https://{{ local_tailscale_ip }}:6443\n    tls-server-name: 127.0.0.1|g" /tmp/argo-target.yaml
         
         # 3. 컨텍스트 이름 변경
-        KUBECONFIG=/tmp/argo-target.yaml kubectl config rename-context default local-pc || true
+        export KUBECONFIG=/tmp/argo-target.yaml
+        kubectl config rename-context default local-pc || true
 
-        # 4. 실행용 kubeconfig 준비
+        # 4. 실행용 kubeconfig 복사
         cp {{ kubeconfig_path }} /tmp/argo-exec.yaml
-        KUBECONFIG=/tmp/argo-exec.yaml kubectl config set-context default --namespace={{ argocd_namespace }}
+        export KUBECONFIG=/tmp/argo-exec.yaml
+        kubectl config set-context default --namespace={{ argocd_namespace }}
       args:
         executable: /bin/bash
 
