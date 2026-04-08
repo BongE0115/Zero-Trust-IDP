@@ -2,13 +2,13 @@
   "case_id": "worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a",
-  "status": "revalidation_passed",
+  "status": "promoted",
   "created_at": "2026-04-08T13:18:00Z",
-  "updated_at": "2026-04-08T15:08:55Z",
+  "updated_at": "2026-04-08T15:09:49Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:03aa2cc",
   "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:0a6183482d87757494d0bb23799bfcde8b284871e8650378cb9fd6e5760f21e5",
   "verified_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:0a6183482d87757494d0bb23799bfcde8b284871e8650378cb9fd6e5760f21e5",
-  "promoted_image_ref": "",
+  "promoted_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:0a6183482d87757494d0bb23799bfcde8b284871e8650378cb9fd6e5760f21e5",
   "previous_production_image_ref": null,
   "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-forensic-case-17756-20260408t131.yaml",
   "revalidation_generation": 1,
@@ -16,7 +16,7 @@
   "redrive_count": 0,
   "flags": {
     "revalidation_passed": true,
-    "promoted": false,
+    "promoted": true,
     "redriven": false,
     "resolved": false,
     "cleanup_completed": false,
@@ -134,6 +134,16 @@
         "forced": true,
         "generation": "1",
         "verified_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:0a6183482d87757494d0bb23799bfcde8b284871e8650378cb9fd6e5760f21e5"
+      }
+    },
+    {
+      "at": "2026-04-08T15:09:49Z",
+      "action": "update",
+      "status": "promoted",
+      "note": "verified image promoted automatically after successful revalidation",
+      "extra": {
+        "from_status": "revalidation_passed",
+        "to_status": "promoted"
       }
     }
   ]
