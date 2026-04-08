@@ -316,25 +316,6 @@ resource "aws_iam_role_policy" "ssm_node_ansible_ssm_s3_policy" {
   })
 }
 
-resource "aws_iam_role_policy" "ssm_terminate_policy" {
-  name = "ssm-terminate-policy"
-  role = aws_iam_role.monitoring_role.id 
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:TerminateSession",
-          "ssm:ResumeSession"
-        ]
-        Resource = "arn:aws:ssm:*:*:session/*"
-      }
-    ]
-  })
-}
-
 # 3. 붙이기(Instance Profile): EC2에 역할을 부여하기 위한 프로필
 resource "aws_iam_instance_profile" "ssm_node_profile" {
   name = "aiops-ssm-node-profile"

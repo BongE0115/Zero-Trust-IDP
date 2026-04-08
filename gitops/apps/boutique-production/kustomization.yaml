@@ -5,4 +5,5 @@ resources:
   - frontend.yaml
   - checkoutservice.yaml
   - paymentservice.yaml & shippingservice.yaml
+  - loadgenerator.yaml
   - hpa.yaml
