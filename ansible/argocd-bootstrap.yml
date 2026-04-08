@@ -136,23 +136,16 @@
 
     - name: Prepare argo configs
       shell: |
-        # 1. K3s 원본 설정 파일 복사 (CA 인증서 데이터 절대 유지!)
+        # 1. Kubeconfig 복사 (트릭이나 삭제 없이 순수 복사)
         cp {{ kubeconfig_path }} /tmp/argo-target.yaml
-        export KUBECONFIG=/tmp/argo-target.yaml
         
-        # 2. 서버 주소를 Tailscale IP로 변경
-        kubectl config set-cluster default --server=https://{{ local_tailscale_ip }}:6443
+        # 2. 서버 주소를 Tailscale IP로 변경 (이제 K3s가 이 IP를 공식 지원하므로 문제 없음)
+        KUBECONFIG=/tmp/argo-target.yaml kubectl config set-cluster default --server=https://{{ local_tailscale_ip }}:6443
         
-        # 3. [핵심!] 인증서 검증 우회를 위해 서버 이름을 127.0.0.1로 강제 지정
-        kubectl config set clusters.default.tls-server-name 127.0.0.1
-        
-        # 4. 혹시 모를 insecure 옵션이 남아있다면 강제 삭제 (안전장치)
-        sed -i '/insecure-skip-tls-verify/d' /tmp/argo-target.yaml
+        # 3. 컨텍스트 이름 변경
+        KUBECONFIG=/tmp/argo-target.yaml kubectl config rename-context default local-pc || true
 
-        # 5. 컨텍스트 이름 변경
-        kubectl config rename-context default local-pc || true
-
-        # 6. 실행용 kubeconfig 준비
+        # 4. 실행용 kubeconfig 준비
         cp {{ kubeconfig_path }} /tmp/argo-exec.yaml
         KUBECONFIG=/tmp/argo-exec.yaml kubectl config set-context default --namespace={{ argocd_namespace }}
       args:
