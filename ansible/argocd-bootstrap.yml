@@ -131,21 +131,19 @@
     - name: Prepare argo configs
       shell: |
         cp {{ kubeconfig_path }} /tmp/argo-target.yaml
-        KUBECONFIG=/tmp/argo-target.yaml kubectl config set-cluster default --server=https://{{ local_tailscale_ip }}:6443
+        
+        sed -i '/certificate-authority-data/d' /tmp/argo-target.yaml
+        
+        KUBECONFIG=/tmp/argo-target.yaml kubectl config set-cluster default \
+          --server=https://{{ local_tailscale_ip }}:6443 \
+          --insecure-skip-tls-verify=true
+
         KUBECONFIG=/tmp/argo-target.yaml kubectl config rename-context default local-pc || true
 
         cp {{ kubeconfig_path }} /tmp/argo-exec.yaml
         KUBECONFIG=/tmp/argo-exec.yaml kubectl config set-context default --namespace={{ argocd_namespace }}
       args:
         executable: /bin/bash
-
-    - name: Check existing ArgoCD clusters
-      shell: |
-        export KUBECONFIG=/tmp/argo-exec.yaml
-        argocd cluster list --core
-      register: argocd_cluster_list
-      changed_when: false
-      failed_when: false
 
     - name: Register local cluster if missing
       shell: |
@@ -154,6 +152,7 @@
           --name boutique-local-cluster \
           --kubeconfig /tmp/argo-target.yaml \
           --yes \
+          --insecure \
           --core
       args:
         executable: /bin/bash
