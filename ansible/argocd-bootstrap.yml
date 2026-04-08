@@ -148,7 +148,7 @@
         nohup kubectl -n {{ argocd_namespace }} port-forward svc/argocd-server 8080:80 >/tmp/argocd-portforward.log 2>&1 &
       args:
         executable: /bin/bash
-      async: 10   
+      async: 300   
       poll: 0    
 
 
