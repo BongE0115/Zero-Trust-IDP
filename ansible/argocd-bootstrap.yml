@@ -139,8 +139,8 @@
 
     - name: Check existing ArgoCD clusters
       shell: |
-        export KUBECONFIG={{ kubeconfig_path }}
-        argocd cluster list --core --namespace {{ argocd_namespace }}
+        export KUBECONFIG=/tmp/argo-local.yaml
+        argocd cluster list --core
       register: argocd_cluster_list
       changed_when: false
       failed_when: false
@@ -151,16 +151,15 @@
         argocd cluster add local-pc \
           --name boutique-local-cluster \
           --yes \
-          --core \
-          --namespace {{ argocd_namespace }}
+          --core
       args:
         executable: /bin/bash
       when: "'boutique-local-cluster' not in argocd_cluster_list.stdout"
 
     - name: Show registered clusters
       shell: |
-        export KUBECONFIG={{ kubeconfig_path }}
-        argocd cluster list --core --namespace {{ argocd_namespace }}
+        export KUBECONFIG=/tmp/argo-local.yaml
+        argocd cluster list --core
       register: argocd_clusters_final
       changed_when: false
 
