@@ -131,7 +131,7 @@
     - name: Prepare argo configs
       shell: |
         cp {{ kubeconfig_path }} /tmp/argo-target.yaml
-        sed -i 's/127.0.0.1/{{ local_tailscale_ip }}/g' /tmp/argo-target.yaml
+        KUBECONFIG=/tmp/argo-target.yaml kubectl config set-cluster default --server=https://{{ local_tailscale_ip }}:6443
         KUBECONFIG=/tmp/argo-target.yaml kubectl config rename-context default local-pc || true
 
         cp {{ kubeconfig_path }} /tmp/argo-exec.yaml
