@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 import requests
 
-from slack_notifier import send_slack_alert # 🚨 추가됨: 슬랙 요원 호출
+from slack_notifier import send_slack_alert # 슬랙 호출
 
 def getenv(name: str, default: str = "") -> str:
     return os.getenv(name, default)
@@ -408,7 +408,7 @@ def validate_github_dispatch_config():
         raise ValueError(f"Missing GitHub dispatch configuration: {', '.join(missing)}")
 
 
-# 🚨 AS-IS: 기존의 자동 격발 함수들 (더 이상 직접 호출하지 않지만, 코드는 유지해도 무방합니다)
+# AS-IS: 기존의 자동 격발 함수들 
 def github_dispatch(workflow_file: str, inputs: Dict[str, str]):
     url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{workflow_file}/dispatches"
     headers = {
@@ -503,7 +503,7 @@ def main():
 
             spec_path = emit_spec(sandbox_spec)
 
-            # 🚨 TO-BE: [jy 브랜치 HITL 통합 로직] 
+            # TO-BE: [jy 브랜치 HITL 통합 로직] 
             # 자동 격발 대신 슬랙으로 알림을 보냅니다.
             combined_payload = {
                 "spec": sandbox_spec,

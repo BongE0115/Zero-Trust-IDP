@@ -49,8 +49,8 @@ EOF
     done
     sleep 5
 
-    # 🔍 [검증 1] 로컬 K3s 노드 확인
-    echo "🔍 [검증] 로컬 K3s 노드 상태:"
+    # [검증 1] 로컬 K3s 노드 확인
+    echo "[검증] 로컬 K3s 노드 상태:"
     sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes
 
     echo "[3/7] 네임스페이스 및 환경 설정 중..."
@@ -72,8 +72,8 @@ EOF
       --from-literal=LOCAL_TAILSCALE_IP="$LOCAL_TS_IP" \
       --dry-run=client -o yaml | sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
       
-    # 🔍 [검증 2] 로컬 ConfigMap 확인
-    echo "🔍 [검증] 로컬 ConfigMap 생성 결과:"
+    #  [검증 2] 로컬 ConfigMap 확인
+    echo " [검증] 로컬 ConfigMap 생성 결과:"
     sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get configmap aws-global-env -n boutique-local
 
     echo "[5/7] 로컬 전용 마이크로서비스 배포..."
@@ -85,13 +85,13 @@ EOF
         echo "⚠️ GitOps 경로를 찾을 수 없어 배포를 건너뜁니다: $GITOPS_PATH"
     fi
 
-    # 🔍 [검증 3] 로컬 파드 배포 상태 확인
-    echo "🔍 [검증] 로컬 클러스터 파드 목록:"
+    #  [검증 3] 로컬 파드 배포 상태 확인
+    echo " [검증] 로컬 클러스터 파드 목록:"
     sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get pods -n boutique-local
 
     
     echo "=================================================="
-    echo "🎉 로컬 + 마스터 + 워커 하이브리드 인프라 세팅 끝"
+    echo " 로컬 + 마스터 + 워커 하이브리드 인프라 세팅 끝"
     echo "=================================================="
   EOT
 }

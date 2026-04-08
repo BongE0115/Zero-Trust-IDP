@@ -196,13 +196,13 @@
 
     - name: Install GitHub self-hosted runner when enabled
       shell: |
-        # 💡 모든 실행 과정을 대상 서버의 /tmp/runner-install-debug.log 파일에 실시간 기록
+        # 모든 실행 과정을 대상 서버의 /tmp/runner-install-debug.log 파일에 실시간 기록
         exec > >(tee -a /tmp/runner-install-debug.log) 2>&1
         set -euxo pipefail
 
         echo "--- 1. 스크립트 시작 ---"
         export AWS_PAGER=""
-        # 💡 AWS CLI가 네트워크가 막혔을 때 무한 대기하지 않고 1번만 시도 후 바로 에러를 뱉게 설정
+        # AWS CLI가 네트워크가 막혔을 때 무한 대기하지 않고 1번만 시도 후 바로 에러를 뱉게 설정
         export AWS_MAX_ATTEMPTS=1
         export AWS_RETRY_MODE=standard
 
