@@ -4,7 +4,6 @@ global:
     node-role.kubernetes.io/master: "true"
   
   # 2. 마스터 노드의 '접근 제한(Taint)'을 허용하는 설정
-  # 이게 없으면 마스터 노드가 "일반 앱은 거부한다"며 배포를 막을 수 있다.
   tolerations:
     - key: "node-role.kubernetes.io/master"
       operator: "Exists"

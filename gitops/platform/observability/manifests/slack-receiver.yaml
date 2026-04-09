@@ -42,7 +42,7 @@ spec:
                   name: github-dispatch-secret
                   key: token
 ---
-# 2. 네트워크 길잡이 (Service - 아까 만드신 것)
+# 2. 네트워크 길잡이
 apiVersion: v1
 kind: Service
 metadata:

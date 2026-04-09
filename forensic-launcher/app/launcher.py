@@ -1,4 +1,3 @@
-# 트리거
 from kafka import KafkaProducer, KafkaConsumer
 from kafka.errors import KafkaTimeoutError
 import json
@@ -44,7 +43,6 @@ EXPECTED_FAILURE_STATUS = getenv(
 )
 EXPECTED_NORMAL_STATUS = getenv("EXPECTED_NORMAL_STATUS", "success")
 
-# verdict 수집용 시간창 확보
 POST_VERDICT_SLEEP_SECONDS = int(getenv("POST_VERDICT_SLEEP_SECONDS", "0"))
 
 TOPIC_METADATA_WAIT_SECONDS = int(getenv("TOPIC_METADATA_WAIT_SECONDS", "30"))

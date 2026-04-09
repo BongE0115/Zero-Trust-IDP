@@ -16,12 +16,9 @@ spec:
       values: |
         profile: ambient
         
-        # [수정] 우리가 마스터 노드 스크립트에서 추가한 라벨을 지정합니다.
         nodeSelector:
           node-role.kubernetes.io/master: "true"
         
-        # [추가] 마스터 노드에 기본적으로 걸려있는 '접근 제한(Taint)'을 허용하는 설정입니다.
-        # 이 설정이 있어야 마스터 노드가 "나한텐 아무나 못 올라와!"라고 거부해도 Istiod가 올라갈 수 있습니다.
         tolerations:
           - key: "node-role.kubernetes.io/master"
             operator: "Exists"

@@ -1,0 +1,15 @@
+admin_cidr = ["", "", "", ""] #공인 ip 설정
+tailscale_auth_key = "" 
+local_tailscale_ip = ""
+k3s_token          = "" 
+
+db_username = ""
+db_password = ""
+
+enable_github_secret_sync = true
+github_owner              = "BongE0115"        
+github_repository         = "Zero-Trust-IDP"   
+
+# [Slack 설정]
+slack_bot_token = ""
+slack_channel   = ""

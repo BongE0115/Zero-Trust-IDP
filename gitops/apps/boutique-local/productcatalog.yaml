@@ -3,14 +3,14 @@ kind: Service
 metadata:
   name: productcatalogservice
 spec:
-  type: NodePort  #  ClusterIP에서 NodePort로 변경
+  type: NodePort  
   selector:
     app: productcatalogservice
   ports:
   - name: grpc
     port: 3550
     targetPort: 3550
-    nodePort: 30550 # 고정 포트 할당
+    nodePort: 30550 
 ---
 apiVersion: apps/v1
 kind: Deployment

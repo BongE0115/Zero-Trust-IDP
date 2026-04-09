@@ -10,7 +10,7 @@ spec:
     path: gitops/apps/boutique-production
     targetRevision: jy 
   destination:
-    server: 'https://kubernetes.default.svc' # AWS 자기 자신 클러스터
+    server: 'https://kubernetes.default.svc' 
     namespace: default
   syncPolicy:
     automated:

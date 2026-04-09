@@ -11,7 +11,7 @@ spec:
     targetRevision: jy 
   destination:
     name: boutique-local-cluster 
-    namespace: boutique-local    # 로컬용 네임스페이스
+    namespace: boutique-local    
   syncPolicy:
     automated:
       prune: true

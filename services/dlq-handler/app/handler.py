@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 import requests
 
-from slack_notifier import send_slack_alert # 슬랙 호출
+from slack_notifier import send_slack_alert 
 
 def getenv(name: str, default: str = "") -> str:
     return os.getenv(name, default)
@@ -36,7 +36,7 @@ TOPIC_INIT_IMAGE = getenv("TOPIC_INIT_IMAGE", "bitnamilegacy/kafka:3.7")
 TOPIC_INIT_PARTITIONS = int(getenv("TOPIC_INIT_PARTITIONS", "1"))
 TOPIC_INIT_REPLICATION_FACTOR = int(getenv("TOPIC_INIT_REPLICATION_FACTOR", "1"))
 
-SPEC_OUTPUT_MODE = getenv("SPEC_OUTPUT_MODE", "stdout")  # stdout | file
+SPEC_OUTPUT_MODE = getenv("SPEC_OUTPUT_MODE", "stdout")  
 SPEC_OUTPUT_DIR = getenv("SPEC_OUTPUT_DIR", "/tmp/sandbox-specs")
 
 REPLAY_ARTIFACT_OUTPUT_DIR = getenv("REPLAY_ARTIFACT_OUTPUT_DIR", "/tmp/replay-artifacts")
@@ -98,14 +98,10 @@ def get_nested(event: Dict[str, Any], *keys, default=None):
 
 
 def build_case_id_from_payload(source_service: str, payload: Dict[str, Any]) -> str:
-    # 서비스명과 주문 ID를 포함하되 전체 길이를 조절
     order_id = str(payload.get("order_id", "order"))[:10] 
-    # 초 단위까지 포함할 필요 없이 분 단위나 짧은 형식으로 변경
     ts = datetime.now(timezone.utc).strftime("%m%d%H%M") 
-    # 해시값도 4자로 단축
     digest = sha256_of_json(payload)[:4]
     
-    # 예: worker-order-04052116-a1b2 (약 30자 내외로 생성됨)
     return f"{source_service[:15]}-{order_id}-{ts}-{digest}"
 
 
@@ -408,7 +404,6 @@ def validate_github_dispatch_config():
         raise ValueError(f"Missing GitHub dispatch configuration: {', '.join(missing)}")
 
 
-# AS-IS: 기존의 자동 격발 함수들 
 def github_dispatch(workflow_file: str, inputs: Dict[str, str]):
     url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{workflow_file}/dispatches"
     headers = {
@@ -459,8 +454,6 @@ def dispatch_create_case_branch(spec: Dict[str, Any]):
 
 
 def main():
-    # HITL 방식에서는 DLQ 핸들러가 직접 GitHub로 쏘지 않으므로, 이 검증을 통과하지 않아도 됩니다.
-    # validate_github_dispatch_config() 
     consumer = get_consumer()
 
     print(
@@ -503,8 +496,6 @@ def main():
 
             spec_path = emit_spec(sandbox_spec)
 
-            # TO-BE: [jy 브랜치 HITL 통합 로직] 
-            # 자동 격발 대신 슬랙으로 알림을 보냅니다.
             combined_payload = {
                 "spec": sandbox_spec,
                 "failure_artifact": failure_artifact,

@@ -14,7 +14,7 @@ resource "local_file" "local_node_setup_script" {
     echo "🚀 AIOps 로컬 환경(On-Premise) 자동 구축 시작"
     echo "=================================================="
 
-    echo "[1/7] Tailscale 설치 및 VPN 연결 중..."
+    echo "[1/5] Tailscale 설치 및 VPN 연결 중..."
     if ! command -v tailscale &> /dev/null; then
         curl -fsSL https://tailscale.com/install.sh | sh
     fi
@@ -23,7 +23,7 @@ resource "local_file" "local_node_setup_script" {
     LOCAL_TS_IP=$(tailscale ip -4 | head -n 1)
     echo "✅ Tailscale 연동 완료! (현재 IP: $LOCAL_TS_IP)"
 
-    echo "[2/7] K3s 클러스터 설치 중..."
+    echo "[2/5] K3s 클러스터 설치 중..."
     sudo mkdir -p /etc/rancher/k3s
     
     cat <<EOF | sudo tee /etc/rancher/k3s/config.yaml > /dev/null
@@ -53,10 +53,10 @@ EOF
     echo "[검증] 로컬 K3s 노드 상태:"
     sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes
 
-    echo "[3/7] 네임스페이스 및 환경 설정 중..."
+    echo "[3/5] 네임스페이스 및 환경 설정 중..."
     sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create namespace boutique-local --dry-run=client -o yaml | sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
 
-    echo "[4/7] AWS 리소스 정보 주입 (ConfigMap)..."
+    echo "[4/5] AWS 리소스 정보 주입 (ConfigMap)..."
     sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create configmap aws-global-env -n boutique-local \
       --from-literal=AWS_REGION="ap-northeast-2" \
       --from-literal=PROJECT_NAME="Zero-Trust-IDP" \
@@ -76,7 +76,7 @@ EOF
     echo " [검증] 로컬 ConfigMap 생성 결과:"
     sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get configmap aws-global-env -n boutique-local
 
-    echo "[5/7] 로컬 전용 마이크로서비스 배포..."
+    echo "[5/5] 로컬 전용 마이크로서비스 배포..."
     GITOPS_PATH="/home/ubuntu/Zero-Trust-IDP/gitops/apps/boutique-local"
     if [ -d "$GITOPS_PATH" ]; then
         sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -k "$GITOPS_PATH" -n boutique-local

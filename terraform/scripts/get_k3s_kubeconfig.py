@@ -122,7 +122,6 @@ def main() -> None:
 
     kubeconfig = fetch_kubeconfig_with_retry(instance_id, region)
 
-    # k3s 기본 kubeconfig는 127.0.0.1을 가리키므로 원격 접속용으로 치환
     kubeconfig = kubeconfig.replace("127.0.0.1", api_server_host)
 
     kubeconfig_b64 = base64.b64encode(kubeconfig.encode("utf-8")).decode("utf-8")

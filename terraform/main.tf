@@ -610,7 +610,6 @@ resource "aws_security_group" "k3s_server_sg" {
   description = "Security group for K3s master node"
   vpc_id      = aws_vpc.main.id
 
-  #  수정: Tailscale 망(100.64.0.0/10)도 K3s API 접속 허용
   ingress {
     description = "K3s API from VPC and Tailscale"
     from_port   = 6443
@@ -619,7 +618,6 @@ resource "aws_security_group" "k3s_server_sg" {
     cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
-  #  수정: Tailscale 망도 Kubelet 통신 허용
   ingress {
     description = "Kubelet metrics from VPC and Tailscale"
     from_port   = 10250
@@ -636,7 +634,6 @@ resource "aws_security_group" "k3s_server_sg" {
     cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
-  #  수정: Tailscale 노드도 Flannel 가상 네트워크에 참여 허용
   ingress {
     description = "Flannel VXLAN from VPC and Tailscale"
     from_port   = 8472
@@ -645,7 +642,6 @@ resource "aws_security_group" "k3s_server_sg" {
     cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
-  #  핵심 추가: Tailscale 직접 통신(P2P)을 위한 전용 포트 개방
   ingress {
     description = "Tailscale P2P Direct Connection"
     from_port   = 41641
@@ -713,7 +709,7 @@ resource "aws_security_group" "k3s_agent_sg" {
     from_port   = 9092
     to_port     = 9092
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.main.cidr_block,"100.64.0.0/10"] # Tailscale 망 전체 허용
+    cidr_blocks = [aws_vpc.main.cidr_block,"100.64.0.0/10"] 
   }
 
   ingress {
@@ -724,7 +720,6 @@ resource "aws_security_group" "k3s_agent_sg" {
     security_groups = [aws_security_group.monitoring_sg.id]
   }
 
-  #  수정: Tailscale 노드도 Flannel 가상 네트워크에 참여 허용
   ingress {
     description = "Flannel VXLAN from VPC and Tailscale"
     from_port   = 8472
@@ -733,7 +728,6 @@ resource "aws_security_group" "k3s_agent_sg" {
     cidr_blocks = [aws_vpc.main.cidr_block, "100.64.0.0/10"]
   }
 
-  #  핵심 추가: Tailscale 직접 통신(P2P)을 위한 전용 포트 개방
   ingress {
     description = "Tailscale P2P Direct Connection"
     from_port   = 41641
@@ -797,7 +791,7 @@ resource "aws_lb" "aiops_alb" {
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.alb_sg.id]
   subnets                    = [aws_subnet.public_a.id, aws_subnet.public_b.id]
-  enable_deletion_protection = false # terraform destroy 하기 위해 false로 설정
+  enable_deletion_protection = false 
 
   tags = {
     Name      = "aiops-alb"
@@ -817,7 +811,7 @@ resource "aws_lb_target_group" "aiops_tg" {
 
   health_check {
     interval            = 30
-    path                = "/healthz" # ArgoCD 전용 건강 검진 경로
+    path                = "/healthz" 
     port                = "30080"
     protocol            = "HTTP"
     timeout             = 5
@@ -839,9 +833,8 @@ resource "aws_lb_target_group" "boutique_frontend_tg" {
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
-  #  헬스 체크를 명시해야 ALB가 노드를 Healthy로 인식합니다.
   health_check {
-    path                = "/" # 프론트엔드 메인 페이지 혹은 /healthz
+    path                = "/" 
     port                = "30081"
     protocol            = "HTTP"
     healthy_threshold   = 3
@@ -908,7 +901,6 @@ resource "aws_security_group" "rds_sg" {
   description = "Security group for AIOps RDS MySQL"
   vpc_id      = aws_vpc.main.id
 
-  # K3s Master로부터의 접속 허용
   ingress {
     description     = "Allow MySQL traffic from K3s master"
     from_port       = 3306
@@ -917,7 +909,6 @@ resource "aws_security_group" "rds_sg" {
     security_groups = [aws_security_group.k3s_server_sg.id]
   }
 
-  # K3s Worker로부터의 접속 허용
   ingress {
     description     = "Allow MySQL traffic from K3s worker"
     from_port       = 3306
@@ -957,7 +948,7 @@ resource "aws_db_instance" "aiops_rds" {
   identifier = "aiops-mysql-db"
 
   engine         = "mysql"
-  engine_version = "8.0" # MySQL 8.0 시리즈 사용
+  engine_version = "8.0" 
   port           = 3306
 
   instance_class    = "db.t3.micro"
@@ -984,7 +975,6 @@ resource "aws_db_instance" "aiops_rds" {
 # ==========================================
 # 4.4 Internal DNS Record (Route53)
 # ==========================================
-# 기존에 생성된 aws_route53_zone.private_internal이 있다면 중복 선언하지 않아도 됩니다.
 resource "aws_route53_record" "rds_cname" {
   zone_id = aws_route53_zone.private_internal.zone_id
   name    = "rds.${var.private_dns_zone_name}"
@@ -1100,8 +1090,8 @@ resource "aws_instance" "k3s_server" {
   iam_instance_profile   = aws_iam_instance_profile.ssm_node_profile.name
 
   root_block_device {
-    volume_size           = 30    # 기본 8GB에서 30GB로 증설
-    volume_type           = "gp3" # 최신 고성능 범용 스토리지
+    volume_size           = 30    
+    volume_type           = "gp3" 
     delete_on_termination = true
   }
 
@@ -1151,16 +1141,16 @@ resource "aws_instance" "k3s_agent" {
 
 
 # ==========================================
-# [추가] Slack Interactivity 수신용 Target Group (터미널 4 app.py 용)
+# Slack Interactivity 수신용 Target Group (터미널 4 app.py 용)
 # ==========================================
 resource "aws_lb_target_group" "slack_receiver_tg" {
   name     = "aiops-slack-receiver-tg"
-  port     = 30082 # K3s NodePort (임의 지정, app.py 서비스용)
+  port     = 30082 
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
   health_check {
-    path                = "/health" # app.py에 헬스체크용 엔드포인트가 하나 있어야 합니다.
+    path                = "/health" 
     port                = "traffic-port"
     protocol            = "HTTP"
     healthy_threshold   = 3
@@ -1183,11 +1173,11 @@ resource "aws_lb_target_group_attachment" "slack_receiver_agent_attach" {
 }
 
 # ==========================================
-# [추가] ALB Listener Rule (경로 기반 라우팅)
+# ALB Listener Rule (경로 기반 라우팅)
 # - /slack/actions 로 들어오는 요청을 app.py로 보냅니다.
 # ==========================================
 resource "aws_lb_listener_rule" "slack_action_rule" {
-  listener_arn = aws_lb_listener.http.arn # 기존 80번 리스너에 룰 추가
+  listener_arn = aws_lb_listener.http.arn 
   priority     = 100
 
   action {
@@ -1209,7 +1199,7 @@ resource "aws_cloudfront_distribution" "aiops_cdn" {
   is_ipv6_enabled     = true
   comment             = "AIOps 프로젝트 통합 HTTPS 대문"
   
-  # [원본 1] AIOps 백엔드 (80포트)
+  # AIOps 백엔드 (80포트)
   origin {
     domain_name = aws_lb.aiops_alb.dns_name 
     origin_id   = "Origin-AIOps-80"
@@ -1222,7 +1212,7 @@ resource "aws_cloudfront_distribution" "aiops_cdn" {
     }
   }
 
-  # [원본 2] Boutique 쇼핑몰 (8080포트)
+  # Boutique 쇼핑몰 (8080포트)
   origin {
     domain_name = aws_lb.aiops_alb.dns_name
     origin_id   = "Origin-Boutique-8080"
@@ -1235,7 +1225,7 @@ resource "aws_cloudfront_distribution" "aiops_cdn" {
     }
   }
 
-  # [규칙 1] 슬랙 전용 (80포트로 배달)
+  # 슬랙 전용 (80포트로 배달)
   ordered_cache_behavior {
     path_pattern     = "/slack/*"
     target_origin_id = "Origin-AIOps-80"
@@ -1246,12 +1236,12 @@ resource "aws_cloudfront_distribution" "aiops_cdn" {
     viewer_protocol_policy = "redirect-to-https"
     
     # 캐시 끄기 (실시간 통신 필수)
-    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled (AWS 고정 ID)
+    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" 
 
-    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AllViewer (AWS 고정 ID)
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" 
   }
 
-  # [기본 규칙] 나머지 모든 접속 (8080 쇼핑몰로 배달)
+  # 나머지 모든 접속 (8080 쇼핑몰로 배달)
   default_cache_behavior {
     target_origin_id = "Origin-Boutique-8080"
 

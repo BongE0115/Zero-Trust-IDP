@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: producer-api
-          image: 'ghcr.io/bonge0115/producer-api:5917511' # 이미지는 ghcr로 만든다. 
+          image: 'ghcr.io/bonge0115/producer-api:5917511'  
           imagePullPolicy: IfNotPresent
           env:
             - name: KAFKA_BOOTSTRAP

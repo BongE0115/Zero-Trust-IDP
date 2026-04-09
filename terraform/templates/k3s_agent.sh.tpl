@@ -38,7 +38,6 @@ if ! snap list | grep -q amazon-ssm-agent; then
   snap install amazon-ssm-agent --classic || true
 fi
 
-# snap 기반 환경에서는 systemctl 서비스명이 다를 수 있으므로 강제 실패시키지 않음
 snap services amazon-ssm-agent || true
 systemctl daemon-reload || true
 

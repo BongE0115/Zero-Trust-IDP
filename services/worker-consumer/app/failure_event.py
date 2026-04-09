@@ -28,14 +28,11 @@ def build_case_id(payload: Dict[str, Any]) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     digest = payload_hash(payload)[:8]
     
-    # 1. 고유함을 보장하는 뒷부분(타임스탬프+해시)은 무조건 살립니다 (약 25자)
     suffix = f"{ts}-{digest}"
     
-    # 2. 앞부분(서비스명+주문번호)은 63자를 넘지 않도록 35자까지만 자릅니다.
     prefix = f"{settings.SERVICE_NAME}-{order_id}"
     safe_prefix = prefix[:35].rstrip("-")
     
-    # 3. 합치면 무조건 63자 미만이면서 절대 겹치지 않는 완벽한 ID 탄생!
     return f"{safe_prefix}-{suffix}"
 
 

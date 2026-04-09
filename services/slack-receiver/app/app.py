@@ -3,7 +3,7 @@ import json
 import base64
 import zlib
 import requests
-import threading  # 백그라운드 작업을 위해 추가됨
+import threading  
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -43,7 +43,7 @@ def github_dispatch(workflow_file: str, inputs: dict) -> bool:
         print(f"❌ [EXCEPTION] Failed to communicate with GitHub: {e}", flush=True)
         return False
 
-# [신규] 시간이 오래 걸리는 작업을 백그라운드에서 처리하는 함수
+
 def process_approval_task(compressed_value, user_id, username, response_url):
     print(f"⚙️ [BACKGROUND] {username}님의 요청을 백그라운드에서 처리 시작...", flush=True)
     
@@ -55,12 +55,10 @@ def process_approval_task(compressed_value, user_id, username, response_url):
     if missing_vars:
         error_msg = f"❌ 서버 설정 에러: 환경변수 {', '.join(missing_vars)} 가 누락되었습니다."
         print(error_msg, flush=True)
-        # response_url로 사후 메시지 업데이트
         requests.post(response_url, json={"replace_original": True, "text": error_msg})
         return
 
     try:
-        # 압축 해제
         decompressed_bytes = zlib.decompress(base64.b64decode(compressed_value))
         combined_payload = json.loads(decompressed_bytes.decode('utf-8'))
         
@@ -75,7 +73,6 @@ def process_approval_task(compressed_value, user_id, username, response_url):
 
         print(f"📦 [DATA] Payload decompressed successfully. Case ID: {case_id}", flush=True)
 
-        # 깃허브 액션 격발
         sandbox_success = github_dispatch(
             ACTIVATE_SANDBOX_WORKFLOW_FILE,
             {
@@ -97,7 +94,6 @@ def process_approval_task(compressed_value, user_id, username, response_url):
             }
         )
 
-        # Slack 카드 업데이트 (승인 완료 메시지로 교체!)
         if sandbox_success and branch_success:
             success_blocks = [
                 {
@@ -135,7 +131,6 @@ def slack_actions():
         action_id = action.get('action_id')
         compressed_value = action.get('value')
         
-        # [중요] 비동기 응답을 위한 고유 URL
         response_url = slack_payload.get('response_url') 
         
         user_id = slack_payload.get('user', {}).get('id')
@@ -143,12 +138,10 @@ def slack_actions():
 
         if action_id == "approve_sandbox_creation" and compressed_value and response_url:
             print(f"🚨 [SLACK_RECV] Action ID: {action_id} clicked by user: {username}", flush=True)
-            
-            # 시간이 걸리는 작업은 스레드로 넘기고, 플라스크는 즉시 200 OK를 반환해서 3초 룰을 우회합니다.
             thread = threading.Thread(target=process_approval_task, args=(compressed_value, user_id, username, response_url))
             thread.start()
             
-            return "", 200 # 슬랙에게 "확인했음!" 즉시 응답
+            return "", 200 
 
     return "", 200
 

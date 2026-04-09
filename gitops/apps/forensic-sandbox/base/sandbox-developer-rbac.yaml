@@ -18,7 +18,7 @@ metadata:
   namespace: forensic-sandbox
 subjects:
 - kind: User
-  name: "developer@yourcompany.com" # 실제 이메일로 치환
+  name: "developer@yourcompany.com" 
   apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: Role

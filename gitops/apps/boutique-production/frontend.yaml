@@ -43,7 +43,6 @@ spec:
     metadata:
       labels:
         app: frontend
-        # Prometheus 관제 이름표 추가
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "15020"
@@ -70,7 +69,6 @@ spec:
                 key: LOCAL_TAILSCALE_IP
           - name: PORT
             value: "8080"
-          # $(변수명) 치환
           - name: PRODUCT_CATALOG_SERVICE_ADDR
             value: "$(LOCAL_IP):30550" 
           - name: CURRENCY_SERVICE_ADDR

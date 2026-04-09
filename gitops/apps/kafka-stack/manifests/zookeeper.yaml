@@ -19,7 +19,7 @@ spec:
         ports:
         - containerPort: 2181
         env:
-        # 1. JVM 힙 메모리 설정: Zookeeper는 256MB~512MB면 충분합니다.
+        # 1. JVM 힙 메모리 설정
         - name: ZOO_HEAP_SIZE
           value: "256"
         # 2. 리소스 제한: 전체 시스템 안정성 확보
@@ -30,7 +30,7 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "250m"
-        # 3. 상태 체크: Zookeeper가 응답 가능한지 주기적으로 확인
+        # 3. 상태 체크
         livenessProbe:
           tcpSocket:
             port: 2181
