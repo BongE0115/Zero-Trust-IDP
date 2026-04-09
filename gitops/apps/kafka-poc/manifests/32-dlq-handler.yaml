@@ -16,7 +16,7 @@ spec:
       serviceAccountName: dlq-handler-sa
       containers:
         - name: dlq-handler
-          image: 'ghcr.io/bonge0115/dlq-handler:5917511' 
+          image: 'ghcr.io/bonge0115/dlq-handler:1d9293c'
           imagePullPolicy: IfNotPresent
           env:
             - name: KAFKA_BOOTSTRAP
