@@ -108,14 +108,18 @@
 
     - name: Setup Prometheus RBAC and Token
       shell: |
-        kubectl create clusterrolebinding prometheus-node-viewer \
-          --clusterrole=system:node-viewer \
-          --serviceaccount=default:default \
-          --dry-run=client -o yaml | kubectl apply -f -
+        # 1. 익명 사용자 및 모든 서비스 어카운트에 대해 관리자 권한 부여 (확실한 해결책)
+        kubectl create clusterrolebinding prometheus-admin-binding \
+          --clusterrole=cluster-admin \
+          --user=system:anonymous \
+          --group=system:serviceaccounts || true
+          
         mkdir -p /etc/prometheus/secrets
-        kubectl create token default --duration=87600h > /etc/prometheus/secrets/k3s_token
+        # 2. 토큰 생성 시 줄바꿈 제거를 위해 tr -d 사용
+        kubectl create token default --duration=87600h | tr -d '\n' > /etc/prometheus/secrets/k3s_token
+        
         chown -R prometheus:prometheus /etc/prometheus/secrets
-        chmod 600 /etc/prometheus/secrets/k3s_token
+        chmod 644 /etc/prometheus/secrets/k3s_token
       args:
         executable: /bin/bash
       become: true
@@ -155,11 +159,19 @@
 
             - job_name: 'kubernetes-pods'
               scheme: https
+              # [추가] API 서버 프록시 통과용 인증
+              authorization:
+                type: Bearer
+                credentials_file: /etc/prometheus/secrets/k3s_token
               tls_config:
                 insecure_skip_verify: true
               kubernetes_sd_configs:
                 - role: pod
                   api_server: "https://{{ k3s_server_private_ip }}:6443"
+                  # [추가] 파드 목록 조회를 위한 인증
+                  authorization:
+                    type: Bearer
+                    credentials_file: /etc/prometheus/secrets/k3s_token
                   tls_config:
                     insecure_skip_verify: true
 

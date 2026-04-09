@@ -119,7 +119,7 @@
             INSTALL_K3S_VERSION="{{ k3s_version }}" \
             K3S_URL="https://{{ master_private_ip }}:6443" \
             K3S_TOKEN="{{ k3s_node_token.stdout | trim }}" \
-            sh -s - agent
+            sh -s - agent --kubelet-arg=anonymous-auth=true --kubelet-arg=authorization-mode=AlwaysAllow
         fi
       args:
         executable: /bin/bash

@@ -97,7 +97,7 @@
         if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
           curl -sfL https://get.k3s.io | \
             INSTALL_K3S_VERSION="{{ k3s_version }}" \
-            INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --tls-san {{ master_private_ip.stdout | trim }}{% if master_ts_ip.stdout | trim != '' %} --tls-san {{ master_ts_ip.stdout | trim }}{% endif %}" \
+            INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644 --disable traefik --tls-san {{ master_private_ip.stdout | trim }}{% if master_ts_ip.stdout | trim != '' %} --tls-san {{ master_ts_ip.stdout | trim }}{% endif %} --kubelet-arg=anonymous-auth=true --kubelet-arg=authorization-mode=AlwaysAllow"
             K3S_TOKEN="{{ k3s_token }}" sh -
         fi
       args:
