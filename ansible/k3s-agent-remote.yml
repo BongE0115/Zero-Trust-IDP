@@ -112,15 +112,14 @@
       register: k3s_node_token
       changed_when: false
 
-    - name: Install k3s agent
+    - name: Install or Update k3s agent with monitoring flags
       shell: |
-        if [ ! -f /etc/systemd/system/k3s-agent.service ]; then
-          curl -sfL https://get.k3s.io | \
-            INSTALL_K3S_VERSION="{{ k3s_version }}" \
-            K3S_URL="https://{{ master_private_ip }}:6443" \
-            K3S_TOKEN="{{ k3s_node_token.stdout | trim }}" \
-            sh -s - agent --kubelet-arg=anonymous-auth=true --kubelet-arg=authorization-mode=AlwaysAllow
-        fi
+        curl -sfL https://get.k3s.io | \
+          INSTALL_K3S_VERSION="{{ k3s_version }}" \
+          K3S_URL="https://{{ master_private_ip }}:6443" \
+          K3S_TOKEN="{{ k3s_token }}" \
+          INSTALL_K3S_EXEC="agent --kubelet-arg=anonymous-auth=true --kubelet-arg=authorization-mode=AlwaysAllow" \
+          sh -
       args:
         executable: /bin/bash
 
