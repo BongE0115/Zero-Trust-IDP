@@ -2,22 +2,22 @@
   "case_id": "worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a",
   "service": "worker-consumer",
   "branch_name": "case/worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a",
-  "status": "redriven",
+  "status": "candidate_built",
   "created_at": "2026-04-08T13:18:00Z",
-  "updated_at": "2026-04-08T15:10:33Z",
+  "updated_at": "2026-04-09T00:45:55Z",
   "source_image_ref": "ghcr.io/bonge0115/worker-consumer:03aa2cc",
-  "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:0a6183482d87757494d0bb23799bfcde8b284871e8650378cb9fd6e5760f21e5",
-  "verified_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:0a6183482d87757494d0bb23799bfcde8b284871e8650378cb9fd6e5760f21e5",
-  "promoted_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:0a6183482d87757494d0bb23799bfcde8b284871e8650378cb9fd6e5760f21e5",
+  "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:4814d1513babf12cfa3d7426a09b961698471643f3559176a611e1f1f42c5e7f",
+  "verified_image_ref": "",
+  "promoted_image_ref": "",
   "previous_production_image_ref": null,
   "sandbox_manifest_path": "gitops/apps/forensic-sandbox/cases/sandbox-case-worker-consumer-forensic-case-17756-20260408t131.yaml",
-  "revalidation_generation": 1,
-  "validation_run_id": "worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a-reval-g1",
+  "revalidation_generation": 2,
+  "validation_run_id": "",
   "redrive_count": 1,
   "flags": {
-    "revalidation_passed": true,
-    "promoted": true,
-    "redriven": true,
+    "revalidation_passed": false,
+    "promoted": false,
+    "redriven": false,
     "resolved": false,
     "cleanup_completed": false,
     "reproduce_verdict_collected": true,
@@ -37,7 +37,7 @@
     "last_reproduce_validation_run_id": "reproduce-worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a-0",
     "last_reproduce_generation": 0,
     "candidate_build_branch": "case/worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a",
-    "candidate_build_generation": 1,
+    "candidate_build_generation": 2,
     "revalidation_job_manifest_path": "/opt/actions-runner/_work/Zero-Trust-IDP/Zero-Trust-IDP/gitops/apps/forensic-sandbox/cases/revalidation/revalidate-case-worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a.yaml",
     "revalidation_expected_failure_status": "success",
     "revalidation_expected_normal_status": "success",
@@ -159,6 +159,26 @@
       "extra": {
         "from_status": "promoted",
         "to_status": "redriven"
+      }
+    },
+    {
+      "at": "2026-04-09T00:45:55Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "candidate image built from case branch case/worker-consumer-forensic-case-17756-20260408T131732Z-06d3ab2a",
+      "extra": {
+        "from_status": "redriven",
+        "to_status": "candidate_built"
+      }
+    },
+    {
+      "at": "2026-04-09T00:45:55Z",
+      "action": "update",
+      "status": "candidate_built",
+      "note": "force-synced record after candidate patch",
+      "extra": {
+        "candidate_image_ref": "ghcr.io/bonge0115/worker-consumer@sha256:4814d1513babf12cfa3d7426a09b961698471643f3559176a611e1f1f42c5e7f",
+        "revalidation_generation": 2
       }
     }
   ]
