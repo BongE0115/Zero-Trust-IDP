@@ -8,7 +8,7 @@ spec:
     kind: Deployment
     name: frontend
   minReplicas: 1
-  maxReplicas: 3
+  maxReplicas: 5
   metrics:
   - type: Resource
     resource:
@@ -22,6 +22,13 @@ spec:
       target:
         type: Utilization
         averageUtilization: 90 # 메모리 90% 기준
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 60 # 5분 대신 60초만 대기
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
 
 ---
 
