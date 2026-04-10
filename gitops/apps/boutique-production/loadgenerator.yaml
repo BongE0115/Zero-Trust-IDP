@@ -61,7 +61,7 @@ spec:
         - name: FRONTEND_ADDR
           value: "frontend:80"
         - name: USERS
-          value: "10"
+          value: "700"
         - name: RATE
           value: "1"
         resources:
